@@ -1,0 +1,147 @@
+{
+  "schema_version": "1.0.0",
+  "document_type": "operational_policy",
+  "source": {
+    "file_name": "운영_정책.png",
+    "source_path": "/Users/bini/Documents/4차 프로젝트/docs/운영_정책.png",
+    "extracted_on": "2026-07-23"
+  },
+  "policy_groups": [
+    {
+      "id": "review_state",
+      "name": "검토·상태 정책",
+      "rules": [
+        {
+          "id": "review_state.contract_type_uncertain",
+          "trigger": "CONTRACT_TYPE_UNCERTAIN",
+          "behavior": "사용자가 계약 유형을 선택하기 전에는 검토를 시작하지 않는다.",
+          "user_action": "후보 또는 전체 지원 계약 유형 중 하나를 선택한다.",
+          "notes": "후보·전체 목록 제공"
+        },
+        {
+          "id": "review_state.out_of_scope",
+          "trigger": "OUT_OF_SCOPE",
+          "behavior": "범위 밖 경고와 계속 진행 재확인 뒤에만 검토를 시작한다.",
+          "user_action": "계속 진행을 명시적으로 확인하거나 다른 문서를 선택한다.",
+          "notes": "자동 진행 금지"
+        },
+        {
+          "id": "review_state.empty_document",
+          "trigger": "EMPTY_DOCUMENT",
+          "behavior": "원인과 재업로드 방법을 안내하고 검토 결과 화면은 표시하지 않는다.",
+          "user_action": "텍스트를 읽을 수 있는 다른 파일을 업로드한다.",
+          "notes": "results가 비어 있어도 ‘문제 없음’으로 표시 금지"
+        },
+        {
+          "id": "review_state.error_retry",
+          "trigger": "retryable_error",
+          "behavior": "최상위 status를 우선하고 재시도 가능 상태에서만 재실행한다.",
+          "user_action": "다시 시도한다.",
+          "notes": "중복 실행 방지"
+        }
+      ]
+    },
+    {
+      "id": "file_mcp_integration",
+      "name": "파일·MCP 연동 정책",
+      "rules": [
+        {
+          "id": "file_mcp.upload_validation",
+          "behavior": "확장자, 실제 형식, 크기, 손상, 암호화 여부를 검증한다.",
+          "enforcement": "MCP 호출 전에 차단"
+        },
+        {
+          "id": "file_mcp.response_compatibility",
+          "behavior": "누락, null, 빈 배열을 백엔드 DTO에서 정규화한다.",
+          "notes": "런타임 계약 테스트"
+        },
+        {
+          "id": "file_mcp.progress",
+          "behavior": "실제 progress 이벤트를 review_id와 연결해 SSE로 전달한다.",
+          "fallback": "끊김 또는 오류 시 상태 조회 후 종료"
+        },
+        {
+          "id": "file_mcp.result_presentation",
+          "behavior": "상태, 카테고리, 키워드 필터와 ‘포함 여부 확인’ 체크리스트, 근거를 함께 표시한다.",
+          "notes": "법률 자문이 아님"
+        }
+      ]
+    },
+    {
+      "id": "chat_and_draft",
+      "name": "챗봇·수정·협의 문구 정책",
+      "rules": [
+        {
+          "id": "chat.grounding",
+          "behavior": "현재 계약서, 검토 결과, 법령 근거 안에서만 답변한다.",
+          "prohibitions": ["추측 답변 금지"],
+          "requirements": ["출처 표시"]
+        },
+        {
+          "id": "chat.llm_safety",
+          "behavior": "문서 지시문을 격리하고 구조화된 출력과 출처 검증을 거친 뒤 표시한다.",
+          "notes": "프롬프트 인젝션 방어"
+        },
+        {
+          "id": "draft.generation",
+          "behavior": "선택한 조항과 표준 조항 근거가 모두 있을 때만 수정·협의 문구를 생성한다.",
+          "prohibitions": ["자동 반영 금지", "원본에 없는 금액·기간 임의 생성 금지"]
+        },
+        {
+          "id": "draft.failure",
+          "behavior": "근거 부족, 필수값 누락, 검증 실패 시 문구를 생성하지 않고 확인 필요 안내를 표시한다."
+        }
+      ]
+    },
+    {
+      "id": "data_security",
+      "name": "데이터·보안 정책",
+      "rules": [
+        {
+          "id": "security.transport_isolation",
+          "behavior": "사용자·웹·MCP·LLM 구간은 TLS로 보호하고 세션별 요청·파일·결과를 격리한다.",
+          "notes": "HTTPS 또는 보안 채널"
+        },
+        {
+          "id": "security.temporary_storage",
+          "behavior": "완료·실패·취소·TTL 만료 후 임시 파일과 결과를 삭제하고 재시작 시 잔존 파일을 정리한다.",
+          "notes": "영구 저장·백업 제외"
+        },
+        {
+          "id": "security.operational_logs",
+          "behavior": "계약서, 조항, 대화, 프롬프트 본문은 운영 로그에 기록하지 않는다.",
+          "notes": "APM·디버그 도구의 본문 수집도 금지"
+        },
+        {
+          "id": "security.secrets_and_input",
+          "behavior": "API 키와 접속정보는 Secret으로 관리하고 파일명은 저장 경로에 직접 사용하지 않는다.",
+          "notes": "경로 순회 방지"
+        }
+      ]
+    },
+    {
+      "id": "llm_service_operations",
+      "name": "LLM·서비스 운영 정책",
+      "rules": [
+        {
+          "id": "llm.default_model",
+          "behavior": "자체 호스팅 로컬 LLM을 기본으로 사용한다.",
+          "prohibitions": ["외부 LLM 자동 폴백 금지"]
+        },
+        {
+          "id": "llm.external_transfer",
+          "behavior": "외부 LLM 전송은 범위, 목적, 공급자 고지 후 사용자 동의가 있을 때만 허용한다.",
+          "on_consent_denied": "전송 금지"
+        },
+        {
+          "id": "service.resource_limit",
+          "behavior": "파일 크기, 동시 검토 수, 요청 빈도를 제한하고 초과 시 안내한다."
+        },
+        {
+          "id": "service.cancellation",
+          "behavior": "MVP에서는 실제 MCP 작업 취소를 보장하지 않으며 취소 뒤 결과를 폐기하고 임시 데이터를 정리한다."
+        }
+      ]
+    }
+  ]
+}

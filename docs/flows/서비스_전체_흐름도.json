@@ -1,0 +1,300 @@
+{
+  "schema_version": "1.0.0",
+  "document_type": "service_flow_and_state_machine",
+  "service": "WorkShield",
+  "scope": "MVP",
+  "sources": [
+    {
+      "type": "diagram",
+      "path": "/Users/bini/Documents/4차 프로젝트/docs/서비스_전체_흐름도.png"
+    },
+    {
+      "type": "state_definition",
+      "path": "/Users/bini/Documents/4차 프로젝트/docs/사용자 흐름·항태 정의서 초안.md"
+    },
+    {
+      "type": "requirements",
+      "path": "/Users/bini/Documents/4차 프로젝트/docs/requirements/요구사항.json"
+    },
+    {
+      "type": "policy",
+      "path": "/Users/bini/Documents/4차 프로젝트/docs/policies/운영_정책.json"
+    }
+  ],
+  "screens": [
+    {"id": "S01", "name": "계약서 업로드", "route": "/review"},
+    {"id": "S02", "name": "계약 유형 선택", "route": "/review/type"},
+    {"id": "S03", "name": "범위 외 안내", "route": "/review/type"},
+    {"id": "S04", "name": "검토 진행", "route": "/review/{review_id}/progress"},
+    {"id": "S05", "name": "검토 결과", "route": "/review/{review_id}/results"},
+    {"id": "S06", "name": "조항 상세", "route": "결과 화면 드로어"},
+    {"id": "S07", "name": "검토 결과 챗봇", "route": "결과 화면 하단"},
+    {"id": "S08", "name": "협상 문구 제안", "route": "조항 상세 모달"},
+    {"id": "S09", "name": "오류·중단 안내", "route": "공통 상태"}
+  ],
+  "review_state_machine": {
+    "initial_state": "READY",
+    "states": [
+      {"id": "READY", "screen": "S01", "description": "파일을 선택할 수 있는 초기 상태"},
+      {"id": "UPLOADING", "screen": "S01", "description": "파일 업로드 중"},
+      {"id": "ANALYZING_CONTRACT_TYPE", "screen": "S02", "description": "계약 유형 후보 분석 중"},
+      {"id": "TYPE_SELECTION_REQUIRED", "screen": "S02", "description": "사용자의 계약 유형 선택이 필요함"},
+      {"id": "OUT_OF_SCOPE_CONFIRMATION_REQUIRED", "screen": "S03", "description": "범위 외 계약의 계속 진행 재확인이 필요함"},
+      {"id": "READY_TO_REVIEW", "screen": "S02", "description": "사용자 선택 또는 재확인이 완료되어 검토를 시작할 수 있음"},
+      {"id": "REVIEWING", "screen": "S04", "description": "계약서 검토 중"},
+      {"id": "COMPLETED", "screen": "S05", "description": "검토 결과 생성 완료"},
+      {"id": "FAILED", "screen": "S09", "description": "업로드·분석·검토 처리 실패"},
+      {"id": "EXPIRED", "screen": "S09", "description": "검토 세션 만료"}
+    ],
+    "transitions": [
+      {
+        "from": "READY",
+        "event": "upload_requested",
+        "to": "UPLOADING",
+        "guard": "확장자·크기·실제 형식 등 사전 검증 통과",
+        "action": "업로드 세션 생성"
+      },
+      {
+        "from": "READY",
+        "event": "upload_validation_failed",
+        "to": "FAILED",
+        "action": "MCP 호출 전 오류 원인과 재업로드 방법 안내"
+      },
+      {
+        "from": "UPLOADING",
+        "event": "upload_completed",
+        "to": "ANALYZING_CONTRACT_TYPE",
+        "action": "계약 유형 후보 분석 요청"
+      },
+      {
+        "from": "UPLOADING",
+        "event": "upload_failed",
+        "to": "FAILED",
+        "action": "업로드 실패 안내"
+      },
+      {
+        "from": "ANALYZING_CONTRACT_TYPE",
+        "event": "scope_assessed",
+        "to": "TYPE_SELECTION_REQUIRED",
+        "guard": "scope_status가 IN_SCOPE 또는 CONTRACT_TYPE_UNCERTAIN",
+        "action": "추천 유형과 후보 또는 전체 지원 유형 표시"
+      },
+      {
+        "from": "ANALYZING_CONTRACT_TYPE",
+        "event": "out_of_scope_detected",
+        "to": "OUT_OF_SCOPE_CONFIRMATION_REQUIRED",
+        "action": "범위 제한 경고와 선택한 유형 표시"
+      },
+      {
+        "from": "ANALYZING_CONTRACT_TYPE",
+        "event": "empty_document_detected",
+        "to": "FAILED",
+        "action": "빈 문서·스캔본·손상 가능성 및 재업로드 방법 안내"
+      },
+      {
+        "from": "ANALYZING_CONTRACT_TYPE",
+        "event": "scope_analysis_failed",
+        "to": "FAILED",
+        "action": "오류 안내와 재시도 가능 여부 표시"
+      },
+      {
+        "from": "TYPE_SELECTION_REQUIRED",
+        "event": "contract_type_selected",
+        "to": "READY_TO_REVIEW",
+        "action": "selected_contract_type와 selection_source 저장"
+      },
+      {
+        "from": "OUT_OF_SCOPE_CONFIRMATION_REQUIRED",
+        "event": "continue_confirmed",
+        "to": "READY_TO_REVIEW",
+        "action": "계속 진행 확인 이력 저장"
+      },
+      {
+        "from": "OUT_OF_SCOPE_CONFIRMATION_REQUIRED",
+        "event": "cancelled",
+        "to": "READY",
+        "action": "임시 데이터 정리"
+      },
+      {
+        "from": "READY_TO_REVIEW",
+        "event": "review_requested",
+        "to": "REVIEWING",
+        "guard": "selected_contract_type이 존재하고 범위 외 상태는 계속 진행 재확인을 완료함",
+        "action": "review_id 생성 및 검토 요청"
+      },
+      {
+        "from": "REVIEWING",
+        "event": "review_completed",
+        "to": "COMPLETED",
+        "action": "결과 스냅샷 저장 및 챗봇 활성화"
+      },
+      {
+        "from": "REVIEWING",
+        "event": "review_failed",
+        "to": "FAILED",
+        "action": "진행 표시 종료, 오류와 재시도 가능 여부 표시"
+      },
+      {
+        "from": "COMPLETED",
+        "event": "result_or_detail_viewed",
+        "to": "COMPLETED",
+        "action": "같은 review_id의 결과·조항 상세·근거 제공"
+      },
+      {
+        "from": "FAILED",
+        "event": "retry_requested",
+        "to": "READY",
+        "guard": "재시도 가능 오류",
+        "action": "새 업로드 또는 새 검토 흐름 시작"
+      },
+      {
+        "from": "*",
+        "event": "session_expired",
+        "to": "EXPIRED",
+        "action": "임시 파일·결과·대화 이력 정리"
+      }
+    ]
+  },
+  "contract_type_branches": [
+    {
+      "scope_status": "IN_SCOPE",
+      "next_state": "TYPE_SELECTION_REQUIRED",
+      "user_message": "문서 내용을 바탕으로 비교 기준 후보를 제안합니다. 실제 계약 관계를 가장 잘 설명하는 기준을 선택해 주세요.",
+      "user_action": "추천 또는 후보 중 최종 계약 유형 선택"
+    },
+    {
+      "scope_status": "CONTRACT_TYPE_UNCERTAIN",
+      "next_state": "TYPE_SELECTION_REQUIRED",
+      "user_action": "후보 또는 전체 지원 유형에서 직접 선택",
+      "review_blocked": true
+    },
+    {
+      "scope_status": "OUT_OF_SCOPE",
+      "next_state": "OUT_OF_SCOPE_CONFIRMATION_REQUIRED",
+      "user_action": "경고를 읽고 계속 진행을 명시적으로 확인하거나 취소",
+      "review_blocked": true
+    },
+    {
+      "scope_status": "EMPTY_DOCUMENT",
+      "next_state": "FAILED",
+      "user_action": "다른 파일 업로드",
+      "review_blocked": true
+    }
+  ],
+  "progress_stages": [
+    {"id": "PREPARE", "user_message": "검토를 준비하고 있습니다"},
+    {"id": "BATCH_SEARCH", "user_message": "비교 기준 조항을 찾고 있습니다"},
+    {"id": "RERANK", "user_message": "비교할 조항을 선별하고 있습니다"},
+    {"id": "CLAUSE_REVIEW", "user_message": "계약 조항을 비교하고 있습니다"},
+    {"id": "MISSING_DETECTION", "user_message": "포함 여부를 확인할 표준조항을 찾고 있습니다"},
+    {"id": "RESULT_ASSEMBLY", "user_message": "결과를 정리하고 있습니다"}
+  ],
+  "result_statuses": [
+    {
+      "code": "NONE",
+      "display_name": "대응 표준조항 있음",
+      "description": "대응하는 표준조항 후보가 있습니다.",
+      "display_area": "조항 결과 목록"
+    },
+    {
+      "code": "EXTRA",
+      "display_name": "추가·변형 내용 확인",
+      "description": "표준 대비 추가되었거나 변경된 내용 후보입니다.",
+      "display_area": "조항 결과 목록"
+    },
+    {
+      "code": "NO_MATCH",
+      "display_name": "대응 조항 확인 필요",
+      "description": "사용자 조항에서 대응 표준조항 후보를 찾기 어렵습니다.",
+      "display_area": "조항 결과 목록"
+    },
+    {
+      "code": "MISSING",
+      "display_name": "포함 여부 확인",
+      "description": "표준조항 관점에서 계약서 전체에 대응 내용이 보이지 않아 확인이 필요합니다.",
+      "display_area": "표준 체크리스트",
+      "is_separate_checklist": true,
+      "prohibition": "누락 또는 문제를 단정하지 않음"
+    }
+  ],
+  "independent_result_areas": [
+    {
+      "id": "toxic_patterns",
+      "display_name": "주의 문구 후보",
+      "description": "결과 상태와 별도로 표시하며, 법적 결론으로 표현하지 않습니다."
+    }
+  ],
+  "chat_state_machine": {
+    "initial_state": "DISABLED",
+    "states": [
+      {"id": "DISABLED", "description": "검토 결과가 없어 챗봇 사용 불가"},
+      {"id": "READY", "description": "질문 입력 가능"},
+      {"id": "ANSWERING", "description": "답변 생성 및 근거 검증 중"},
+      {"id": "ANSWERED", "description": "답변 생성 완료"},
+      {"id": "REFUSED", "description": "범위 밖 질문 또는 근거 부족으로 답변 제한"},
+      {"id": "ERROR", "description": "MCP·LLM 호출 또는 출력 검증 실패"},
+      {"id": "EXPIRED", "description": "검토 세션 만료로 대화 종료"}
+    ],
+    "transitions": [
+      {"from": "DISABLED", "event": "review_completed", "to": "READY"},
+      {"from": "READY", "event": "question_submitted", "to": "ANSWERING"},
+      {"from": "ANSWERING", "event": "answer_grounded", "to": "ANSWERED"},
+      {"from": "ANSWERING", "event": "out_of_scope_or_insufficient_grounding", "to": "REFUSED"},
+      {"from": "ANSWERING", "event": "answer_generation_failed", "to": "ERROR"},
+      {"from": "ANSWERED", "event": "follow_up_submitted", "to": "ANSWERING"},
+      {"from": "REFUSED", "event": "rephrased_question_submitted", "to": "ANSWERING"},
+      {"from": "ERROR", "event": "retry_requested", "to": "ANSWERING"},
+      {"from": "*", "event": "session_expired", "to": "EXPIRED"}
+    ],
+    "response_policy": {
+      "allowed_scope": ["현재 검토 결과", "사용자 조항과 표준조항의 차이", "관련 법령 원문·조문·출처", "특정 조항에서 확인할 사항"],
+      "prohibited_scope": ["위법·합법 단정", "유리·불리 단정", "승소 가능성 단정", "현재 검토와 무관한 질문", "세션에 없는 조항 또는 출처 생성", "문서·법령 원문의 명령문 실행"],
+      "citation_required": true,
+      "citation_types": ["사용자 조항 ID", "표준조항 ID", "법령명·조번호"]
+    }
+  },
+  "draft_state_machine": {
+    "initial_state": "IDLE",
+    "states": [
+      {"id": "IDLE", "description": "조항을 선택하지 않은 초기 상태"},
+      {"id": "SOURCE_SELECTED", "description": "사용자 조항과 대응 표준조항을 선택함"},
+      {"id": "GENERATING", "description": "협상 문구 생성 중"},
+      {"id": "GENERATED", "description": "제안 문구 생성 완료"},
+      {"id": "INSUFFICIENT_GROUNDING", "description": "근거 부족 또는 필수값 누락"},
+      {"id": "ERROR", "description": "생성 또는 검증 실패"}
+    ],
+    "transitions": [
+      {"from": "IDLE", "event": "result_clause_selected", "to": "SOURCE_SELECTED"},
+      {"from": "SOURCE_SELECTED", "event": "draft_requested", "to": "GENERATING"},
+      {"from": "GENERATING", "event": "draft_verified", "to": "GENERATED"},
+      {"from": "GENERATING", "event": "grounding_insufficient", "to": "INSUFFICIENT_GROUNDING"},
+      {"from": "GENERATING", "event": "generation_or_validation_failed", "to": "ERROR"},
+      {"from": "GENERATED", "event": "copy_requested", "to": "GENERATED"}
+    ],
+    "mvp_rules": [
+      "단일 제안 문구만 생성",
+      "생성 목적, 원문과의 주요 차이, 참고 표준조항 표시",
+      "복사 기능 제공",
+      "계약서에 없는 금액·기간 등은 [확인 필요]로 표시",
+      "원본 계약서 자동 수정 금지"
+    ]
+  },
+  "global_rules": [
+    "시스템은 계약 유형을 자동 확정하지 않고 후보만 제시한다.",
+    "검토 결과와 챗봇 답변은 법적 판단이 아닌 검토 후보·참고 설명으로 제공한다.",
+    "results가 비어 있어도 ‘문제 없음’으로 표시하지 않고 최상위 status를 우선한다.",
+    "진행률은 프론트엔드 임의 타이머가 아니라 서버의 실제 진행 이벤트를 review_id와 연결해 표시한다.",
+    "계약서 원문, 대화 이력, 협상 문구 제안은 영구 저장하지 않는다.",
+    "매칭 점수와 신뢰도 수치는 MVP 화면에 표시하지 않는다."
+  ],
+  "post_mvp_extensions": [
+    "매칭 점수와 신뢰도 수치 표시",
+    "LLM의 자유로운 추가 확인 의견",
+    "협상 문구 생성 방향 선택",
+    "같은 조항의 복수 대안 문구",
+    "원문과 제안문의 레드라인 비교",
+    "제안 문구 직접 편집·임시 저장",
+    "수정 문구 재검토",
+    "검토 진행 취소"
+  ]
+}
