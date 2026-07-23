@@ -1,0 +1,4 @@
+interface:
+  display_name: "WorkShield MCP"
+  short_description: "Use WorkShield MCP contract review workflows"
+  default_prompt: "Use $workshield-mcp to review a contract through WorkShield MCP."

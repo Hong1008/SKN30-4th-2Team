@@ -1,0 +1,9 @@
+# API의 비밀값은 로컬 파일에만 보관합니다.
+**/.env
+
+# API 실행·테스트 생성물
+**/.venv/
+**/.pytest_cache/
+**/.ruff_cache/
+**/__pycache__/
+api/**/*.py[cod]
