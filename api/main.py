@@ -1,10 +1,26 @@
 """WorkShield API 진입점."""
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 
-from app.config import SettingsDep
+from app.config import SettingsDep, get_settings
+from app.llm.mcp import open_workshield_mcp
 
-app = FastAPI(title="WorkShield API", version="0.1.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """WorkShield MCP session을 API 애플리케이션 수명과 함께 관리한다."""
+    async with open_workshield_mcp(get_settings()) as runtime:
+        app.state.workshield_mcp = runtime
+        try:
+            yield
+        finally:
+            del app.state.workshield_mcp
+
+
+app = FastAPI(title="WorkShield API", version="0.1.0", lifespan=lifespan)
 
 
 @app.get("/health", tags=["system"])

@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Annotated, Literal, cast
 
 from fastapi import Depends
-from pydantic import AnyHttpUrl, SecretStr, model_validator
+from pydantic import AnyHttpUrl, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -21,6 +21,13 @@ class LLMProvider(StrEnum):
     OPENAI = "openai"
     GEMINI = "gemini"
     OLLAMA = "ollama"
+
+
+class MCPTransport(StrEnum):
+    """WorkShield MCP 서버 연결 방식."""
+
+    STREAMABLE_HTTP = "streamable_http"
+    STDIO = "stdio"
 
 
 def _selected_environment() -> Environment:
@@ -53,13 +60,19 @@ class Settings(BaseSettings):
     openai_api_key: SecretStr | None = None
     gemini_api_key: SecretStr | None = None
     ollama_base_url: AnyHttpUrl = "http://localhost:11434"
+    workshield_mcp_transport: MCPTransport = MCPTransport.STDIO
     workshield_mcp_url: AnyHttpUrl = "http://localhost:8000/mcp"
+    workshield_mcp_project_dir: Path = API_ROOT.parent / "mcp"
+    workshield_mcp_timeout: float = Field(default=30.0, gt=0)
+    workshield_mcp_read_timeout: float = Field(default=300.0, gt=0)
 
     @model_validator(mode="after")
     def validate_production_provider(self) -> "Settings":
         """운영 환경에서 계약서가 외부 LLM으로 전송되는 구성을 막는다."""
         if self.app_env == "prod" and self.llm_provider is not LLMProvider.OLLAMA:
-            raise ValueError("운영 환경에서는 LLM_PROVIDER=ollama만 사용할 수 있습니다.")
+            raise ValueError(
+                "운영 환경에서는 LLM_PROVIDER=ollama만 사용할 수 있습니다."
+            )
         return self
 
     def selected_provider_key(self) -> SecretStr | None:
