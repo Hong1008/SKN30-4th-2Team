@@ -26,14 +26,17 @@ def get_mcp_runtime(request: Request) -> WorkShieldMCPRuntime:
         )
     return runtime
 
+ChatModelDep = Annotated[BaseChatModel, Depends(get_chat_model)]
+"""FastAPI 라우터와 서비스에서 재사용하는 chat model 의존성."""
+
+MCPRuntimeDep = Annotated[WorkShieldMCPRuntime, Depends(get_mcp_runtime)]
+"""MCP session 정보가 필요한 서비스에서 재사용하는 의존성."""
+
+
 def get_mcp_tools(runtime: MCPRuntimeDep) -> tuple[BaseTool, ...]:
     """현재 session에 결합된 LangChain MCP 도구를 반환한다."""
     return runtime.tools
 
 
-ChatModelDep = Annotated[BaseChatModel, Depends(get_chat_model)]
-"""FastAPI 라우터와 서비스에서 재사용하는 chat model 의존성."""
-MCPRuntimeDep = Annotated[WorkShieldMCPRuntime, Depends(get_mcp_runtime)]
-"""MCP session 정보가 필요한 서비스에서 재사용하는 의존성."""
 MCPToolsDep = Annotated[tuple[BaseTool, ...], Depends(get_mcp_tools)]
 """LangGraph와 agent 계층에서 재사용하는 MCP 도구 의존성."""
