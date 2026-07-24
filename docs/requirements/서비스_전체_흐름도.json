@@ -41,6 +41,7 @@
       {"id": "TYPE_SELECTION_REQUIRED", "screen": "S02", "description": "사용자의 계약 유형 선택이 필요함"},
       {"id": "OUT_OF_SCOPE_CONFIRMATION_REQUIRED", "screen": "S03", "description": "범위 외 계약의 계속 진행 재확인이 필요함"},
       {"id": "READY_TO_REVIEW", "screen": "S02", "description": "사용자 선택 또는 재확인이 완료되어 검토를 시작할 수 있음"},
+      {"id": "QUEUED", "screen": "S04", "description": "검토 요청이 접수되어 실행을 기다리는 상태"},
       {"id": "REVIEWING", "screen": "S04", "description": "계약서 검토 중"},
       {"id": "COMPLETED", "screen": "S05", "description": "검토 결과 생성 완료"},
       {"id": "FAILED", "screen": "S09", "description": "업로드·분석·검토 처리 실패"},
@@ -118,9 +119,21 @@
       {
         "from": "READY_TO_REVIEW",
         "event": "review_requested",
-        "to": "REVIEWING",
+        "to": "QUEUED",
         "guard": "selected_contract_type이 존재하고 범위 외 상태는 계속 진행 재확인을 완료함",
-        "action": "review_id 생성 및 검토 요청"
+        "action": "review_id 생성 및 검토 요청 접수"
+      },
+      {
+        "from": "QUEUED",
+        "event": "review_started",
+        "to": "REVIEWING",
+        "action": "검토 작업 실행 시작"
+      },
+      {
+        "from": "QUEUED",
+        "event": "review_failed",
+        "to": "FAILED",
+        "action": "검토 작업 접수·실행 실패 안내"
       },
       {
         "from": "REVIEWING",
@@ -143,9 +156,9 @@
       {
         "from": "FAILED",
         "event": "retry_requested",
-        "to": "READY",
+        "to": "QUEUED",
         "guard": "재시도 가능 오류",
-        "action": "새 업로드 또는 새 검토 흐름 시작"
+        "action": "새 review_id 발급 후 새 검토 흐름 시작"
       },
       {
         "from": "*",
