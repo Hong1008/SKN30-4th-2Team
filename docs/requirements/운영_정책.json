@@ -15,8 +15,8 @@
           "id": "review_state.contract_type_uncertain",
           "trigger": "CONTRACT_TYPE_UNCERTAIN",
           "behavior": "사용자가 계약 유형을 선택하기 전에는 검토를 시작하지 않는다.",
-          "user_action": "후보 또는 전체 지원 계약 유형 중 하나를 선택한다.",
-          "notes": "후보·전체 목록 제공"
+          "user_action": "고정된 3가지 지원 계약 유형 중 하나를 직접 선택한다.",
+          "notes": "세 가지 유형을 고정 제공"
         },
         {
           "id": "review_state.out_of_scope",

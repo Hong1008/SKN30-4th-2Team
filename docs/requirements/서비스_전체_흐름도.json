@@ -29,7 +29,7 @@
     {"id": "S05", "name": "검토 결과", "route": "/review/{review_id}/results"},
     {"id": "S06", "name": "조항 상세", "route": "결과 화면 드로어"},
     {"id": "S07", "name": "검토 결과 챗봇", "route": "결과 화면 하단"},
-    {"id": "S08", "name": "협상 문구 제안", "route": "조항 상세 모달"},
+    {"id": "S08", "name": "협의 문구 제안", "route": "조항 상세 모달"},
     {"id": "S09", "name": "오류·중단 안내", "route": "공통 상태"}
   ],
   "review_state_machine": {
@@ -258,7 +258,7 @@
     "states": [
       {"id": "IDLE", "description": "조항을 선택하지 않은 초기 상태"},
       {"id": "SOURCE_SELECTED", "description": "사용자 조항과 대응 표준조항을 선택함"},
-      {"id": "GENERATING", "description": "협상 문구 생성 중"},
+      {"id": "GENERATING", "description": "협의 문구 생성 중"},
       {"id": "GENERATED", "description": "제안 문구 생성 완료"},
       {"id": "INSUFFICIENT_GROUNDING", "description": "근거 부족 또는 필수값 누락"},
       {"id": "ERROR", "description": "생성 또는 검증 실패"}
@@ -280,11 +280,11 @@
     ]
   },
   "global_rules": [
-    "시스템은 계약 유형을 자동 확정하지 않고 후보만 제시한다.",
+    "지원 계약 유형은 3가지로 고정하며, 사용자는 세 가지 유형 중 하나를 직접 선택한다.",
     "검토 결과와 챗봇 답변은 법적 판단이 아닌 검토 후보·참고 설명으로 제공한다.",
     "results가 비어 있어도 ‘문제 없음’으로 표시하지 않고 최상위 status를 우선한다.",
     "진행률은 프론트엔드 임의 타이머가 아니라 서버의 실제 진행 이벤트를 review_id와 연결해 표시한다.",
-    "계약서 원문, 대화 이력, 협상 문구 제안은 영구 저장하지 않는다.",
+    "계약서 원문, 대화 이력, 협의 문구 제안은 영구 저장하지 않는다.",
     "매칭 점수와 신뢰도 수치는 MVP 화면에 표시하지 않는다."
   ],
   "post_mvp_extensions": [
