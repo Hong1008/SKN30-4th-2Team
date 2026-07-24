@@ -17,6 +17,7 @@ dependencies = [
     "langchain-openai",
     "langchain-google-genai>=4.0.0",
     "langchain-ollama",
+    "sqlalchemy>=2.0",
 ]
 
 [dependency-groups]

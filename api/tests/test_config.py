@@ -4,8 +4,8 @@ import pytest
 from fastapi.routing import APIRoute
 from pydantic import ValidationError
 
+from app.api.system import router as system_router
 from app.config import MCPTransport, Settings, get_settings
-from main import app
 
 
 def test_get_settings_is_cached() -> None:
@@ -40,11 +40,23 @@ def test_mcp_timeout_must_be_positive() -> None:
         )
 
 
-def test_health_declares_settings_dependency() -> None:
+def test_database_defaults_to_file_sqlite() -> None:
+    settings = Settings(
+        app_env="local",
+        llm_provider="ollama",
+        llm_model="configured-model",
+    )
+
+    assert settings.database_url.startswith("sqlite+pysqlite:///")
+    assert settings.database_url.endswith("/data/workshield.db")
+    assert settings.database_echo is False
+
+
+def test_ready_health_declares_settings_dependency() -> None:
     route = next(
         route
-        for route in app.routes
-        if isinstance(route, APIRoute) and route.path == "/health"
+        for route in system_router.routes
+        if isinstance(route, APIRoute) and route.path == "/health/ready"
     )
 
     dependency_calls = {dependency.call for dependency in route.dependant.dependencies}

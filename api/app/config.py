@@ -56,6 +56,11 @@ class Settings(BaseSettings):
     app_env: Environment = _selected_environment()
     llm_provider: LLMProvider
     llm_model: str | None = None
+    database_url: str = (
+        f"sqlite+pysqlite:///{API_ROOT / 'data' / 'workshield.db'}"
+    )
+    database_echo: bool = False
+    cors_origins: list[str] = ["http://localhost:5173"]
 
     openai_api_key: SecretStr | None = None
     gemini_api_key: SecretStr | None = None

@@ -5,14 +5,14 @@
     "version": "0.1.0"
   },
   "paths": {
-    "/health": {
+    "/health/live": {
       "get": {
         "tags": [
           "system"
         ],
-        "summary": "Health",
-        "description": "비밀값을 노출하지 않는 최소 상태 확인 엔드포인트.",
-        "operationId": "health_health_get",
+        "summary": "Liveness",
+        "description": "프로세스가 HTTP 요청을 처리할 수 있음을 반환한다.",
+        "operationId": "liveness_health_live_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -23,7 +23,33 @@
                     "type": "string"
                   },
                   "type": "object",
-                  "title": "Response Health Health Get"
+                  "title": "Response Liveness Health Live Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Readiness",
+        "description": "비밀값 없이 현재 애플리케이션 설정 준비 상태를 반환한다.",
+        "operationId": "readiness_health_ready_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Readiness Health Ready Get"
                 }
               }
             }

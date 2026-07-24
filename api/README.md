@@ -2,6 +2,9 @@
 
 WorkShield 웹 애플리케이션의 API·LLM 오케스트레이션 계층입니다. FastAPI를 기반으로 계약서 업로드, 검토 진행 상태, MCP(Model Context Protocol) 세션 및 LLM 기반 설명을 관리합니다.
 
+팀 공통 구현 순서와 계층별 규칙은
+[백엔드 개발 가이드](../docs/api/backend-development-guide.md)를 먼저 확인합니다.
+
 ---
 
 ## 빠른 시작
@@ -34,6 +37,8 @@ cp .env.example .env
 
 - `APP_ENV`를 지정하지 않으면 기본적으로 `.env.local`을 적용합니다.
 - 운영 배포 환경에서는 프로세스 환경 변수로 `APP_ENV=prod`를 반드시 지정해야 합니다.
+- DB는 기본적으로 `api/data/workshield.db` 파일형 SQLite를 사용합니다.
+  서버 시작 시 필요한 테이블을 자동 생성하며 DB 파일은 Git으로 추적하지 않습니다.
 
 ### 서버 실행
 
@@ -47,10 +52,17 @@ uv run uvicorn main:app --reload
 
 ```
 api/
-├── main.py              # FastAPI 앱 생성, lifespan 및 엔드포인트 진입점
+├── main.py              # create_app을 호출하는 실행 진입점
 ├── pyproject.toml        # 의존성 및 프로젝트 설정
 ├── app/
+│   ├── factory.py        # FastAPI 앱 생성과 공통 기반 등록
+│   ├── lifespan.py       # MCP 등 외부 자원의 수명주기
 │   ├── config.py         # 애플리케이션 전체 공통 Settings 및 SettingsDep (DI)
+│   ├── api/              # 시스템 API와 /api/v1 라우터
+│   ├── common/           # 공통 응답, 오류, 예외 처리, 요청 ID
+│   ├── db/               # SQLite Engine, Session 의존성, ORM Row
+│   ├── review_sessions/  # 검토 세션 도메인, Mapper, Repository
+│   ├── reviews/          # 검토 도메인, Mapper, Repository
 │   └── llm/              # LLM 및 MCP 오케스트레이션 패키지
 │       ├── factory.py        # Settings에 따른 BaseChatModel 생성 factory
 │       ├── dependencies.py   # LLM 도메인 전용 FastAPI 의존성 (ChatModelDep, MCPRuntimeDep 등)
@@ -131,3 +143,36 @@ uv run pytest -q
 # ruff 코드 스타일 및 린트 검사
 uv run ruff check app main.py tests
 ```
+
+## 공통 API 계약
+
+`/api/v1`의 JSON API는 성공 시 `data`와 `meta`, 실패 시 `error`와
+`meta`를 반환합니다. `meta.request_id`는 응답의 `X-Request-ID` 헤더와
+같은 값이며 운영 로그의 요청 추적에 사용합니다.
+
+공통 예외 처리기는 입력 원문, 서버 경로, 설정, 스택 트레이스를 응답에
+포함하지 않습니다. 파일 다운로드와 SSE는 공통 JSON 응답으로 자동
+래핑하지 않고 각 라우터에서 별도 응답으로 처리합니다.
+
+상태 확인 엔드포인트:
+
+| Method | Path | 용도 |
+| --- | --- | --- |
+| `GET` | `/health/live` | API 프로세스의 HTTP 응답 가능 여부 |
+| `GET` | `/health/ready` | 애플리케이션 설정 준비 상태 |
+
+## SQLite 영속성
+
+애플리케이션 lifespan이 파일형 SQLite Engine과 테이블을 준비하고 종료 시
+연결 풀을 정리합니다. SQLite 외래키는 연결마다 활성화합니다.
+
+현재 테이블은 다음 두 개입니다.
+
+| 테이블 | 용도 |
+| --- | --- |
+| `review_sessions` | 업로드 파일, 범위 판별, 계약 유형 선택 상태 |
+| `reviews` | 검토 진행 상태, 멱등성 키, 결과·오류 스냅샷 |
+
+Repository는 `commit` 또는 `rollback`하지 않습니다. 트랜잭션 경계는 이후
+Application Service에서 명시하며, MCP·LLM 호출 중에는 DB 트랜잭션을
+열어두지 않습니다.
