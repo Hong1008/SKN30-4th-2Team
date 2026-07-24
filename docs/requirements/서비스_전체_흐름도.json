@@ -6,19 +6,19 @@
   "sources": [
     {
       "type": "diagram",
-      "path": "/Users/bini/Documents/4차 프로젝트/docs/서비스_전체_흐름도.png"
+      "path": "./서비스_전체_흐름도.png"
     },
     {
       "type": "state_definition",
-      "path": "/Users/bini/Documents/4차 프로젝트/docs/사용자 흐름·항태 정의서 초안.md"
+      "path": "./사용자 흐름·항태 정의서 초안.md"
     },
     {
       "type": "requirements",
-      "path": "/Users/bini/Documents/4차 프로젝트/docs/requirements/요구사항.json"
+      "path": "./요구사항.json"
     },
     {
       "type": "policy",
-      "path": "/Users/bini/Documents/4차 프로젝트/docs/policies/운영_정책.json"
+      "path": "./운영_정책.json"
     }
   ],
   "screens": [
