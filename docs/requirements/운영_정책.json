@@ -35,9 +35,9 @@
         {
           "id": "review_state.error_retry",
           "trigger": "retryable_error",
-          "behavior": "최상위 status를 우선하고 재시도 가능 상태에서만 재실행한다.",
+          "behavior": "최상위 status를 우선하고 MCP 연결 실패, 타임아웃, CORPUS_UNAVAILABLE, PIPELINE_ERROR에만 재실행한다.",
           "user_action": "다시 시도한다.",
-          "notes": "중복 실행 방지"
+          "notes": "파일 검증 실패, 빈 문서, 계약 유형 미선택, 범위 외 미확인, INVALID_CONFIG, EXPIRED는 재시도하지 않으며 재시도 시 새 review_id를 발급"
         }
       ]
     },
@@ -57,8 +57,8 @@
         },
         {
           "id": "file_mcp.progress",
-          "behavior": "실제 progress 이벤트를 review_id와 연결해 SSE로 전달한다.",
-          "fallback": "끊김 또는 오류 시 상태 조회 후 종료"
+          "behavior": "상태 조회 API를 2~3초 간격으로 호출하는 방식을 기본으로 사용하고, 실제 progress 이벤트는 review_id와 연결해 SSE로 보조 전달한다.",
+          "fallback": "QUEUED·REVIEWING에서만 조회하며 COMPLETED·FAILED·EXPIRED면 종료"
         },
         {
           "id": "file_mcp.result_presentation",
@@ -99,12 +99,12 @@
       "rules": [
         {
           "id": "security.transport_isolation",
-          "behavior": "사용자·웹·MCP·LLM 구간은 TLS로 보호하고 세션별 요청·파일·결과를 격리한다.",
+          "behavior": "사용자·웹·MCP·LLM 구간은 TLS로 보호하고 세션별 요청·파일·결과를 격리한다. 로그인 없이 서버가 발급한 추측 불가능한 세션 토큰으로 접근을 확인한다.",
           "notes": "HTTPS 또는 보안 채널"
         },
         {
           "id": "security.temporary_storage",
-          "behavior": "완료·실패·취소·TTL 만료 후 임시 파일과 결과를 삭제하고 재시작 시 잔존 파일을 정리한다.",
+          "behavior": "사용자가 검토 페이지를 벗어나면 임시 파일과 결과를 삭제 요청하고, 완료·실패·취소·TTL 만료 또는 재시작 시 잔존 임시 데이터를 정리한다.",
           "notes": "영구 저장·백업 제외"
         },
         {
@@ -135,7 +135,7 @@
         },
         {
           "id": "service.resource_limit",
-          "behavior": "파일 크기, 동시 검토 수, 요청 빈도를 제한하고 초과 시 안내한다."
+          "behavior": "파일 크기, 동시 검토 수, 요청 빈도 제한의 값과 이번 프로젝트 구현 범위는 추후 논의한다."
         },
         {
           "id": "service.cancellation",

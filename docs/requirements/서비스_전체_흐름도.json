@@ -41,7 +41,7 @@
       {"id": "TYPE_SELECTION_REQUIRED", "screen": "S02", "description": "사용자의 계약 유형 선택이 필요함"},
       {"id": "OUT_OF_SCOPE_CONFIRMATION_REQUIRED", "screen": "S03", "description": "범위 외 계약의 계속 진행 재확인이 필요함"},
       {"id": "READY_TO_REVIEW", "screen": "S02", "description": "사용자 선택 또는 재확인이 완료되어 검토를 시작할 수 있음"},
-      {"id": "QUEUED", "screen": "S04", "description": "검토 요청이 접수되어 실행을 기다리는 상태"},
+      {"id": "QUEUED", "screen": "S04", "description": "향후 작업 대기열 확장을 위한 상태이며 이번 프로젝트에서는 즉시 REVIEWING으로 전환"},
       {"id": "REVIEWING", "screen": "S04", "description": "계약서 검토 중"},
       {"id": "COMPLETED", "screen": "S05", "description": "검토 결과 생성 완료"},
       {"id": "FAILED", "screen": "S09", "description": "업로드·분석·검토 처리 실패"},
@@ -127,7 +127,7 @@
         "from": "QUEUED",
         "event": "review_started",
         "to": "REVIEWING",
-        "action": "검토 작업 실행 시작"
+        "action": "별도 작업 큐 없이 검토 작업을 즉시 시작"
       },
       {
         "from": "QUEUED",
