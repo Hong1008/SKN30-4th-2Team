@@ -30,9 +30,9 @@ Review 실행·상태·결과·SSE는 BE-B 담당 범위이므로 이번 변경�
 | 형식 | 검증 내용 |
 |---|---|
 | PDF | PDF header, xref·trailer·page tree, 암호화 여부 |
-| DOCX | ZIP 무결성, 암호화 flag, `[Content_Types].xml`, `word/document.xml` |
-| HWPX | ZIP 무결성, 암호화 flag, `Contents/content.hpf` |
-| HWP | HWP 3 signature 또는 OLE `FileHeader`, HWP 5 암호화 property |
+| DOCX | ZIP 무결성·크기 제한, 암호화 flag, Content Types와 main XML |
+| HWPX | ZIP 무결성·크기 제한, mimetype, version, package, section XML |
+| HWP | HWP 3 고정 signature·헤더 또는 OLE `FileHeader`·필수 stream·암호화 property |
 
 제품에서 허용하는 업로드 형식은 `HWP`, `HWPX`, `PDF`, `DOCX`
 네 가지로 제한한다. 환경변수로도 이 범위 밖의 형식을 활성화할 수 없다.
@@ -53,6 +53,13 @@ Review 실행·상태·결과·SSE는 BE-B 담당 범위이므로 이번 변경�
 
 PDF와 OLE 문서의 구조·암호화 검증에는 각각 `pypdf`, `olefile`을
 사용한다. 기존 magic byte 추측용 `filetype` 의존성은 제거한다.
+ZIP 계열은 중복 member, 과도한 member 수·압축 해제 크기, CRC 오류,
+과도한 XML, `DOCTYPE`·`ENTITY` 선언을 거부한다. HWP 3은 30바이트
+signature와 문서 정보 블록의 암호화·압축·정보 블록 길이를 검증한다.
+
+파일 검증은 FileStorage 저장 전에 끝내며, 저장 후
+`assess_contract_scope`가 설정된 시간 안에 완료되지 않으면
+`504 MCP_TIMEOUT`으로 응답하고 저장 파일을 삭제한다.
 
 ### 2. MCP 범위 판별 응답 정규화
 
@@ -119,17 +126,18 @@ uv run python scripts/generate_openapi.py
 결과:
 
 ```text
-Pytest: 132 passed
+Pytest: 166 passed, 4 skipped
 Ruff: All checks passed
 OpenAPI runtime schema 일치
 ```
 
 주요 추가 검증:
 
-- 정상 PDF, DOCX, HWPX, HWP 구조
+- 정상 PDF, DOCX, HWPX, HWP 3·HWP 5 구조
 - HWPML, XLS, XLSX 미지원 형식 차단
 - 암호화 PDF
-- 손상 PDF·XML과 확장자/실제 형식 불일치
+- 손상 PDF·XML·ZIP·HWP와 확장자/실제 형식 불일치
+- ZIP bomb 경계와 XML 외부 엔티티 선언 차단
 - 미지원 확장자와 10MB 제한 초과
 - 잘못된 파일이 MCP 호출 전에 차단되는지 확인
 - 잘못된 MCP 응답 시 저장 파일 삭제
@@ -137,7 +145,8 @@ OpenAPI runtime schema 일치
 - candidates 누락·null·빈 배열·동점과 정수 점수 보존
 - OUT_OF_SCOPE 선택·확인 순서와 `can_start_review`
 - EMPTY_DOCUMENT 및 비활성 계약 유형 검토 차단
-- 실제 저장소의 HWP, HWPX, DOCX, PDF 샘플 검증 통과
+- 실제 저장소의 HWP, HWPX, DOCX, PDF 샘플 14건 구조 검증 통과
+- 범위 판별 timeout의 504 응답과 저장 파일 삭제
 
 테스트의 MCP는 동일 tool 인터페이스를 제공하는 fake를 사용했다. 운영
 WorkShield MCP 프로세스를 이용한 transport E2E는 배포 환경에서 별도로
@@ -154,9 +163,11 @@ WorkShield MCP 프로세스를 이용한 transport E2E는 배포 환경에서 �
 업로드된 파일의 확장자만 확인하지 않고 실제 문서 구조를 검사하는 규칙을 검증한다.
 
 - 정상 PDF, DOCX, HWPX, HWP 문서 구조를 허용한다.
-- 암호화된 PDF를 `ENCRYPTED_FILE`로 거부한다.
+- 암호화된 PDF와 HWP 3·HWP 5를 `ENCRYPTED_FILE`로 거부한다.
 - 깨진 PDF와 HWP 문서를 `CORRUPTED_FILE`로 거부한다.
 - DOCX 확장자를 사용한 일반 ZIP 또는 XLSX 구조를 `FILE_TYPE_MISMATCH`로 거부한다.
+- 중복·과다 ZIP member, 압축 해제 크기, XML 구조·크기·엔티티 경계를
+  `CORRUPTED_FILE`로 거부한다.
 - 제품 범위 밖인 HWPML, XLS, XLSX를 `UNSUPPORTED_FILE_TYPE`으로 거부한다.
 
 이 테스트는 미지원 파일과 손상·암호화 파일이 FileStorage 저장 및 MCP 호출 전에
@@ -224,8 +235,8 @@ BE-B 연동 경계에서는 다음을 검증한다.
 - 공통 세션으로 Review 생성
 - Review가 `COMPLETED` 또는 `FAILED` terminal 상태에 도달하는지 확인
 - SSE에 현재 `review_id`와 terminal event가 포함되는지 확인
-- 완료 결과의 `clause_results`, `missing_standard_clauses`,
-  `toxic_patterns` 정규화 확인
+- 완료 결과의 `clause_results`, `missing_standard_clauses` 분리와
+  `clause_results[].toxic_patterns` 정규화 확인
 - 다른 브라우저의 Review 상태와 SSE 접근을 404로 차단
 
 실제 연동 테스트 실행 조건은 다음과 같다.
@@ -244,15 +255,16 @@ BE-B 연동 경계에서는 다음을 검증한다.
 ### 테스트 실행 결과
 
 - 파일 검증, scope 및 metadata 정규화 관련 기본 테스트를 포함한 전체 기본 테스트:
-  `140 passed, 2 skipped`
+  `166 passed, 4 skipped`
 - 파일명 정리 후 scope 정규화와 MCP payload 단위 테스트:
   `15 passed`
 - 실제 WorkShield MCP stdio 기반 BE-A 세션 흐름: 통과
 - 실제 WorkShield MCP stdio 기반 Review/SSE 흐름: 통과
 - Ruff 정적 검사: 통과
 
-여기서 기본 테스트의 두 skip은 실제 MCP 연결을 의도적으로 비활성화한 결과이며,
-기능 누락이나 실패를 의미하지 않는다. 운영 배포 환경의 URL, 인증, 네트워크 조건까지
+여기서 기본 테스트의 네 skip은 실제 MCP BE-A·BE-B와 실제 LLM
+Chat·Suggestions 연결을 의도적으로 비활성화한 결과이며, 기능 누락이나
+실패를 의미하지 않는다. 운영 배포 환경의 URL, 인증, 네트워크 조건까지
 포함하는 최종 E2E 검증은 배포 환경에서 별도로 수행한다.
 
 ## 결과

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import zipfile
 from io import BytesIO
+from xml.etree import ElementTree
 
 import olefile
 from pypdf import PdfReader
@@ -13,7 +14,12 @@ from app.common.errors import AppValidationError, UnsupportedMediaTypeError
 
 
 OLE_SIGNATURE = bytes.fromhex("D0CF11E0A1B11AE1")
-HWP_V3_SIGNATURE = b"HWP Document File V3.00"
+HWP_V3_PREFIX = b"HWP Document File V3.00"
+HWP_V3_SIGNATURE = HWP_V3_PREFIX + b" \x1a\x01\x02\x03\x04\x05"
+HWP_V3_FIXED_SIZE = len(HWP_V3_SIGNATURE) + 128 + 1008
+MAX_ZIP_MEMBER_COUNT = 2048
+MAX_ZIP_UNCOMPRESSED_SIZE = 100 * 1024 * 1024
+MAX_XML_SIZE = 16 * 1024 * 1024
 
 
 def _invalid(code: str, message: str) -> AppValidationError:
@@ -47,7 +53,93 @@ def _validate_pdf(content: bytes) -> None:
         raise _invalid("CORRUPTED_FILE", "파일 내용을 읽을 수 없습니다.") from error
 
 
-def _zip_members(content: bytes) -> set[str]:
+def _validate_zip_infos(infos: list[zipfile.ZipInfo]) -> set[str]:
+    if len(infos) > MAX_ZIP_MEMBER_COUNT:
+        raise _invalid("CORRUPTED_FILE", "파일 내용을 읽을 수 없습니다.")
+    total_size = 0
+    members: set[str] = set()
+    for info in infos:
+        name = info.filename.replace("\\", "/")
+        if name in members:
+            raise _invalid("CORRUPTED_FILE", "파일 내용을 읽을 수 없습니다.")
+        members.add(name)
+        total_size += info.file_size
+        if (
+            info.file_size < 0
+            or info.compress_size < 0
+            or total_size > MAX_ZIP_UNCOMPRESSED_SIZE
+        ):
+            raise _invalid("CORRUPTED_FILE", "파일 내용을 읽을 수 없습니다.")
+    return members
+
+
+def _read_xml(archive: zipfile.ZipFile, member: str) -> ElementTree.Element:
+    info = archive.getinfo(member)
+    if info.file_size > MAX_XML_SIZE:
+        raise _invalid("CORRUPTED_FILE", "파일 내용을 읽을 수 없습니다.")
+    raw = archive.read(info)
+    if b"<!DOCTYPE" in raw.upper() or b"<!ENTITY" in raw.upper():
+        raise _invalid("CORRUPTED_FILE", "파일 내용을 읽을 수 없습니다.")
+    try:
+        return ElementTree.fromstring(raw)
+    except ElementTree.ParseError as error:
+        raise _invalid("CORRUPTED_FILE", "파일 내용을 읽을 수 없습니다.") from error
+
+
+def _local_name(tag: str) -> str:
+    return tag.rsplit("}", 1)[-1]
+
+
+def _validate_docx(archive: zipfile.ZipFile, members: set[str]) -> None:
+    required = {"[Content_Types].xml", "word/document.xml"}
+    if not required.issubset(members):
+        raise _mismatch()
+
+    content_types = _read_xml(archive, "[Content_Types].xml")
+    document = _read_xml(archive, "word/document.xml")
+    if _local_name(content_types.tag) != "Types":
+        raise _invalid("CORRUPTED_FILE", "파일 내용을 읽을 수 없습니다.")
+    if _local_name(document.tag) != "document":
+        raise _invalid("CORRUPTED_FILE", "파일 내용을 읽을 수 없습니다.")
+
+    main_document_declared = any(
+        _local_name(element.tag) == "Override"
+        and element.attrib.get("PartName") == "/word/document.xml"
+        and element.attrib.get("ContentType")
+        in {
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml",
+            "application/vnd.ms-word.document.macroEnabled.main+xml",
+        }
+        for element in content_types
+    )
+    if not main_document_declared:
+        raise _invalid("CORRUPTED_FILE", "파일 내용을 읽을 수 없습니다.")
+
+
+def _validate_hwpx(archive: zipfile.ZipFile, members: set[str]) -> None:
+    required = {
+        "mimetype",
+        "version.xml",
+        "Contents/content.hpf",
+        "Contents/section0.xml",
+    }
+    if not required.issubset(members):
+        raise _mismatch()
+    if archive.read("mimetype") != b"application/hwp+zip":
+        raise _mismatch()
+
+    version = _read_xml(archive, "version.xml")
+    package = _read_xml(archive, "Contents/content.hpf")
+    section = _read_xml(archive, "Contents/section0.xml")
+    if _local_name(version.tag).lower() not in {"hcfversion", "version"}:
+        raise _invalid("CORRUPTED_FILE", "파일 내용을 읽을 수 없습니다.")
+    if _local_name(package.tag) != "package":
+        raise _invalid("CORRUPTED_FILE", "파일 내용을 읽을 수 없습니다.")
+    if _local_name(section.tag) not in {"sec", "section"}:
+        raise _invalid("CORRUPTED_FILE", "파일 내용을 읽을 수 없습니다.")
+
+
+def _validate_zip_document(extension: str, content: bytes) -> None:
     if not zipfile.is_zipfile(BytesIO(content)):
         if content.startswith(OLE_SIGNATURE):
             try:
@@ -70,23 +162,43 @@ def _zip_members(content: bytes) -> set[str]:
                     "ENCRYPTED_FILE",
                     "암호화된 파일은 업로드할 수 없습니다.",
                 )
+            members = _validate_zip_infos(infos)
             if archive.testzip() is not None:
                 raise _invalid("CORRUPTED_FILE", "파일 내용을 읽을 수 없습니다.")
-            return {info.filename.replace("\\", "/") for info in infos}
+            if extension == "docx":
+                _validate_docx(archive, members)
+            else:
+                _validate_hwpx(archive, members)
     except AppValidationError:
         raise
-    except (zipfile.BadZipFile, RuntimeError, OSError) as error:
+    except UnsupportedMediaTypeError:
+        raise
+    except (KeyError, zipfile.BadZipFile, RuntimeError, OSError) as error:
         raise _invalid("CORRUPTED_FILE", "파일 내용을 읽을 수 없습니다.") from error
 
 
-def _validate_zip_document(extension: str, content: bytes) -> None:
-    members = _zip_members(content)
-    required_members = {
-        "docx": {"[Content_Types].xml", "word/document.xml"},
-        "hwpx": {"Contents/content.hpf"},
-    }
-    if not required_members[extension].issubset(members):
-        raise _mismatch()
+def _validate_hwp_v3(content: bytes) -> None:
+    if not content.startswith(HWP_V3_SIGNATURE):
+        raise _invalid("CORRUPTED_FILE", "파일 내용을 읽을 수 없습니다.")
+    if len(content) < HWP_V3_FIXED_SIZE:
+        raise _invalid("CORRUPTED_FILE", "파일 내용을 읽을 수 없습니다.")
+
+    document_info_start = len(HWP_V3_SIGNATURE)
+    encrypted = int.from_bytes(
+        content[document_info_start + 96 : document_info_start + 98],
+        "little",
+    )
+    if encrypted:
+        raise _invalid("ENCRYPTED_FILE", "암호화된 파일은 업로드할 수 없습니다.")
+    compressed = content[document_info_start + 124]
+    if compressed not in {0, 1}:
+        raise _invalid("CORRUPTED_FILE", "파일 내용을 읽을 수 없습니다.")
+    information_block_size = int.from_bytes(
+        content[document_info_start + 126 : document_info_start + 128],
+        "little",
+    )
+    if HWP_V3_FIXED_SIZE + information_block_size > len(content):
+        raise _invalid("CORRUPTED_FILE", "파일 내용을 읽을 수 없습니다.")
 
 
 def _ole_stream_names(document: olefile.OleFileIO) -> set[str]:
@@ -94,16 +206,18 @@ def _ole_stream_names(document: olefile.OleFileIO) -> set[str]:
 
 
 def _validate_hwp(content: bytes) -> None:
-    if content.startswith(HWP_V3_SIGNATURE):
-        if len(content) <= len(HWP_V3_SIGNATURE):
-            raise _invalid("CORRUPTED_FILE", "파일 내용을 읽을 수 없습니다.")
+    if content.startswith(HWP_V3_PREFIX):
+        _validate_hwp_v3(content)
         return
     if not content.startswith(OLE_SIGNATURE):
         raise _mismatch()
     try:
-        with olefile.OleFileIO(BytesIO(content)) as document:
+        with olefile.OleFileIO(
+            BytesIO(content),
+            raise_defects=olefile.DEFECT_INCORRECT,
+        ) as document:
             streams = _ole_stream_names(document)
-            if {"EncryptionInfo", "EncryptedPackage"}.issubset(streams):
+            if "EncryptedPackage" in streams:
                 raise _invalid(
                     "ENCRYPTED_FILE",
                     "암호화된 파일은 업로드할 수 없습니다.",
@@ -121,9 +235,15 @@ def _validate_hwp(content: bytes) -> None:
                     "ENCRYPTED_FILE",
                     "암호화된 파일은 업로드할 수 없습니다.",
                 )
+            if not {"DocInfo", "BodyText/Section0"}.issubset(streams):
+                raise _invalid("CORRUPTED_FILE", "파일 내용을 읽을 수 없습니다.")
+            if not document.openstream("DocInfo").read():
+                raise _invalid("CORRUPTED_FILE", "파일 내용을 읽을 수 없습니다.")
+            if not document.openstream("BodyText/Section0").read():
+                raise _invalid("CORRUPTED_FILE", "파일 내용을 읽을 수 없습니다.")
     except (AppValidationError, UnsupportedMediaTypeError):
         raise
-    except (OSError, IOError) as error:
+    except (OSError, IOError, TypeError) as error:
         raise _invalid("CORRUPTED_FILE", "파일 내용을 읽을 수 없습니다.") from error
 
 

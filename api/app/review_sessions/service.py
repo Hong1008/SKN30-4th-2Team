@@ -1,5 +1,6 @@
 """검토 세션 생성과 사용자 선택 상태 변경 Use Case."""
 
+import asyncio
 import base64
 import json
 import uuid
@@ -13,6 +14,7 @@ from app.common.errors import (
     AppValidationError,
     ConflictError,
     ExternalServiceError,
+    ExternalServiceTimeoutError,
     PayloadTooLargeError,
     UnsupportedMediaTypeError,
 )
@@ -109,10 +111,15 @@ async def _assess_scope(
     storage_key: str,
     file_name: str,
     content: bytes,
+    timeout: float,
 ) -> dict[str, Any]:
     """MCP assess_contract_scope를 현재 transport 계약에 맞게 호출한다."""
     tool = next(
-        (candidate for candidate in runtime.tools if candidate.name == "assess_contract_scope"),
+        (
+            candidate
+            for candidate in runtime.tools
+            if candidate.name == "assess_contract_scope"
+        ),
         None,
     )
     if tool is None:
@@ -121,16 +128,30 @@ async def _assess_scope(
             message="검토 서비스가 범위 판별 기능을 제공하지 않습니다.",
             next_action="CONTACT_SUPPORT",
         )
-    if runtime.supports_file_path:
-        with storage.local_path(storage_key) as local_path:
-            result = await tool.ainvoke({"file_path": str(local_path)})
-    else:
-        result = await tool.ainvoke(
-            {
-                "file_content": base64.b64encode(content).decode("ascii"),
-                "file_name": file_name,
-            }
-        )
+    try:
+        if runtime.supports_file_path:
+            with storage.local_path(storage_key) as local_path:
+                result = await asyncio.wait_for(
+                    tool.ainvoke({"file_path": str(local_path)}),
+                    timeout=timeout,
+                )
+        else:
+            result = await asyncio.wait_for(
+                tool.ainvoke(
+                    {
+                        "file_content": base64.b64encode(content).decode("ascii"),
+                        "file_name": file_name,
+                    }
+                ),
+                timeout=timeout,
+            )
+    except (asyncio.TimeoutError, TimeoutError) as error:
+        raise ExternalServiceTimeoutError(
+            code="MCP_TIMEOUT",
+            message="계약 범위 분석 시간이 초과되었습니다.",
+            retryable=True,
+            next_action="RETRY",
+        ) from error
     return _tool_payload(result)
 
 
@@ -155,6 +176,7 @@ async def create_review_session(
                 storage_key,
                 file_name,
                 content,
+                settings.workshield_mcp_timeout,
             )
         )
         scope_status = ScopeStatus(scope_result["status"])
@@ -217,7 +239,10 @@ def select_contract_type(
     entity.selected_contract_type = selected_contract_type
     entity.selection_source = source
     entity.updated_at = datetime.now(UTC)
-    if entity.scope_status is ScopeStatus.OUT_OF_SCOPE and entity.out_of_scope_confirmed_at is None:
+    if (
+        entity.scope_status is ScopeStatus.OUT_OF_SCOPE
+        and entity.out_of_scope_confirmed_at is None
+    ):
         entity.state = ReviewSessionState.OUT_OF_SCOPE_CONFIRMATION_REQUIRED
     else:
         entity.state = ReviewSessionState.READY_TO_REVIEW

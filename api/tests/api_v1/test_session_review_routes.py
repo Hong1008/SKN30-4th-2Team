@@ -1,5 +1,6 @@
 """실제 v1 Router의 Cookie 소유권과 세션·검토 흐름을 검증한다."""
 
+import asyncio
 from contextlib import asynccontextmanager
 from io import BytesIO
 from pathlib import Path
@@ -25,16 +26,24 @@ class FakeTool:
 
     name = "assess_contract_scope"
 
-    def __init__(self, payload: dict[str, object] | None = None) -> None:
+    def __init__(
+        self,
+        payload: dict[str, object] | None = None,
+        *,
+        delay: float = 0,
+    ) -> None:
         self.payload = payload or {
             "scope_status": "CONTRACT_TYPE_UNCERTAIN",
             "suggested_contract_type": "SW_FREELANCE",
             "candidates": [],
         }
+        self.delay = delay
         self.call_count = 0
 
     async def ainvoke(self, _payload: dict[str, object]) -> dict[str, object]:
         self.call_count += 1
+        if self.delay:
+            await asyncio.sleep(self.delay)
         return self.payload
 
 
@@ -43,6 +52,8 @@ def create_test_app(
     scope_payload: dict[str, object] | None = None,
     *,
     max_upload_size_bytes: int = 10 * 1024 * 1024,
+    scope_delay: float = 0,
+    workshield_mcp_timeout: float = 30,
 ) -> FastAPI:
     """실제 v1 Router에 테스트 의존성만 교체한 앱을 만든다."""
     database = Database(f"sqlite+pysqlite:///{tmp_path / 'api.db'}")
@@ -53,8 +64,9 @@ def create_test_app(
         llm_provider="ollama",
         temp_upload_dir=tmp_path / "uploads",
         max_upload_size_bytes=max_upload_size_bytes,
+        workshield_mcp_timeout=workshield_mcp_timeout,
     )
-    fake_tool = FakeTool(scope_payload)
+    fake_tool = FakeTool(scope_payload, delay=scope_delay)
     runtime = SimpleNamespace(tools=(fake_tool,), supports_file_path=False)
 
     @asynccontextmanager
@@ -131,7 +143,9 @@ async def test_session_creation_and_review_access_are_cookie_bound(
         transport=transport,
         base_url="http://test",
     ) as other:
-        assert (await other.get(f"/api/v1/review-sessions/{session_id}")).status_code == 404
+        assert (
+            await other.get(f"/api/v1/review-sessions/{session_id}")
+        ).status_code == 404
         assert (await other.get(f"/api/v1/reviews/{review_id}")).status_code == 404
 
 
@@ -259,6 +273,36 @@ async def test_invalid_mcp_scope_response_removes_saved_file(tmp_path: Path) -> 
 
     assert response.status_code == 503
     assert response.json()["error"]["code"] == "MCP_RESPONSE_INVALID"
+    assert app.state.fake_scope_tool.call_count == 1
+    assert list(app.state.test_storage.list_keys()) == []
+
+
+async def test_mcp_scope_timeout_returns_504_and_removes_saved_file(
+    tmp_path: Path,
+) -> None:
+    app = create_test_app(
+        tmp_path,
+        scope_delay=0.1,
+        workshield_mcp_timeout=0.01,
+    )
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        response = await client.post(
+            "/api/v1/review-sessions",
+            files={"file": ("contract.pdf", _pdf(), "application/pdf")},
+        )
+
+    assert response.status_code == 504
+    assert response.json()["error"] == {
+        "code": "MCP_TIMEOUT",
+        "message": "계약 범위 분석 시간이 초과되었습니다.",
+        "field": None,
+        "retryable": True,
+        "next_action": "RETRY",
+        "details": {},
+    }
     assert app.state.fake_scope_tool.call_count == 1
     assert list(app.state.test_storage.list_keys()) == []
 
