@@ -707,7 +707,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponse_ReviewResponse_"
+                  "$ref": "#/components/schemas/ApiResponse_ReviewResultsResponse_"
                 }
               }
             }
@@ -1719,6 +1719,22 @@
         ],
         "title": "ApiResponse[ReviewResponse]"
       },
+      "ApiResponse_ReviewResultsResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ReviewResultsResponse"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ApiMeta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "title": "ApiResponse[ReviewResultsResponse]"
+      },
       "ApiResponse_ReviewSessionResponse_": {
         "properties": {
           "data": {
@@ -1969,6 +1985,25 @@
           "type"
         ],
         "title": "ChatSource"
+      },
+      "CodeLabel": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "label"
+        ],
+        "title": "CodeLabel",
+        "description": "프론트가 하드코딩 없이 표시할 수 있는 코드와 표시명."
       },
       "ContractTypeCandidate": {
         "properties": {
@@ -2379,6 +2414,28 @@
         ],
         "title": "MetadataResponse"
       },
+      "MissingStandardClauseResponse": {
+        "properties": {
+          "result_type": {
+            "$ref": "#/components/schemas/CodeLabel"
+          },
+          "standard": {
+            "$ref": "#/components/schemas/ReviewResultStandardClause"
+          },
+          "explanation": {
+            "type": "string",
+            "title": "Explanation"
+          }
+        },
+        "type": "object",
+        "required": [
+          "result_type",
+          "standard",
+          "explanation"
+        ],
+        "title": "MissingStandardClauseResponse",
+        "description": "계약서 전체에서 대응 내용을 찾지 못한 표준조항 후보."
+      },
       "OutOfScopeConfirmationRequest": {
         "properties": {
           "confirmed": {
@@ -2452,6 +2509,79 @@
         ],
         "title": "ReviewCancelResponse",
         "description": "검토 결과 폐기와 파일 정리 응답."
+      },
+      "ReviewClauseResultCounts": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Total"
+          },
+          "NONE": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "None"
+          },
+          "EXTRA": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Extra"
+          },
+          "NO_MATCH": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "No Match"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "NONE",
+          "EXTRA",
+          "NO_MATCH"
+        ],
+        "title": "ReviewClauseResultCounts",
+        "description": "사용자 조항 결과 코드별 개수."
+      },
+      "ReviewClauseResultResponse": {
+        "properties": {
+          "user_clause_id": {
+            "type": "string",
+            "title": "User Clause Id"
+          },
+          "user_clause": {
+            "type": "string",
+            "title": "User Clause"
+          },
+          "deviation": {
+            "$ref": "#/components/schemas/CodeLabel"
+          },
+          "match": {
+            "$ref": "#/components/schemas/ReviewResultMatch"
+          },
+          "explanation": {
+            "type": "string",
+            "title": "Explanation"
+          },
+          "toxic_patterns": {
+            "items": {
+              "$ref": "#/components/schemas/CodeLabel"
+            },
+            "type": "array",
+            "title": "Toxic Patterns"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_clause_id",
+          "user_clause",
+          "deviation",
+          "match",
+          "explanation",
+          "toxic_patterns"
+        ],
+        "title": "ReviewClauseResultResponse",
+        "description": "사용자 계약서에 실제로 존재하는 조항의 표시용 결과."
       },
       "ReviewCreateRequest": {
         "properties": {
@@ -2605,6 +2735,196 @@
         "title": "ReviewResponse",
         "description": "검토 상태 조회 응답."
       },
+      "ReviewResultMatch": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/StandardMatchStatus"
+          },
+          "standard": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewResultStandardClause"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "ReviewResultMatch",
+        "description": "표준조항 후보 선택 여부."
+      },
+      "ReviewResultMetadata": {
+        "properties": {
+          "review_id": {
+            "type": "string",
+            "title": "Review Id"
+          },
+          "review_state": {
+            "type": "string",
+            "title": "Review State"
+          },
+          "mcp_review_status": {
+            "type": "string",
+            "title": "Mcp Review Status"
+          },
+          "contract_type": {
+            "type": "string",
+            "title": "Contract Type"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          },
+          "disclaimer": {
+            "type": "string",
+            "title": "Disclaimer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "review_id",
+          "review_state",
+          "mcp_review_status",
+          "contract_type",
+          "started_at",
+          "completed_at",
+          "expires_at",
+          "disclaimer"
+        ],
+        "title": "ReviewResultMetadata",
+        "description": "완료된 검토 결과의 상태와 수명주기 메타데이터."
+      },
+      "ReviewResultStandardClause": {
+        "properties": {
+          "clause_id": {
+            "type": "string",
+            "title": "Clause Id"
+          },
+          "contract_type": {
+            "type": "string",
+            "title": "Contract Type"
+          },
+          "category": {
+            "$ref": "#/components/schemas/CodeLabel"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "clause_id",
+          "contract_type",
+          "category",
+          "title",
+          "text",
+          "source",
+          "version"
+        ],
+        "title": "ReviewResultStandardClause",
+        "description": "결과 화면에 노출하는 표준조항과 출처."
+      },
+      "ReviewResultsResponse": {
+        "properties": {
+          "review": {
+            "$ref": "#/components/schemas/ReviewResultMetadata"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/ReviewResultsSummary"
+          },
+          "clause_results": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewClauseResultResponse"
+            },
+            "type": "array",
+            "title": "Clause Results"
+          },
+          "missing_standard_clauses": {
+            "items": {
+              "$ref": "#/components/schemas/MissingStandardClauseResponse"
+            },
+            "type": "array",
+            "title": "Missing Standard Clauses"
+          }
+        },
+        "type": "object",
+        "required": [
+          "review",
+          "summary",
+          "clause_results",
+          "missing_standard_clauses"
+        ],
+        "title": "ReviewResultsResponse",
+        "description": "문서화된 검토 결과 조회 응답."
+      },
+      "ReviewResultsSummary": {
+        "properties": {
+          "clause_results": {
+            "$ref": "#/components/schemas/ReviewClauseResultCounts"
+          },
+          "missing_standard_clauses": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Missing Standard Clauses"
+          },
+          "toxic_pattern_candidates": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Toxic Pattern Candidates"
+          }
+        },
+        "type": "object",
+        "required": [
+          "clause_results",
+          "missing_standard_clauses",
+          "toxic_pattern_candidates"
+        ],
+        "title": "ReviewResultsSummary",
+        "description": "결과 화면 상단 요약."
+      },
       "ReviewSessionResponse": {
         "properties": {
           "session_id": {
@@ -2737,6 +3057,15 @@
         ],
         "title": "ReviewSessionResponse",
         "description": "세션 생성·상태 복구 응답."
+      },
+      "StandardMatchStatus": {
+        "type": "string",
+        "enum": [
+          "CANDIDATE_SELECTED",
+          "NO_CANDIDATE"
+        ],
+        "title": "StandardMatchStatus",
+        "description": "표준조항 후보 선택 상태."
       },
       "SuggestionRequest": {
         "properties": {

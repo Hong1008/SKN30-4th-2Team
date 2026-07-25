@@ -27,6 +27,7 @@ from app.grounding.schemas import GroundingResponse
 from app.grounding.service import get_review_grounding
 from app.idempotency.service import (
     find_replay,
+    idempotency_guard,
     internal_operation_key,
     request_fingerprint,
     require_idempotency_key,
@@ -38,11 +39,13 @@ from app.review_sessions.repository import SqlAlchemyReviewSessionRepository
 from app.reviews.domain import ReviewState
 from app.reviews.repository import SqlAlchemyReviewRepository
 from app.reviews.runner import execute_review
+from app.reviews.presentation import present_review_results
 from app.reviews.schemas import (
     ReviewCancelResponse,
     ReviewCreateRequest,
     ReviewCreateResponse,
     ReviewResponse,
+    ReviewResultsResponse,
 )
 from app.reviews.service import create_review, retry_review
 from app.storage.dependencies import FileStorageDep
@@ -146,7 +149,7 @@ async def start_review(
         review_state=entity.state.value,
         session_id=entity.session_id,
     )
-    save_response(
+    raced_replay = save_response(
         db_session,
         scope="reviews.create",
         session_id=review_session.id,
@@ -155,6 +158,11 @@ async def start_review(
         response_snapshot=response_data.model_dump(mode="json"),
         ttl_seconds=settings.session_ttl_seconds,
     )
+    if raced_replay is not None:
+        return success_response(
+            request,
+            ReviewCreateResponse.model_validate(raced_replay),
+        )
     db_session.commit()
     _schedule_review(
         request,
@@ -169,7 +177,8 @@ async def start_review(
 
 @router.get(
     "/{review_id}/results",
-    response_model=ApiResponse[ReviewResponse],
+    response_model=ApiResponse[ReviewResultsResponse],
+    response_model_exclude_none=True,
 )
 def get_results(request: Request, owned: OwnedReviewDep):
     if owned.state is not ReviewState.COMPLETED:
@@ -177,7 +186,13 @@ def get_results(request: Request, owned: OwnedReviewDep):
             code="REVIEW_NOT_COMPLETED",
             message="검토가 아직 완료되지 않았습니다.",
         )
-    return success_response(request, _response(owned))
+    return success_response(
+        request,
+        present_review_results(
+            owned,
+            metadata_cache=getattr(request.app.state, "metadata_cache", None),
+        ),
+    )
 
 
 @router.get(
@@ -212,34 +227,47 @@ async def chat_message(
 ):
     """대화 본문을 별도 영구 이력으로 남기지 않는 검토 범위 질의응답."""
     key = require_idempotency_key(idempotency_key)
-    fingerprint = request_fingerprint(payload.model_dump(mode="json"))
-    replay = find_replay(
-        db_session,
+    fingerprint = request_fingerprint(
+        {
+            "review_id": owned.id,
+            "payload": payload.model_dump(mode="json"),
+        }
+    )
+    async with idempotency_guard(
         scope="reviews.chat",
         session_id=owned.session_id,
         idempotency_key=key,
-        fingerprint=fingerprint,
-    )
-    if replay is not None:
-        return success_response(request, ChatResponse.model_validate(replay))
-    data = await answer_review_question(
-        owned,
-        payload,
-        runtime=runtime,
-        model=model,
-        settings=settings,
-    )
-    save_response(
-        db_session,
-        scope="reviews.chat",
-        session_id=owned.session_id,
-        idempotency_key=key,
-        fingerprint=fingerprint,
-        response_snapshot=data.model_dump(mode="json"),
-        ttl_seconds=settings.session_ttl_seconds,
-    )
-    db_session.commit()
-    return success_response(request, data)
+    ):
+        replay = find_replay(
+            db_session,
+            scope="reviews.chat",
+            session_id=owned.session_id,
+            idempotency_key=key,
+            fingerprint=fingerprint,
+        )
+        if replay is not None:
+            return success_response(request, ChatResponse.model_validate(replay))
+        data = await answer_review_question(
+            owned,
+            payload,
+            runtime=runtime,
+            model=model,
+            settings=settings,
+        )
+        raced_replay = save_response(
+            db_session,
+            scope="reviews.chat",
+            session_id=owned.session_id,
+            idempotency_key=key,
+            fingerprint=fingerprint,
+            response_snapshot=data.model_dump(mode="json"),
+            ttl_seconds=settings.session_ttl_seconds,
+        )
+        if raced_replay is not None:
+            data = ChatResponse.model_validate(raced_replay)
+        else:
+            db_session.commit()
+        return success_response(request, data)
 
 
 @router.post(
@@ -258,37 +286,50 @@ async def create_suggestion(
 ):
     """검증된 단일 사용자·표준조항과 grounding으로 협의 초안을 생성한다."""
     key = require_idempotency_key(idempotency_key)
-    fingerprint = request_fingerprint(payload.model_dump(mode="json"))
-    replay = find_replay(
-        db_session,
+    fingerprint = request_fingerprint(
+        {
+            "review_id": owned.id,
+            "payload": payload.model_dump(mode="json"),
+        }
+    )
+    async with idempotency_guard(
         scope="reviews.suggestions",
         session_id=owned.session_id,
         idempotency_key=key,
-        fingerprint=fingerprint,
-    )
-    if replay is not None:
-        return success_response(
-            request,
-            SuggestionResponse.model_validate(replay),
+    ):
+        replay = find_replay(
+            db_session,
+            scope="reviews.suggestions",
+            session_id=owned.session_id,
+            idempotency_key=key,
+            fingerprint=fingerprint,
         )
-    data = await generate_suggestion(
-        owned,
-        payload,
-        runtime=runtime,
-        model=model,
-        settings=settings,
-    )
-    save_response(
-        db_session,
-        scope="reviews.suggestions",
-        session_id=owned.session_id,
-        idempotency_key=key,
-        fingerprint=fingerprint,
-        response_snapshot=data.model_dump(mode="json"),
-        ttl_seconds=settings.session_ttl_seconds,
-    )
-    db_session.commit()
-    return success_response(request, data)
+        if replay is not None:
+            return success_response(
+                request,
+                SuggestionResponse.model_validate(replay),
+            )
+        data = await generate_suggestion(
+            owned,
+            payload,
+            runtime=runtime,
+            model=model,
+            settings=settings,
+        )
+        raced_replay = save_response(
+            db_session,
+            scope="reviews.suggestions",
+            session_id=owned.session_id,
+            idempotency_key=key,
+            fingerprint=fingerprint,
+            response_snapshot=data.model_dump(mode="json"),
+            ttl_seconds=settings.session_ttl_seconds,
+        )
+        if raced_replay is not None:
+            data = SuggestionResponse.model_validate(raced_replay)
+        else:
+            db_session.commit()
+        return success_response(request, data)
 
 
 @router.get("/{review_id}/events")
@@ -317,17 +358,33 @@ async def review_events(
             else:
                 event_name = "progress"
             if sequence > last_sequence or event_name in {"completed", "failed"}:
+                progress = current.progress or {}
+                event_data = {
+                    "review_id": current.id,
+                    "sequence": sequence,
+                    "review_state": current.state.value,
+                    "stage": progress.get("stage"),
+                    "current": progress.get("current"),
+                    "total": progress.get("total"),
+                    "percent": progress.get("percent"),
+                    "message": progress.get("message"),
+                }
+                if event_name in {"completed", "failed"}:
+                    event_data.update(
+                        {
+                            "mcp_review_status": (
+                                current.mcp_review_status.value
+                                if current.mcp_review_status
+                                else None
+                            ),
+                            "error": current.error,
+                        }
+                    )
                 yield {
                     "event": event_name,
                     "id": str(sequence),
                     "data": json.dumps(
-                        {
-                            "review_id": current.id,
-                            "sequence": sequence,
-                            "review_state": current.state.value,
-                            "progress": current.progress,
-                            "error": current.error,
-                        },
+                        event_data,
                         ensure_ascii=False,
                     ),
                 }
@@ -393,7 +450,7 @@ async def retry(
         session_id=entity.session_id,
         retry_of=entity.retry_of_review_id,
     )
-    save_response(
+    raced_replay = save_response(
         db_session,
         scope="reviews.retry",
         session_id=owned.session_id,
@@ -402,6 +459,11 @@ async def retry(
         response_snapshot=response_data.model_dump(mode="json"),
         ttl_seconds=settings.session_ttl_seconds,
     )
+    if raced_replay is not None:
+        return success_response(
+            request,
+            ReviewCreateResponse.model_validate(raced_replay),
+        )
     db_session.commit()
     _schedule_review(
         request,

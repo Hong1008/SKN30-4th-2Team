@@ -1,6 +1,7 @@
 # 0724 WorkShield MVP API 완성
 
 - 상태: 승인됨
+- 구현 상태: `feat/mvp-api` 로컬 검증 완료, main 반영 대기
 - 결정일: 2026-07-24
 - 대상 브랜치: `feat/mvp-api`
 - 기준 커밋: `e658b0d feat(api): 세션 및 리뷰 API 기본 흐름 구현`
@@ -68,6 +69,10 @@ WorkShield API는 MCP가 생성한 결정론적 검토 결과를 사실의 기�
 
 - 동일 키·동일 fingerprint: 저장된 응답을 반환한다.
 - 동일 키·다른 fingerprint: `409 IDEMPOTENCY_KEY_REUSED`를 반환한다.
+- Chat과 Suggestions의 fingerprint에는 `review_id`를 포함하여 같은
+  세션의 다른 review에서 키를 재사용하지 못하게 한다.
+- 단일 프로세스에서는 동일한 외부 호출을 async lock으로 직렬화하고,
+  다중 프로세스 경쟁은 DB unique 제약과 승자 응답 재조회로 수렴시킨다.
 - 검토 접수와 멱등 응답 스냅샷은 같은 DB commit으로 저장한다.
 - 기존 `reviews.idempotency_key`에는 scope를 반영한 내부 해시 키를
   저장하여 legacy unique 제약과 API scope가 충돌하지 않게 한다.
@@ -118,11 +123,19 @@ WorkShield API는 MCP가 생성한 결정론적 검토 결과를 사실의 기�
 - MCP 결과는 다음 배열을 항상 분리해서 보존한다.
   - `clause_results`
   - `missing_standard_clauses`
-  - `toxic_patterns`
-- 누락 또는 null 배열은 빈 배열로 정규화한다.
+  - 각 `clause_results[].toxic_patterns`
+- 실제 MCP 공개 DTO를 `extra=forbid`로 검증하고 필수 필드·enum·유니온
+  위반은 `MCP_RESPONSE_INVALID` 실패로 처리한다.
+- 결과 순서로 `uc_{review_id}_{1부터 시작하는 순번}` ID를 생성한다.
+- 두 최상위 결과 배열의 누락 또는 null은 빈 배열로 정규화한다.
+- `GET /results`는 저장 dict를 그대로 노출하지 않고
+  `review`, `summary`, `clause_results`, `missing_standard_clauses` DTO로
+  변환하며 내부 후보 점수는 노출하지 않는다.
 - 상태 전이는 `QUEUED → REVIEWING → COMPLETED | FAILED`로 제한한다.
 - SSE는 저장된 sequence를 사용하고 완료·실패·만료·취소 후 종료한다.
 - `Last-Event-ID` 이하의 진행 이벤트는 다시 전송하지 않는다.
+- SSE data는 `stage`, `current`, `total`, `percent`, `message`를 최상위에
+  제공하고 terminal event에 `mcp_review_status`, `error`를 추가한다.
 - SSE가 끊기면 프론트는 상태 조회 API로 동기화한 뒤 재연결한다.
 
 MCP 상태와 실패 정책:
@@ -135,6 +148,7 @@ MCP 상태와 실패 정책:
 | MCP timeout | `FAILED / MCP_TIMEOUT` | 가능 |
 | `INVALID_CONFIG` | `FAILED` | 불가 |
 | `EMPTY_DOCUMENT` | `FAILED` | 불가 |
+| 공개 DTO 위반 | `FAILED / MCP_RESPONSE_INVALID` | 불가 |
 
 서버가 재시작되면 남아 있던 `QUEUED`, `REVIEWING` 검토를
 `FAILED / REVIEW_INTERRUPTED`로 복구한다. 이 오류는 재시도 가능하며,
@@ -309,7 +323,7 @@ git diff --check
 
 ```text
 Ruff: All checks passed
-Pytest: 94 passed in 6.32s
+Pytest: 166 passed, 4 skipped
 git diff --check: 통과
 ```
 
@@ -321,6 +335,8 @@ git diff --check: 통과
 - 같은 멱등 키·다른 요청 `409 IDEMPOTENCY_KEY_REUSED`
 - metadata 메모리 캐시와 ETag `304`
 - MCP 결과의 null 배열 정규화
+- 실제 MCP 공개 DTO 위반 거부와 canonical 사용자 조항 ID
+- 결과 조회의 표시용 DTO·요약·MISSING 분리
 - grounding category와 출처 정규화
 - Chat focus clause와 citation allowlist
 - Suggestions 표준조항·grounding citation·생성 숫자 검증
@@ -332,27 +348,41 @@ git diff --check: 통과
 - 반복 가능한 orphan 파일 정리와 취소
 - OpenAPI 파일과 FastAPI runtime schema 일치
 
-테스트는 실제 외부 MCP·LLM을 호출하지 않고 동일한 runtime, tool,
-structured-output 인터페이스를 제공하는 fake로 전체 API 흐름을
-검증했다.
+기본 회귀 테스트는 실제 외부 MCP·LLM을 호출하지 않고 동일한 runtime,
+tool, structured-output 인터페이스를 제공하는 fake로 전체 API 흐름을
+검증한다. 외부 의존성이 필요한 검증은 opt-in 통합 테스트로 분리했다.
+
+2026-07-25 opt-in 사전 검증 결과:
+
+- 실제 WorkShield MCP stdio BE-A 세션 흐름: 통과
+- 실제 WorkShield MCP stdio BE-B Review/SSE 흐름: 통과
+- Ollama Qwen3.5 4B Chat 구조·출처: 통과, 표현 품질 후속 필요
+- Ollama Qwen3.5 4B Suggestions: 출처 누락으로 모델 품질 gate 실패,
+  서버의 `LLM_OUTPUT_INVALID` 안전 차단 통과
+- Gemini Gemma 4 31B 합성 fixture: Chat·Suggestions 각 3/3 통과,
+  외부 전송 정책으로 운영 사용 금지
 
 ## 확인된 제한과 후속 검증
 
 다음 항목은 코드와 자동화 테스트만으로 완료되었다고 판단하지 않는다.
 
-- 운영 환경의 실제 WorkShield MCP 프로세스와 파일 transport 연결
-- 실제 MCP progress message의 단계 문자열과 발생 빈도
+- 운영 환경 streamable HTTP WorkShield MCP와 실제 서비스 주소·파일
+  transport 연결
+- 실제 MCP progress의 happy path는 stdio에서 확인했으나 운영 환경의
+  단계 문자열, 발생 빈도와 오류 이벤트
 - 운영 corpus를 사용한 `review_contract_candidates` 결과 품질
 - 실제 `get_category_grounding` 원문·출처 필드 호환성
-- 운영 Ollama 모델의 구조화 출력 준수율과 timeout
+- Qwen3.5 4B는 Suggestions 품질 gate를 통과하지 못했으며 운영 Ollama
+  모델은 아직 미선정
 - 긴 계약서에서 Chat/Suggestions 컨텍스트 크기와 응답 시간
 - 다중 프로세스 또는 다중 인스턴스 환경의 메모리 metadata 캐시
-- 동시 요청 경쟁 상황에서 SQLite 멱등 레코드 충돌 처리
+- 다중 인스턴스에서 Chat/Suggestions 외부 호출 자체의 분산 잠금
 - 운영 로그·APM·reverse proxy에서 계약서, 토큰, 대화 본문 미수집 확인
 
-따라서 배포 전 실제 MCP·LLM 운영 서버를 사용한 E2E와 장애 주입 테스트를
-별도로 수행해야 한다. 해당 검증 전에는 자동화 테스트의 통과를 운영 품질
-검증 완료로 해석하지 않는다.
+따라서 배포 전 실제 운영 주소의 MCP E2E와 장애 주입 테스트를 별도로
+수행해야 한다. LLM 기능을 활성화할 경우에는 승인된 정확한 Ollama 모델로
+기능별 품질 gate도 다시 통과해야 한다. 해당 검증 전에는 자동화 테스트의
+통과를 운영 품질 검증 완료로 해석하지 않는다.
 
 ## 고려한 대안
 

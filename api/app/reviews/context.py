@@ -1,30 +1,19 @@
 """검토 결과에서 조항·표준조항·카테고리 컨텍스트를 안전하게 추출."""
 
+from copy import deepcopy
 from typing import Any
 
 
 def clause_results(result: dict[str, Any] | None) -> list[dict[str, Any]]:
     if not result or not isinstance(result.get("clause_results"), list):
         return []
-    return [
-        item
-        for item in result["clause_results"]
-        if isinstance(item, dict)
-    ]
+    return [item for item in result["clause_results"] if isinstance(item, dict)]
 
 
 def user_clause_id(item: dict[str, Any]) -> str | None:
-    user_clause = item.get("user_clause")
-    candidates = [
-        item.get("user_clause_id"),
-        item.get("clause_id"),
-        item.get("id"),
-        user_clause.get("id") if isinstance(user_clause, dict) else None,
-    ]
-    return next(
-        (value for value in candidates if isinstance(value, str) and value),
-        None,
-    )
+    """백엔드 정규화 단계에서 생성한 canonical ID만 반환한다."""
+    value = item.get("user_clause_id")
+    return value if isinstance(value, str) and value else None
 
 
 def match_data(item: dict[str, Any]) -> dict[str, Any]:
@@ -63,11 +52,7 @@ def find_user_clause(
     clause_id: str,
 ) -> dict[str, Any] | None:
     return next(
-        (
-            item
-            for item in clause_results(result)
-            if user_clause_id(item) == clause_id
-        ),
+        (item for item in clause_results(result) if user_clause_id(item) == clause_id),
         None,
     )
 
@@ -82,3 +67,13 @@ def source_registry(result: dict[str, Any] | None) -> dict[str, set[str]]:
         if standard_id:
             registry["STANDARD_CLAUSE"].add(standard_id)
     return registry
+
+
+def llm_review_result(result: dict[str, Any]) -> dict[str, Any]:
+    """LLM 설명에 필요 없는 내부 후보 점수를 제거한 복사본을 반환한다."""
+    sanitized = deepcopy(result)
+    for item in clause_results(sanitized):
+        match = item.get("match")
+        if isinstance(match, dict):
+            match.pop("score", None)
+    return sanitized

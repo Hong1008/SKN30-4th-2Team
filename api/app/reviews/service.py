@@ -15,7 +15,9 @@ from app.reviews.repository import SqlAlchemyReviewRepository
 
 def _ensure_startable(session: ReviewSession) -> None:
     """세션이 검토를 시작할 수 있는 상태인지 확인한다."""
-    if session.state is ReviewSessionState.EXPIRED or session.is_expired(datetime.now(UTC)):
+    if session.state is ReviewSessionState.EXPIRED or session.is_expired(
+        datetime.now(UTC)
+    ):
         raise ExpiredError(
             code="SESSION_EXPIRED",
             message="검토 세션이 만료되었습니다.",
@@ -27,7 +29,10 @@ def _ensure_startable(session: ReviewSession) -> None:
             message="계약 유형을 먼저 선택해 주세요.",
             next_action="SELECT_CONTRACT_TYPE",
         )
-    if session.scope_status is not None and session.scope_status.value == "EMPTY_DOCUMENT":
+    if (
+        session.scope_status is not None
+        and session.scope_status.value == "EMPTY_DOCUMENT"
+    ):
         raise ConflictError(
             code="CONTRACT_TYPE_SELECTION_REQUIRED",
             message="검토 가능한 문서를 다시 업로드해 주세요.",
@@ -95,7 +100,6 @@ def create_review(
         ttl_seconds=settings.session_ttl_seconds,
         now=now,
     )
-    db_session.flush()
     return entity
 
 
@@ -134,5 +138,4 @@ def retry_review(
         progress={"sequence": 0, "stage": "PREPARE", "percent": 0},
     )
     repository.add(retried)
-    db_session.flush()
     return retried

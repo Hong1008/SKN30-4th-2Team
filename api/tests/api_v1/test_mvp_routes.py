@@ -2,9 +2,12 @@
 
 import asyncio
 from contextlib import asynccontextmanager
+from dataclasses import replace
+from datetime import UTC, datetime, timedelta
 from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
+import json
 
 import httpx
 import pytest
@@ -18,6 +21,7 @@ from app.db.database import Database
 from app.db.dependencies import get_database
 from app.llm.dependencies import get_chat_model
 from app.llm.mcp.dependencies import get_workshield_runtime
+from app.reviews.repository import SqlAlchemyReviewRepository
 from app.storage.dependencies import get_file_storage
 from app.storage.local import LocalFileStorage
 
@@ -34,15 +38,33 @@ class FakeTool:
 
 
 class FakeStructuredRunnable:
-    def __init__(self, schema: type) -> None:
+    def __init__(self, schema: type, calls: dict[str, int]) -> None:
         self._schema = schema
+        self._calls = calls
 
     async def ainvoke(self, _prompt: str):
+        call_name = (
+            "chat_completion"
+            if self._schema.__name__ == "ChatStructuredOutput"
+            else "suggestion_completion"
+        )
+        self._calls[call_name] = self._calls.get(call_name, 0) + 1
+        await asyncio.sleep(0.02)
         if self._schema.__name__ == "ChatStructuredOutput":
+            context = json.loads(_prompt.split("\n", 1)[1])
+            clause = (
+                context.get("focused_clause")
+                or context["review_result"]["clause_results"][0]
+            )
             return {
                 "outcome": "ANSWERED",
                 "answer": "현재 검토 결과에서는 책임 범위를 추가로 확인할 수 있습니다.",
-                "sources": [{"type": "USER_CLAUSE", "id": "uc_1"}],
+                "sources": [
+                    {
+                        "type": "USER_CLAUSE",
+                        "id": clause["user_clause_id"],
+                    }
+                ],
                 "limitations": ["법률 자문이 아닙니다."],
             }
         return {
@@ -56,8 +78,11 @@ class FakeStructuredRunnable:
 
 
 class FakeChatModel:
+    def __init__(self, calls: dict[str, int]) -> None:
+        self._calls = calls
+
     def with_structured_output(self, schema: type):
-        return FakeStructuredRunnable(schema)
+        return FakeStructuredRunnable(schema, self._calls)
 
 
 def create_mvp_app(tmp_path: Path) -> tuple[FastAPI, dict[str, int]]:
@@ -88,19 +113,25 @@ def create_mvp_app(tmp_path: Path) -> tuple[FastAPI, dict[str, int]]:
                 "contract_type": "SW_FREELANCE",
                 "clause_results": [
                     {
-                        "user_clause": {"id": "uc_1", "text": "책임 조항"},
+                        "user_clause": "책임 조항",
+                        "deviation": "NONE",
                         "match": {
                             "status": "CANDIDATE_SELECTED",
                             "standard": {
                                 "clause_id": "std_1",
+                                "contract_type": "SW_FREELANCE",
                                 "category": "LIABILITY",
+                                "title": "책임 조항",
                                 "text": "표준 책임 조항",
+                                "source": "표준계약서",
+                                "version": "2026-07-25",
                             },
+                            "score": 0.95,
                         },
+                        "toxic_patterns": [],
                     }
                 ],
                 "missing_standard_clauses": [],
-                "toxic_patterns": [],
             },
             calls,
         ),
@@ -123,11 +154,7 @@ def create_mvp_app(tmp_path: Path) -> tuple[FastAPI, dict[str, int]]:
         ),
         FakeTool(
             "list_contract_types",
-            {
-                "contract_types": [
-                    {"code": "SW_FREELANCE", "label": "SW 프리랜서 용역"}
-                ]
-            },
+            {"contract_types": [{"code": "SW_FREELANCE", "label": "SW 프리랜서 용역"}]},
             calls,
         ),
         FakeTool(
@@ -171,7 +198,7 @@ def create_mvp_app(tmp_path: Path) -> tuple[FastAPI, dict[str, int]]:
     app.dependency_overrides[get_database] = lambda: database
     app.dependency_overrides[get_file_storage] = lambda: storage
     app.dependency_overrides[get_workshield_runtime] = lambda: runtime
-    app.dependency_overrides[get_chat_model] = lambda: FakeChatModel()
+    app.dependency_overrides[get_chat_model] = lambda: FakeChatModel(calls)
     app.dependency_overrides[get_settings] = lambda: settings
     return app, calls
 
@@ -197,7 +224,7 @@ def _pdf() -> bytes:
 
 
 async def test_full_mvp_flow_and_browser_isolation(tmp_path: Path) -> None:
-    app, _ = create_mvp_app(tmp_path)
+    app, calls = create_mvp_app(tmp_path)
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(
         transport=transport,
@@ -235,11 +262,33 @@ async def test_full_mvp_flow_and_browser_isolation(tmp_path: Path) -> None:
         )
         assert replay.json()["data"]["review_id"] == review_id
         await _wait_completed(owner, review_id)
+        user_clause_id = f"uc_{review_id}_1"
 
         result = await owner.get(f"/api/v1/reviews/{review_id}/results")
-        assert result.json()["data"]["result"]["clause_results"][0]["user_clause"][
-            "id"
-        ] == "uc_1"
+        result_data = result.json()["data"]
+        assert result_data["review"]["review_id"] == review_id
+        assert result_data["summary"] == {
+            "clause_results": {
+                "total": 1,
+                "NONE": 1,
+                "EXTRA": 0,
+                "NO_MATCH": 0,
+            },
+            "missing_standard_clauses": 0,
+            "toxic_pattern_candidates": 0,
+        }
+        clause_result = result_data["clause_results"][0]
+        assert clause_result["user_clause_id"] == user_clause_id
+        assert clause_result["deviation"] == {
+            "code": "NONE",
+            "label": "표준 대응 후보 있음",
+        }
+        assert clause_result["match"]["standard"]["category"] == {
+            "code": "LIABILITY",
+            "label": "LIABILITY",
+        }
+        assert "score" not in clause_result["match"]
+        assert "result" not in result_data
         grounding = await owner.get(
             f"/api/v1/reviews/{review_id}/grounding",
             params={"category": "LIABILITY"},
@@ -248,13 +297,16 @@ async def test_full_mvp_flow_and_browser_isolation(tmp_path: Path) -> None:
 
         chat = await owner.post(
             f"/api/v1/reviews/{review_id}/chat/messages",
-            json={"message": "책임 조항을 설명해줘", "focus_clause_id": "uc_1"},
+            json={
+                "message": "책임 조항을 설명해줘",
+                "focus_clause_id": user_clause_id,
+            },
             headers={"Idempotency-Key": "chat-1"},
         )
         assert chat.json()["data"]["outcome"] == "ANSWERED"
         chat_conflict = await owner.post(
             f"/api/v1/reviews/{review_id}/chat/messages",
-            json={"message": "다른 질문", "focus_clause_id": "uc_1"},
+            json={"message": "다른 질문", "focus_clause_id": user_clause_id},
             headers={"Idempotency-Key": "chat-1"},
         )
         assert chat_conflict.status_code == 409
@@ -263,7 +315,7 @@ async def test_full_mvp_flow_and_browser_isolation(tmp_path: Path) -> None:
         suggestion = await owner.post(
             f"/api/v1/reviews/{review_id}/suggestions",
             json={
-                "user_clause_id": "uc_1",
+                "user_clause_id": user_clause_id,
                 "purpose": "책임 범위를 명확히 하기",
             },
             headers={"Idempotency-Key": "suggestion-1"},
@@ -274,6 +326,61 @@ async def test_full_mvp_flow_and_browser_isolation(tmp_path: Path) -> None:
             headers={"Last-Event-ID": "0"},
         )
         assert "event: completed" in events.text
+        event_data_line = next(
+            line for line in events.text.splitlines() if line.startswith("data: ")
+        )
+        event_data = json.loads(event_data_line.removeprefix("data: "))
+        assert event_data == {
+            "review_id": review_id,
+            "sequence": 2,
+            "review_state": "COMPLETED",
+            "stage": "RESULT_ASSEMBLY",
+            "current": 1,
+            "total": 1,
+            "percent": 100,
+            "message": "검토 결과 정리가 완료되었습니다.",
+            "mcp_review_status": "OK",
+            "error": None,
+        }
+
+        database = app.dependency_overrides[get_database]()
+        with database.session() as db_session:
+            repository = SqlAlchemyReviewRepository(db_session)
+            first_review = repository.get(review_id)
+            assert first_review is not None
+            second_review = replace(
+                first_review,
+                id="rev_same_session_second",
+                idempotency_key="second-review-operation",
+                created_at=datetime.now(UTC),
+                expires_at=datetime.now(UTC) + timedelta(hours=1),
+            )
+            repository.add(second_review)
+            db_session.commit()
+
+        cross_review_chat = await owner.post(
+            "/api/v1/reviews/rev_same_session_second/chat/messages",
+            json={
+                "message": "책임 조항을 설명해줘",
+                "focus_clause_id": user_clause_id,
+            },
+            headers={"Idempotency-Key": "chat-1"},
+        )
+        assert cross_review_chat.status_code == 409
+        assert cross_review_chat.json()["error"]["code"] == "IDEMPOTENCY_KEY_REUSED"
+        cross_review_suggestion = await owner.post(
+            "/api/v1/reviews/rev_same_session_second/suggestions",
+            json={
+                "user_clause_id": user_clause_id,
+                "purpose": "책임 범위를 명확히 하기",
+            },
+            headers={"Idempotency-Key": "suggestion-1"},
+        )
+        assert cross_review_suggestion.status_code == 409
+        assert (
+            cross_review_suggestion.json()["error"]["code"] == "IDEMPOTENCY_KEY_REUSED"
+        )
+
         first_cancel = await owner.delete(f"/api/v1/reviews/{review_id}")
         second_cancel = await owner.delete(f"/api/v1/reviews/{review_id}")
         assert first_cancel.json()["data"]["review_state"] == "CANCELLED"

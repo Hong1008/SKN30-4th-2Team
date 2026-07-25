@@ -71,9 +71,7 @@ def _settings(tmp_path: Path) -> Settings:
                 str(Path(__file__).resolve().parents[3] / "mcp"),
             )
         ),
-        workshield_mcp_timeout=float(
-            os.getenv("WORKSHIELD_MCP_TIMEOUT", "30")
-        ),
+        workshield_mcp_timeout=float(os.getenv("WORKSHIELD_MCP_TIMEOUT", "30")),
         workshield_mcp_read_timeout=float(
             os.getenv("WORKSHIELD_MCP_READ_TIMEOUT", "300")
         ),
@@ -150,18 +148,14 @@ async def test_real_mcp_be_a_session_flow(
             }
             session_id = str(created["session_id"])
 
-            restored = await owner.get(
-                f"/api/v1/review-sessions/{session_id}"
-            )
+            restored = await owner.get(f"/api/v1/review-sessions/{session_id}")
             assert restored.status_code == 200
 
         async with httpx.AsyncClient(
             transport=transport,
             base_url="http://test",
         ) as other_browser:
-            denied = await other_browser.get(
-                f"/api/v1/review-sessions/{session_id}"
-            )
+            denied = await other_browser.get(f"/api/v1/review-sessions/{session_id}")
             assert denied.status_code == 404
 
 
@@ -181,7 +175,9 @@ async def _prepare_review(
     )
     created = _assert_common_response(created_response)
     if created["scope_status"] == "EMPTY_DOCUMENT":
-        pytest.skip("테스트 문서가 EMPTY_DOCUMENT여서 실제 Review를 시작할 수 없습니다.")
+        pytest.skip(
+            "테스트 문서가 EMPTY_DOCUMENT여서 실제 Review를 시작할 수 없습니다."
+        )
     session_id = str(created["session_id"])
     selected = await client.patch(
         f"/api/v1/review-sessions/{session_id}/contract-type",
@@ -252,16 +248,17 @@ async def test_real_mcp_be_b_review_and_sse_flow(
             )
 
             if terminal["review_state"] == "COMPLETED":
-                results = await owner.get(
-                    f"/api/v1/reviews/{review_id}/results"
-                )
-                result_data = _assert_common_response(results)["result"]
+                results = await owner.get(f"/api/v1/reviews/{review_id}/results")
+                result_data = _assert_common_response(results)
                 assert isinstance(result_data["clause_results"], list)
                 assert isinstance(
                     result_data["missing_standard_clauses"],
                     list,
                 )
-                assert isinstance(result_data["toxic_patterns"], list)
+                assert all(
+                    isinstance(item["toxic_patterns"], list)
+                    for item in result_data["clause_results"]
+                )
 
         async with httpx.AsyncClient(
             transport=transport,
@@ -271,7 +268,5 @@ async def test_real_mcp_be_b_review_and_sse_flow(
                 await other_browser.get(f"/api/v1/reviews/{review_id}")
             ).status_code == 404
             assert (
-                await other_browser.get(
-                    f"/api/v1/reviews/{review_id}/events"
-                )
+                await other_browser.get(f"/api/v1/reviews/{review_id}/events")
             ).status_code == 404

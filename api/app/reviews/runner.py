@@ -15,7 +15,16 @@ from app.review_sessions.repository import SqlAlchemyReviewSessionRepository
 from app.review_sessions.service import _tool_payload
 from app.reviews.domain import MCPReviewStatus, ReviewState
 from app.reviews.repository import SqlAlchemyReviewRepository
+from app.reviews.schemas import (
+    MCPReviewResult,
+    NormalizedReviewResult,
+    ReviewClauseResult,
+)
 from app.storage.protocol import FileStorage
+
+
+class InvalidMCPReviewResultError(ValueError):
+    """MCP 전체 검토 응답이 공개 DTO를 위반했음을 나타낸다."""
 
 
 def _mcp_status(payload: dict[str, Any]) -> MCPReviewStatus:
@@ -26,26 +35,30 @@ def _mcp_status(payload: dict[str, Any]) -> MCPReviewStatus:
         return MCPReviewStatus.PIPELINE_ERROR
 
 
-def _list_of_dicts(value: object) -> list[dict[str, Any]]:
-    if not isinstance(value, list):
-        return []
-    return [dict(item) for item in value if isinstance(item, dict)]
-
-
-def normalize_review_result(payload: dict[str, Any]) -> dict[str, Any]:
-    """MCP 전체 검토 응답을 공개 결과의 세 배열로 정규화한다."""
-    return {
-        "status": str(payload.get("status", "PIPELINE_ERROR")).upper(),
-        "contract_type": payload.get("contract_type"),
-        "clause_results": _list_of_dicts(payload.get("clause_results")),
-        "missing_standard_clauses": _list_of_dicts(
-            payload.get("missing_standard_clauses")
-        ),
-        "toxic_patterns": _list_of_dicts(payload.get("toxic_patterns")),
-        "message": payload.get("message")
-        if isinstance(payload.get("message"), str)
-        else None,
-    }
+def normalize_review_result(
+    payload: dict[str, Any],
+    *,
+    review_id: str,
+) -> dict[str, Any]:
+    """실제 MCP 공개 DTO를 검증하고 API 소유 조항 ID를 결합한다."""
+    try:
+        mcp_result = MCPReviewResult.model_validate(payload)
+    except ValueError as error:
+        raise InvalidMCPReviewResultError from error
+    normalized = NormalizedReviewResult(
+        status=mcp_result.status,
+        contract_type=mcp_result.contract_type,
+        clause_results=[
+            ReviewClauseResult(
+                user_clause_id=f"uc_{review_id}_{index}",
+                **clause.model_dump(),
+            )
+            for index, clause in enumerate(mcp_result.clause_results, start=1)
+        ],
+        missing_standard_clauses=mcp_result.missing_standard_clauses,
+        message=mcp_result.message,
+    )
+    return normalized.model_dump(mode="json")
 
 
 def _stage_from_message(message: str | None, previous: str) -> str:
@@ -212,8 +225,8 @@ async def execute_review(
                 timeout_seconds=settings.workshield_mcp_read_timeout,
                 progress_callback=ReviewProgressRecorder(database, review_id),
             )
-        status = _mcp_status(raw_result)
-        result_payload = normalize_review_result(raw_result)
+        result_payload = normalize_review_result(raw_result, review_id=review_id)
+        status = _mcp_status(result_payload)
         final_state = (
             ReviewState.COMPLETED
             if status is MCPReviewStatus.OK
@@ -240,6 +253,15 @@ async def execute_review(
             "code": "MCP_TIMEOUT",
             "retryable": True,
             "next_action": "RETRY_REVIEW",
+        }
+    except InvalidMCPReviewResultError:
+        status = None
+        final_state = ReviewState.FAILED
+        result_payload = None
+        error = {
+            "code": "MCP_RESPONSE_INVALID",
+            "retryable": False,
+            "next_action": "CONTACT_SUPPORT",
         }
     except Exception:
         status = None
