@@ -48,7 +48,7 @@ def _response(entity) -> ReviewSessionResponse:
     }.get(entity.state.value, [])
     return ReviewSessionResponse(
         session_id=entity.id,
-        review_state=entity.state.value,
+        review_state=entity.state,
         upload=UploadInfo(
             file_name=entity.original_file_name,
             size_bytes=entity.file_size_bytes,
@@ -56,7 +56,7 @@ def _response(entity) -> ReviewSessionResponse:
             if "." in entity.original_file_name
             else "",
         ),
-        scope_status=entity.scope_status.value if entity.scope_status else None,
+        scope_status=entity.scope_status,
         scope_message=scope_result.get("message"),
         suggested_contract_type=entity.suggested_contract_type,
         candidates=[
@@ -72,9 +72,7 @@ def _response(entity) -> ReviewSessionResponse:
         matched_clause_count=scope_result.get("matched_clause_count", 0),
         exclusion_markers=scope_result.get("exclusion_markers", []),
         selected_contract_type=entity.selected_contract_type,
-        selection_source=(
-            entity.selection_source.value if entity.selection_source else None
-        ),
+        selection_source=entity.selection_source,
         out_of_scope_confirmed_at=entity.out_of_scope_confirmed_at,
         can_start_review=can_start,
         allowed_actions=allowed_actions,

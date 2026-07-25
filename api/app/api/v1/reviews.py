@@ -89,10 +89,8 @@ def _response(entity: object) -> ReviewResponse:
     return ReviewResponse(
         review_id=entity.id,
         session_id=entity.session_id,
-        review_state=entity.state.value,
-        mcp_review_status=(
-            entity.mcp_review_status.value if entity.mcp_review_status else None
-        ),
+        review_state=entity.state,
+        mcp_review_status=entity.mcp_review_status,
         progress=entity.progress,
         result=entity.result,
         error=entity.error,

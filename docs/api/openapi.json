@@ -1539,11 +1539,13 @@
         "properties": {
           "code": {
             "type": "string",
-            "title": "Code"
+            "title": "Code",
+            "description": "에러 코드 (예: MCP_TIMEOUT, IDEMPOTENCY_KEY_REUSED)"
           },
           "message": {
             "type": "string",
-            "title": "Message"
+            "title": "Message",
+            "description": "사용자 노출용 오류 메시지"
           },
           "field": {
             "anyOf": [
@@ -1554,11 +1556,13 @@
                 "type": "null"
               }
             ],
-            "title": "Field"
+            "title": "Field",
+            "description": "오류 관련 요청 필드명"
           },
           "retryable": {
             "type": "boolean",
             "title": "Retryable",
+            "description": "재시도 가능 여부",
             "default": false
           },
           "next_action": {
@@ -1570,12 +1574,14 @@
                 "type": "null"
               }
             ],
-            "title": "Next Action"
+            "title": "Next Action",
+            "description": "권장 다음 행동 코드"
           },
           "details": {
             "additionalProperties": true,
             "type": "object",
-            "title": "Details"
+            "title": "Details",
+            "description": "오류 상세 정보"
           }
         },
         "type": "object",
@@ -1589,10 +1595,12 @@
       "ApiErrorResponse": {
         "properties": {
           "error": {
-            "$ref": "#/components/schemas/ApiError"
+            "$ref": "#/components/schemas/ApiError",
+            "description": "오류 정보 본문"
           },
           "meta": {
-            "$ref": "#/components/schemas/ApiMeta"
+            "$ref": "#/components/schemas/ApiMeta",
+            "description": "요청 메타데이터"
           }
         },
         "type": "object",
@@ -1607,12 +1615,14 @@
         "properties": {
           "request_id": {
             "type": "string",
-            "title": "Request Id"
+            "title": "Request Id",
+            "description": "요청 고유 식별자"
           },
           "timestamp": {
             "type": "string",
             "format": "date-time",
-            "title": "Timestamp"
+            "title": "Timestamp",
+            "description": "응답 생성 일시 (ISO 8601)"
           }
         },
         "type": "object",
@@ -1626,10 +1636,12 @@
       "ApiResponse_ChatResponse_": {
         "properties": {
           "data": {
-            "$ref": "#/components/schemas/ChatResponse"
+            "$ref": "#/components/schemas/ChatResponse",
+            "description": "성공 응답 데이터 본문"
           },
           "meta": {
-            "$ref": "#/components/schemas/ApiMeta"
+            "$ref": "#/components/schemas/ApiMeta",
+            "description": "요청 메타데이터"
           }
         },
         "type": "object",
@@ -1642,10 +1654,12 @@
       "ApiResponse_GroundingResponse_": {
         "properties": {
           "data": {
-            "$ref": "#/components/schemas/GroundingResponse"
+            "$ref": "#/components/schemas/GroundingResponse",
+            "description": "성공 응답 데이터 본문"
           },
           "meta": {
-            "$ref": "#/components/schemas/ApiMeta"
+            "$ref": "#/components/schemas/ApiMeta",
+            "description": "요청 메타데이터"
           }
         },
         "type": "object",
@@ -1658,10 +1672,12 @@
       "ApiResponse_MetadataResponse_": {
         "properties": {
           "data": {
-            "$ref": "#/components/schemas/MetadataResponse"
+            "$ref": "#/components/schemas/MetadataResponse",
+            "description": "성공 응답 데이터 본문"
           },
           "meta": {
-            "$ref": "#/components/schemas/ApiMeta"
+            "$ref": "#/components/schemas/ApiMeta",
+            "description": "요청 메타데이터"
           }
         },
         "type": "object",
@@ -1674,10 +1690,12 @@
       "ApiResponse_ReviewCancelResponse_": {
         "properties": {
           "data": {
-            "$ref": "#/components/schemas/ReviewCancelResponse"
+            "$ref": "#/components/schemas/ReviewCancelResponse",
+            "description": "성공 응답 데이터 본문"
           },
           "meta": {
-            "$ref": "#/components/schemas/ApiMeta"
+            "$ref": "#/components/schemas/ApiMeta",
+            "description": "요청 메타데이터"
           }
         },
         "type": "object",
@@ -1690,10 +1708,12 @@
       "ApiResponse_ReviewCreateResponse_": {
         "properties": {
           "data": {
-            "$ref": "#/components/schemas/ReviewCreateResponse"
+            "$ref": "#/components/schemas/ReviewCreateResponse",
+            "description": "성공 응답 데이터 본문"
           },
           "meta": {
-            "$ref": "#/components/schemas/ApiMeta"
+            "$ref": "#/components/schemas/ApiMeta",
+            "description": "요청 메타데이터"
           }
         },
         "type": "object",
@@ -1706,10 +1726,12 @@
       "ApiResponse_ReviewResponse_": {
         "properties": {
           "data": {
-            "$ref": "#/components/schemas/ReviewResponse"
+            "$ref": "#/components/schemas/ReviewResponse",
+            "description": "성공 응답 데이터 본문"
           },
           "meta": {
-            "$ref": "#/components/schemas/ApiMeta"
+            "$ref": "#/components/schemas/ApiMeta",
+            "description": "요청 메타데이터"
           }
         },
         "type": "object",
@@ -1722,10 +1744,12 @@
       "ApiResponse_ReviewResultsResponse_": {
         "properties": {
           "data": {
-            "$ref": "#/components/schemas/ReviewResultsResponse"
+            "$ref": "#/components/schemas/ReviewResultsResponse",
+            "description": "성공 응답 데이터 본문"
           },
           "meta": {
-            "$ref": "#/components/schemas/ApiMeta"
+            "$ref": "#/components/schemas/ApiMeta",
+            "description": "요청 메타데이터"
           }
         },
         "type": "object",
@@ -1738,10 +1762,12 @@
       "ApiResponse_ReviewSessionResponse_": {
         "properties": {
           "data": {
-            "$ref": "#/components/schemas/ReviewSessionResponse"
+            "$ref": "#/components/schemas/ReviewSessionResponse",
+            "description": "성공 응답 데이터 본문"
           },
           "meta": {
-            "$ref": "#/components/schemas/ApiMeta"
+            "$ref": "#/components/schemas/ApiMeta",
+            "description": "요청 메타데이터"
           }
         },
         "type": "object",
@@ -1754,10 +1780,12 @@
       "ApiResponse_SuggestionResponse_": {
         "properties": {
           "data": {
-            "$ref": "#/components/schemas/SuggestionResponse"
+            "$ref": "#/components/schemas/SuggestionResponse",
+            "description": "성공 응답 데이터 본문"
           },
           "meta": {
-            "$ref": "#/components/schemas/ApiMeta"
+            "$ref": "#/components/schemas/ApiMeta",
+            "description": "요청 메타데이터"
           }
         },
         "type": "object",
@@ -1785,11 +1813,13 @@
         "properties": {
           "code": {
             "type": "string",
-            "title": "Code"
+            "title": "Code",
+            "description": "카테고리 코드"
           },
           "label": {
             "type": "string",
-            "title": "Label"
+            "title": "Label",
+            "description": "카테고리 표시명"
           },
           "description": {
             "anyOf": [
@@ -1800,14 +1830,16 @@
                 "type": "null"
               }
             ],
-            "title": "Description"
+            "title": "Description",
+            "description": "카테고리 설명"
           },
           "anchors": {
             "items": {
               "type": "string"
             },
             "type": "array",
-            "title": "Anchors"
+            "title": "Anchors",
+            "description": "카테고리 앵커 키워드 목록"
           }
         },
         "type": "object",
@@ -1820,18 +1852,15 @@
       "ChatHistoryMessage": {
         "properties": {
           "role": {
-            "type": "string",
-            "enum": [
-              "user",
-              "assistant"
-            ],
-            "title": "Role"
+            "$ref": "#/components/schemas/ChatRole",
+            "description": "발화 주체 (user 또는 assistant)"
           },
           "content": {
             "type": "string",
             "maxLength": 2000,
             "minLength": 1,
-            "title": "Content"
+            "title": "Content",
+            "description": "대화 메시지 내용"
           }
         },
         "type": "object",
@@ -1841,13 +1870,25 @@
         ],
         "title": "ChatHistoryMessage"
       },
+      "ChatOutcome": {
+        "type": "string",
+        "enum": [
+          "ANSWERED",
+          "REFUSED",
+          "INSUFFICIENT_GROUNDING",
+          "LLM_OUTPUT_INVALID"
+        ],
+        "title": "ChatOutcome",
+        "description": "질의응답 결과 유형."
+      },
       "ChatRequest": {
         "properties": {
           "message": {
             "type": "string",
             "maxLength": 2000,
             "minLength": 1,
-            "title": "Message"
+            "title": "Message",
+            "description": "사용자 질문 메시지"
           },
           "focus_clause_id": {
             "anyOf": [
@@ -1859,7 +1900,8 @@
                 "type": "null"
               }
             ],
-            "title": "Focus Clause Id"
+            "title": "Focus Clause Id",
+            "description": "질문의 대상이 되는 사용자 조항 식별자"
           },
           "history": {
             "items": {
@@ -1867,7 +1909,8 @@
             },
             "type": "array",
             "maxItems": 10,
-            "title": "History"
+            "title": "History",
+            "description": "이전 대화 히스토리 (최대 10개)"
           }
         },
         "type": "object",
@@ -1879,14 +1922,8 @@
       "ChatResponse": {
         "properties": {
           "outcome": {
-            "type": "string",
-            "enum": [
-              "ANSWERED",
-              "REFUSED",
-              "INSUFFICIENT_GROUNDING",
-              "LLM_OUTPUT_INVALID"
-            ],
-            "title": "Outcome"
+            "$ref": "#/components/schemas/ChatOutcome",
+            "description": "질의응답 결과 유형 (ANSWERED, REFUSED, INSUFFICIENT_GROUNDING, LLM_OUTPUT_INVALID)"
           },
           "answer": {
             "anyOf": [
@@ -1897,33 +1934,39 @@
                 "type": "null"
               }
             ],
-            "title": "Answer"
+            "title": "Answer",
+            "description": "질의응답 답변 내용"
           },
           "refused": {
             "type": "boolean",
-            "title": "Refused"
+            "title": "Refused",
+            "description": "질문 거부/범위 외 여부"
           },
           "sources": {
             "items": {
               "$ref": "#/components/schemas/ChatSource"
             },
             "type": "array",
-            "title": "Sources"
+            "title": "Sources",
+            "description": "참조 근거 출처 목록"
           },
           "limitations": {
             "items": {
               "type": "string"
             },
             "type": "array",
-            "title": "Limitations"
+            "title": "Limitations",
+            "description": "답변 관련 한계 사항"
           },
           "tool_status": {
             "type": "string",
-            "title": "Tool Status"
+            "title": "Tool Status",
+            "description": "도구/MCP 연동 상태"
           },
           "disclaimer": {
             "type": "string",
-            "title": "Disclaimer"
+            "title": "Disclaimer",
+            "description": "법률 자문 불가 면책 조항 문구"
           }
         },
         "type": "object",
@@ -1935,16 +1978,20 @@
         ],
         "title": "ChatResponse"
       },
+      "ChatRole": {
+        "type": "string",
+        "enum": [
+          "user",
+          "assistant"
+        ],
+        "title": "ChatRole",
+        "description": "대화 발화 주체."
+      },
       "ChatSource": {
         "properties": {
           "type": {
-            "type": "string",
-            "enum": [
-              "USER_CLAUSE",
-              "STANDARD_CLAUSE",
-              "LAW"
-            ],
-            "title": "Type"
+            "$ref": "#/components/schemas/ChatSourceType",
+            "description": "참조 근거 유형 (USER_CLAUSE, STANDARD_CLAUSE, LAW)"
           },
           "id": {
             "anyOf": [
@@ -1955,7 +2002,8 @@
                 "type": "null"
               }
             ],
-            "title": "Id"
+            "title": "Id",
+            "description": "참조 조항 또는 근거 식별자"
           },
           "law_name": {
             "anyOf": [
@@ -1966,7 +2014,8 @@
                 "type": "null"
               }
             ],
-            "title": "Law Name"
+            "title": "Law Name",
+            "description": "법령 명칭"
           },
           "article": {
             "anyOf": [
@@ -1977,7 +2026,8 @@
                 "type": "null"
               }
             ],
-            "title": "Article"
+            "title": "Article",
+            "description": "법령 조항 번호"
           }
         },
         "type": "object",
@@ -1986,15 +2036,27 @@
         ],
         "title": "ChatSource"
       },
+      "ChatSourceType": {
+        "type": "string",
+        "enum": [
+          "USER_CLAUSE",
+          "STANDARD_CLAUSE",
+          "LAW"
+        ],
+        "title": "ChatSourceType",
+        "description": "참조 근거 유형."
+      },
       "CodeLabel": {
         "properties": {
           "code": {
             "type": "string",
-            "title": "Code"
+            "title": "Code",
+            "description": "식별 코드"
           },
           "label": {
             "type": "string",
-            "title": "Label"
+            "title": "Label",
+            "description": "화면 표시 라벨"
           }
         },
         "type": "object",
@@ -2009,11 +2071,13 @@
         "properties": {
           "contract_type": {
             "type": "string",
-            "title": "Contract Type"
+            "title": "Contract Type",
+            "description": "추천 계약 유형 코드"
           },
           "evidence_score": {
             "type": "integer",
-            "title": "Evidence Score"
+            "title": "Evidence Score",
+            "description": "MCP 결정론적 근거 점수"
           }
         },
         "type": "object",
@@ -2030,13 +2094,12 @@
             "type": "string",
             "maxLength": 64,
             "minLength": 1,
-            "title": "Selected Contract Type"
+            "title": "Selected Contract Type",
+            "description": "선택한 계약 유형 코드 (예: SW_FREELANCE)"
           },
           "selection_source": {
-            "type": "string",
-            "maxLength": 32,
-            "minLength": 1,
-            "title": "Selection Source",
+            "$ref": "#/components/schemas/SelectionSource",
+            "description": "선택 경로 (SUGGESTED, CANDIDATE, MANUAL)",
             "default": "MANUAL"
           }
         },
@@ -2052,31 +2115,37 @@
           "chat": {
             "type": "boolean",
             "title": "Chat",
+            "description": "질의응답(챗봇) 기능 활성화 여부",
             "default": true
           },
           "basic_suggestion": {
             "type": "boolean",
             "title": "Basic Suggestion",
+            "description": "기본 협의 문구 제안 기능 활성화 여부",
             "default": true
           },
           "confidence_score": {
             "type": "boolean",
             "title": "Confidence Score",
+            "description": "신뢰도 점수 노출 여부",
             "default": false
           },
           "suggestion_edit": {
             "type": "boolean",
             "title": "Suggestion Edit",
+            "description": "제안 문구 편집/임시저장 기능 활성화 여부",
             "default": false
           },
           "single_clause_rereview": {
             "type": "boolean",
             "title": "Single Clause Rereview",
+            "description": "단일 조항 재검토 기능 활성화 여부",
             "default": false
           },
           "server_side_cancel": {
             "type": "boolean",
             "title": "Server Side Cancel",
+            "description": "서버 사이드 검토 취소/폐기 기능 활성화 여부",
             "default": true
           }
         },
@@ -2090,20 +2159,24 @@
               "type": "string"
             },
             "type": "array",
-            "title": "Extensions"
+            "title": "Extensions",
+            "description": "허용 파일 확장자 목록"
           },
           "max_size_bytes": {
             "type": "integer",
-            "title": "Max Size Bytes"
+            "title": "Max Size Bytes",
+            "description": "최대 업로드 허용 파일 크기 (바이트)"
           },
           "single_file_only": {
             "type": "boolean",
             "title": "Single File Only",
+            "description": "단일 파일 업로드 전용 여부",
             "default": true
           },
           "encrypted_file_allowed": {
             "type": "boolean",
             "title": "Encrypted File Allowed",
+            "description": "암호화 파일 허용 여부",
             "default": false
           }
         },
@@ -2118,11 +2191,13 @@
         "properties": {
           "code": {
             "type": "string",
-            "title": "Code"
+            "title": "Code",
+            "description": "카테고리 코드"
           },
           "label": {
             "type": "string",
-            "title": "Label"
+            "title": "Label",
+            "description": "카테고리 표시명"
           }
         },
         "type": "object",
@@ -2136,7 +2211,8 @@
         "properties": {
           "source_id": {
             "type": "string",
-            "title": "Source Id"
+            "title": "Source Id",
+            "description": "법령 출처 식별자"
           },
           "law_name": {
             "anyOf": [
@@ -2147,7 +2223,8 @@
                 "type": "null"
               }
             ],
-            "title": "Law Name"
+            "title": "Law Name",
+            "description": "법령 명칭 (예: 민법)"
           },
           "article": {
             "anyOf": [
@@ -2158,11 +2235,13 @@
                 "type": "null"
               }
             ],
-            "title": "Article"
+            "title": "Article",
+            "description": "조항 번호 (예: 제390조)"
           },
           "text": {
             "type": "string",
-            "title": "Text"
+            "title": "Text",
+            "description": "법령 조문 본문"
           },
           "source": {
             "anyOf": [
@@ -2173,7 +2252,8 @@
                 "type": "null"
               }
             ],
-            "title": "Source"
+            "title": "Source",
+            "description": "출처 기관 및 정보"
           },
           "source_url": {
             "anyOf": [
@@ -2184,7 +2264,8 @@
                 "type": "null"
               }
             ],
-            "title": "Source Url"
+            "title": "Source Url",
+            "description": "출처 URL 링크"
           }
         },
         "type": "object",
@@ -2197,22 +2278,25 @@
       "GroundingResponse": {
         "properties": {
           "grounding_status": {
-            "type": "string",
-            "title": "Grounding Status"
+            "$ref": "#/components/schemas/GroundingStatus",
+            "description": "근거 조회 상태 (OK, NO_RESULT 등)"
           },
           "category": {
-            "$ref": "#/components/schemas/GroundingCategory"
+            "$ref": "#/components/schemas/GroundingCategory",
+            "description": "조회된 카테고리 정보"
           },
           "contract_type": {
             "type": "string",
-            "title": "Contract Type"
+            "title": "Contract Type",
+            "description": "계약 유형 코드"
           },
           "items": {
             "items": {
               "$ref": "#/components/schemas/GroundingItem"
             },
             "type": "array",
-            "title": "Items"
+            "title": "Items",
+            "description": "법령 근거 항목 목록"
           },
           "message": {
             "anyOf": [
@@ -2223,7 +2307,8 @@
                 "type": "null"
               }
             ],
-            "title": "Message"
+            "title": "Message",
+            "description": "상태 관련 메시지"
           }
         },
         "type": "object",
@@ -2235,15 +2320,41 @@
         ],
         "title": "GroundingResponse"
       },
+      "GroundingStatus": {
+        "type": "string",
+        "enum": [
+          "OK",
+          "NO_RESULT",
+          "UNMAPPED_CATEGORY",
+          "UPSTREAM_ERROR",
+          "TIMEOUT"
+        ],
+        "title": "GroundingStatus",
+        "description": "법령 근거 조회 상태."
+      },
+      "MCPReviewResultStatus": {
+        "type": "string",
+        "enum": [
+          "OK",
+          "EMPTY_DOCUMENT",
+          "CORPUS_UNAVAILABLE",
+          "INVALID_CONFIG",
+          "PIPELINE_ERROR"
+        ],
+        "title": "MCPReviewResultStatus",
+        "description": "WorkShield 전체 검토 공개 응답 상태."
+      },
       "MetadataCode": {
         "properties": {
           "code": {
             "type": "string",
-            "title": "Code"
+            "title": "Code",
+            "description": "식별 코드"
           },
           "label": {
             "type": "string",
-            "title": "Label"
+            "title": "Label",
+            "description": "화면 표시명"
           },
           "description": {
             "anyOf": [
@@ -2254,7 +2365,8 @@
                 "type": "null"
               }
             ],
-            "title": "Description"
+            "title": "Description",
+            "description": "코드 상세 설명"
           },
           "enabled_for_mvp": {
             "anyOf": [
@@ -2265,7 +2377,8 @@
                 "type": "null"
               }
             ],
-            "title": "Enabled For Mvp"
+            "title": "Enabled For Mvp",
+            "description": "MVP 선택 활성화 여부"
           }
         },
         "type": "object",
@@ -2280,116 +2393,134 @@
           "schema_version": {
             "type": "string",
             "title": "Schema Version",
+            "description": "메타데이터 스키마 버전",
             "default": "1.1"
           },
           "updated_at": {
             "type": "string",
             "format": "date-time",
-            "title": "Updated At"
+            "title": "Updated At",
+            "description": "메타데이터 최종 업데이트 일시"
           },
           "contract_types": {
             "items": {
               "$ref": "#/components/schemas/MetadataCode"
             },
             "type": "array",
-            "title": "Contract Types"
+            "title": "Contract Types",
+            "description": "지원 계약 유형 목록"
           },
           "categories": {
             "items": {
               "$ref": "#/components/schemas/CategoryMetadata"
             },
             "type": "array",
-            "title": "Categories"
+            "title": "Categories",
+            "description": "검토 카테고리 목록"
           },
           "toxic_patterns": {
             "items": {
               "$ref": "#/components/schemas/ToxicPatternMetadata"
             },
             "type": "array",
-            "title": "Toxic Patterns"
+            "title": "Toxic Patterns",
+            "description": "주의/독소 패턴 목록"
           },
           "scope_statuses": {
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/ScopeStatus"
             },
             "type": "array",
-            "title": "Scope Statuses"
+            "title": "Scope Statuses",
+            "description": "범위 판별 상태 코드 목록"
           },
           "review_states": {
             "items": {
               "type": "string"
             },
             "type": "array",
-            "title": "Review States"
+            "title": "Review States",
+            "description": "검토 세션/진행 상태 코드 목록"
           },
           "result_codes": {
             "items": {
               "type": "string"
             },
             "type": "array",
-            "title": "Result Codes"
+            "title": "Result Codes",
+            "description": "검토 결과 코드 목록"
           },
           "result_code_details": {
             "items": {
               "$ref": "#/components/schemas/ResultCodeMetadata"
             },
             "type": "array",
-            "title": "Result Code Details"
+            "title": "Result Code Details",
+            "description": "검토 결과 코드 상세 목록"
           },
           "progress_stages": {
             "items": {
               "type": "string"
             },
             "type": "array",
-            "title": "Progress Stages"
+            "title": "Progress Stages",
+            "description": "검토 진행 단계 코드 목록"
           },
           "grounding_statuses": {
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/GroundingStatus"
             },
             "type": "array",
-            "title": "Grounding Statuses"
+            "title": "Grounding Statuses",
+            "description": "법령 근거 조회 상태 코드 목록"
           },
           "chat_outcomes": {
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/ChatOutcome"
             },
             "type": "array",
-            "title": "Chat Outcomes"
+            "title": "Chat Outcomes",
+            "description": "질의응답 결과 유형 목록"
           },
           "draft_outcomes": {
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/SuggestionOutcome"
             },
             "type": "array",
-            "title": "Draft Outcomes"
+            "title": "Draft Outcomes",
+            "description": "제안 생성 결과 유형 목록"
           },
           "error_codes": {
             "items": {
               "type": "string"
             },
             "type": "array",
-            "title": "Error Codes"
+            "title": "Error Codes",
+            "description": "시스템 에러 코드 목록"
           },
           "selection_sources": {
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/SelectionSource"
             },
             "type": "array",
-            "title": "Selection Sources"
+            "title": "Selection Sources",
+            "description": "계약 유형 선택 경로 목록"
           },
           "next_actions": {
             "items": {
               "type": "string"
             },
             "type": "array",
-            "title": "Next Actions"
+            "title": "Next Actions",
+            "description": "권장 다음 행동 코드 목록"
           },
           "file_policy": {
-            "$ref": "#/components/schemas/FilePolicy"
+            "$ref": "#/components/schemas/FilePolicy",
+            "description": "업로드 파일 제한 정책"
           },
           "features": {
-            "$ref": "#/components/schemas/FeatureFlags"
+            "$ref": "#/components/schemas/FeatureFlags",
+            "description": "기능 플래그 목록"
           }
         },
         "type": "object",
@@ -2417,14 +2548,17 @@
       "MissingStandardClauseResponse": {
         "properties": {
           "result_type": {
-            "$ref": "#/components/schemas/CodeLabel"
+            "$ref": "#/components/schemas/CodeLabel",
+            "description": "결과 유형 (MISSING)"
           },
           "standard": {
-            "$ref": "#/components/schemas/ReviewResultStandardClause"
+            "$ref": "#/components/schemas/ReviewResultStandardClause",
+            "description": "누락된 표준조항 상세"
           },
           "explanation": {
             "type": "string",
-            "title": "Explanation"
+            "title": "Explanation",
+            "description": "누락 조항 안내 설명 문구"
           }
         },
         "type": "object",
@@ -2440,7 +2574,8 @@
         "properties": {
           "confirmed": {
             "type": "boolean",
-            "title": "Confirmed"
+            "title": "Confirmed",
+            "description": "범위 외 계약서에 대해 계속 진행 동의 여부"
           }
         },
         "type": "object",
@@ -2454,11 +2589,13 @@
         "properties": {
           "field": {
             "type": "string",
-            "title": "Field"
+            "title": "Field",
+            "description": "확인 필요 필드/변수명"
           },
           "placeholder": {
             "type": "string",
-            "title": "Placeholder"
+            "title": "Placeholder",
+            "description": "입력 힌트/치환문구"
           }
         },
         "type": "object",
@@ -2472,11 +2609,13 @@
         "properties": {
           "code": {
             "type": "string",
-            "title": "Code"
+            "title": "Code",
+            "description": "결과 코드"
           },
           "label": {
             "type": "string",
-            "title": "Label"
+            "title": "Label",
+            "description": "결과 코드 표시명"
           }
         },
         "type": "object",
@@ -2490,15 +2629,17 @@
         "properties": {
           "review_id": {
             "type": "string",
-            "title": "Review Id"
+            "title": "Review Id",
+            "description": "취소/폐기된 검토 식별자"
           },
           "review_state": {
-            "type": "string",
-            "title": "Review State"
+            "$ref": "#/components/schemas/ReviewState",
+            "description": "변경된 검토 상태 (CANCELLED)"
           },
           "deleted": {
             "type": "boolean",
-            "title": "Deleted"
+            "title": "Deleted",
+            "description": "저장된 원본 파일 및 스냅샷 폐기 여부"
           }
         },
         "type": "object",
@@ -2515,22 +2656,26 @@
           "total": {
             "type": "integer",
             "minimum": 0.0,
-            "title": "Total"
+            "title": "Total",
+            "description": "전체 검토 조항 수"
           },
           "NONE": {
             "type": "integer",
             "minimum": 0.0,
-            "title": "None"
+            "title": "None",
+            "description": "표준 대응 후보 있음 조항 수"
           },
           "EXTRA": {
             "type": "integer",
             "minimum": 0.0,
-            "title": "Extra"
+            "title": "Extra",
+            "description": "추가·변형 확인 필요 조항 수"
           },
           "NO_MATCH": {
             "type": "integer",
             "minimum": 0.0,
-            "title": "No Match"
+            "title": "No Match",
+            "description": "표준 검색 후보 없음 조항 수"
           }
         },
         "type": "object",
@@ -2547,28 +2692,34 @@
         "properties": {
           "user_clause_id": {
             "type": "string",
-            "title": "User Clause Id"
+            "title": "User Clause Id",
+            "description": "사용자 조항 식별자"
           },
           "user_clause": {
             "type": "string",
-            "title": "User Clause"
+            "title": "User Clause",
+            "description": "사용자 조항 원문"
           },
           "deviation": {
-            "$ref": "#/components/schemas/CodeLabel"
+            "$ref": "#/components/schemas/CodeLabel",
+            "description": "변형 코드 및 표시명 (NONE, EXTRA, NO_MATCH)"
           },
           "match": {
-            "$ref": "#/components/schemas/ReviewResultMatch"
+            "$ref": "#/components/schemas/ReviewResultMatch",
+            "description": "표준조항 매칭 정보"
           },
           "explanation": {
             "type": "string",
-            "title": "Explanation"
+            "title": "Explanation",
+            "description": "조항 검토 설명/안내 문구"
           },
           "toxic_patterns": {
             "items": {
               "$ref": "#/components/schemas/CodeLabel"
             },
             "type": "array",
-            "title": "Toxic Patterns"
+            "title": "Toxic Patterns",
+            "description": "탐지된 주의/독소 패턴 코드 및 표시명 목록"
           }
         },
         "type": "object",
@@ -2589,7 +2740,8 @@
             "type": "string",
             "maxLength": 64,
             "minLength": 1,
-            "title": "Session Id"
+            "title": "Session Id",
+            "description": "검토를 시작할 세션 식별자"
           }
         },
         "type": "object",
@@ -2603,15 +2755,17 @@
         "properties": {
           "review_id": {
             "type": "string",
-            "title": "Review Id"
+            "title": "Review Id",
+            "description": "생성된 검토 식별자"
           },
           "review_state": {
-            "type": "string",
-            "title": "Review State"
+            "$ref": "#/components/schemas/ReviewState",
+            "description": "초기 검토 상태 (QUEUED)"
           },
           "session_id": {
             "type": "string",
-            "title": "Session Id"
+            "title": "Session Id",
+            "description": "연관 세션 식별자"
           },
           "retry_of": {
             "anyOf": [
@@ -2622,7 +2776,8 @@
                 "type": "null"
               }
             ],
-            "title": "Retry Of"
+            "title": "Retry Of",
+            "description": "재시도 대상 이전 검토 식별자"
           }
         },
         "type": "object",
@@ -2638,26 +2793,28 @@
         "properties": {
           "review_id": {
             "type": "string",
-            "title": "Review Id"
+            "title": "Review Id",
+            "description": "검토 식별자"
           },
           "session_id": {
             "type": "string",
-            "title": "Session Id"
+            "title": "Session Id",
+            "description": "연관 세션 식별자"
           },
           "review_state": {
-            "type": "string",
-            "title": "Review State"
+            "$ref": "#/components/schemas/ReviewState",
+            "description": "검토 상태 (QUEUED, REVIEWING, COMPLETED, FAILED 등)"
           },
           "mcp_review_status": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/MCPReviewResultStatus"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Mcp Review Status"
+            "description": "MCP 검토 원본 상태"
           },
           "progress": {
             "anyOf": [
@@ -2669,7 +2826,8 @@
                 "type": "null"
               }
             ],
-            "title": "Progress"
+            "title": "Progress",
+            "description": "진행률 및 단계 정보"
           },
           "result": {
             "anyOf": [
@@ -2681,7 +2839,8 @@
                 "type": "null"
               }
             ],
-            "title": "Result"
+            "title": "Result",
+            "description": "검토 원본 결과 스냅샷"
           },
           "error": {
             "anyOf": [
@@ -2693,7 +2852,8 @@
                 "type": "null"
               }
             ],
-            "title": "Error"
+            "title": "Error",
+            "description": "검토 실패 시 에러 정보"
           },
           "started_at": {
             "anyOf": [
@@ -2705,7 +2865,8 @@
                 "type": "null"
               }
             ],
-            "title": "Started At"
+            "title": "Started At",
+            "description": "검토 시작 일시"
           },
           "completed_at": {
             "anyOf": [
@@ -2717,12 +2878,14 @@
                 "type": "null"
               }
             ],
-            "title": "Completed At"
+            "title": "Completed At",
+            "description": "검토 완료 일시"
           },
           "expires_at": {
             "type": "string",
             "format": "date-time",
-            "title": "Expires At"
+            "title": "Expires At",
+            "description": "검토 결과 만료 일시"
           }
         },
         "type": "object",
@@ -2738,7 +2901,8 @@
       "ReviewResultMatch": {
         "properties": {
           "status": {
-            "$ref": "#/components/schemas/StandardMatchStatus"
+            "$ref": "#/components/schemas/StandardMatchStatus",
+            "description": "매칭 상태 (CANDIDATE_SELECTED, NO_CANDIDATE)"
           },
           "standard": {
             "anyOf": [
@@ -2748,7 +2912,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "선택된 표준조항 상세 정보"
           }
         },
         "type": "object",
@@ -2762,19 +2927,21 @@
         "properties": {
           "review_id": {
             "type": "string",
-            "title": "Review Id"
+            "title": "Review Id",
+            "description": "검토 고유 식별자"
           },
           "review_state": {
-            "type": "string",
-            "title": "Review State"
+            "$ref": "#/components/schemas/ReviewState",
+            "description": "검토 진행 상태 (COMPLETED)"
           },
           "mcp_review_status": {
-            "type": "string",
-            "title": "Mcp Review Status"
+            "$ref": "#/components/schemas/MCPReviewResultStatus",
+            "description": "MCP 검토 원본 상태 (OK)"
           },
           "contract_type": {
             "type": "string",
-            "title": "Contract Type"
+            "title": "Contract Type",
+            "description": "확정된 계약 유형 코드"
           },
           "started_at": {
             "anyOf": [
@@ -2786,7 +2953,8 @@
                 "type": "null"
               }
             ],
-            "title": "Started At"
+            "title": "Started At",
+            "description": "검토 시작 일시"
           },
           "completed_at": {
             "anyOf": [
@@ -2798,16 +2966,19 @@
                 "type": "null"
               }
             ],
-            "title": "Completed At"
+            "title": "Completed At",
+            "description": "검토 완료 일시"
           },
           "expires_at": {
             "type": "string",
             "format": "date-time",
-            "title": "Expires At"
+            "title": "Expires At",
+            "description": "결과 만료 일시"
           },
           "disclaimer": {
             "type": "string",
-            "title": "Disclaimer"
+            "title": "Disclaimer",
+            "description": "법률 자문 불가 면책 조항 문구"
           }
         },
         "type": "object",
@@ -2828,30 +2999,37 @@
         "properties": {
           "clause_id": {
             "type": "string",
-            "title": "Clause Id"
+            "title": "Clause Id",
+            "description": "표준조항 식별자"
           },
           "contract_type": {
             "type": "string",
-            "title": "Contract Type"
+            "title": "Contract Type",
+            "description": "계약 유형 코드"
           },
           "category": {
-            "$ref": "#/components/schemas/CodeLabel"
+            "$ref": "#/components/schemas/CodeLabel",
+            "description": "카테고리 코드 및 표시명"
           },
           "title": {
             "type": "string",
-            "title": "Title"
+            "title": "Title",
+            "description": "표준조항 제목"
           },
           "text": {
             "type": "string",
-            "title": "Text"
+            "title": "Text",
+            "description": "표준조항 본문"
           },
           "source": {
             "type": "string",
-            "title": "Source"
+            "title": "Source",
+            "description": "표준조항 출처"
           },
           "version": {
             "type": "string",
-            "title": "Version"
+            "title": "Version",
+            "description": "표준조항 버전"
           }
         },
         "type": "object",
@@ -2870,24 +3048,28 @@
       "ReviewResultsResponse": {
         "properties": {
           "review": {
-            "$ref": "#/components/schemas/ReviewResultMetadata"
+            "$ref": "#/components/schemas/ReviewResultMetadata",
+            "description": "검토 메타데이터"
           },
           "summary": {
-            "$ref": "#/components/schemas/ReviewResultsSummary"
+            "$ref": "#/components/schemas/ReviewResultsSummary",
+            "description": "검토 결과 요약 정보"
           },
           "clause_results": {
             "items": {
               "$ref": "#/components/schemas/ReviewClauseResultResponse"
             },
             "type": "array",
-            "title": "Clause Results"
+            "title": "Clause Results",
+            "description": "사용자 조항별 검토 결과 목록"
           },
           "missing_standard_clauses": {
             "items": {
               "$ref": "#/components/schemas/MissingStandardClauseResponse"
             },
             "type": "array",
-            "title": "Missing Standard Clauses"
+            "title": "Missing Standard Clauses",
+            "description": "누락된 표준조항 체크리스트 목록"
           }
         },
         "type": "object",
@@ -2903,17 +3085,20 @@
       "ReviewResultsSummary": {
         "properties": {
           "clause_results": {
-            "$ref": "#/components/schemas/ReviewClauseResultCounts"
+            "$ref": "#/components/schemas/ReviewClauseResultCounts",
+            "description": "사용자 조항 결과 요약 카운트"
           },
           "missing_standard_clauses": {
             "type": "integer",
             "minimum": 0.0,
-            "title": "Missing Standard Clauses"
+            "title": "Missing Standard Clauses",
+            "description": "누락 가능성 있는 표준조항 수"
           },
           "toxic_pattern_candidates": {
             "type": "integer",
             "minimum": 0.0,
-            "title": "Toxic Pattern Candidates"
+            "title": "Toxic Pattern Candidates",
+            "description": "독소/주의 패턴 탐지 수"
           }
         },
         "type": "object",
@@ -2929,11 +3114,12 @@
         "properties": {
           "session_id": {
             "type": "string",
-            "title": "Session Id"
+            "title": "Session Id",
+            "description": "검토 세션 고유 식별자"
           },
           "review_state": {
-            "type": "string",
-            "title": "Review State"
+            "$ref": "#/components/schemas/ReviewSessionState",
+            "description": "현재 검토 세션 상태"
           },
           "upload": {
             "anyOf": [
@@ -2943,18 +3129,19 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "업로드 파일 메타데이터"
           },
           "scope_status": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/ScopeStatus"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Scope Status"
+            "description": "계약 범위 판별 상태"
           },
           "scope_message": {
             "anyOf": [
@@ -2965,7 +3152,8 @@
                 "type": "null"
               }
             ],
-            "title": "Scope Message"
+            "title": "Scope Message",
+            "description": "범위 판별 안내 메시지"
           },
           "suggested_contract_type": {
             "anyOf": [
@@ -2976,18 +3164,21 @@
                 "type": "null"
               }
             ],
-            "title": "Suggested Contract Type"
+            "title": "Suggested Contract Type",
+            "description": "자동 추천된 계약 유형 코드"
           },
           "candidates": {
             "items": {
               "$ref": "#/components/schemas/ContractTypeCandidate"
             },
             "type": "array",
-            "title": "Candidates"
+            "title": "Candidates",
+            "description": "계약 유형 추천 후보 목록"
           },
           "matched_clause_count": {
             "type": "integer",
             "title": "Matched Clause Count",
+            "description": "매칭된 조항 수",
             "default": 0
           },
           "exclusion_markers": {
@@ -2995,7 +3186,8 @@
               "type": "string"
             },
             "type": "array",
-            "title": "Exclusion Markers"
+            "title": "Exclusion Markers",
+            "description": "범위 제외 판단 표식 목록"
           },
           "selected_contract_type": {
             "anyOf": [
@@ -3006,18 +3198,19 @@
                 "type": "null"
               }
             ],
-            "title": "Selected Contract Type"
+            "title": "Selected Contract Type",
+            "description": "사용자 또는 추천으로 확정된 계약 유형"
           },
           "selection_source": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/SelectionSource"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Selection Source"
+            "description": "계약 유형 선택 경로 (SUGGESTED, CANDIDATE, MANUAL)"
           },
           "out_of_scope_confirmed_at": {
             "anyOf": [
@@ -3029,11 +3222,13 @@
                 "type": "null"
               }
             ],
-            "title": "Out Of Scope Confirmed At"
+            "title": "Out Of Scope Confirmed At",
+            "description": "범위 외 진행 확인 일시"
           },
           "can_start_review": {
             "type": "boolean",
             "title": "Can Start Review",
+            "description": "검토 시작 가능 여부",
             "default": false
           },
           "allowed_actions": {
@@ -3041,12 +3236,14 @@
               "type": "string"
             },
             "type": "array",
-            "title": "Allowed Actions"
+            "title": "Allowed Actions",
+            "description": "현재 상태에서 허용된 사용자 행동 목록"
           },
           "expires_at": {
             "type": "string",
             "format": "date-time",
-            "title": "Expires At"
+            "title": "Expires At",
+            "description": "세션 만료 일시"
           }
         },
         "type": "object",
@@ -3058,6 +3255,54 @@
         "title": "ReviewSessionResponse",
         "description": "세션 생성·상태 복구 응답."
       },
+      "ReviewSessionState": {
+        "type": "string",
+        "enum": [
+          "ANALYZING_CONTRACT_TYPE",
+          "TYPE_SELECTION_REQUIRED",
+          "OUT_OF_SCOPE_CONFIRMATION_REQUIRED",
+          "READY_TO_REVIEW",
+          "REUPLOAD_REQUIRED",
+          "FAILED",
+          "EXPIRED"
+        ],
+        "title": "ReviewSessionState",
+        "description": "계약 유형 확정 전후의 검토 세션 상태."
+      },
+      "ReviewState": {
+        "type": "string",
+        "enum": [
+          "QUEUED",
+          "REVIEWING",
+          "COMPLETED",
+          "FAILED",
+          "CANCELLED",
+          "EXPIRED"
+        ],
+        "title": "ReviewState",
+        "description": "애플리케이션 검토 작업 상태."
+      },
+      "ScopeStatus": {
+        "type": "string",
+        "enum": [
+          "IN_SCOPE",
+          "CONTRACT_TYPE_UNCERTAIN",
+          "OUT_OF_SCOPE",
+          "EMPTY_DOCUMENT"
+        ],
+        "title": "ScopeStatus",
+        "description": "MCP 계약 범위 판별 원본 상태."
+      },
+      "SelectionSource": {
+        "type": "string",
+        "enum": [
+          "SUGGESTED",
+          "CANDIDATE",
+          "MANUAL"
+        ],
+        "title": "SelectionSource",
+        "description": "사용자가 계약 유형을 고른 경로."
+      },
       "StandardMatchStatus": {
         "type": "string",
         "enum": [
@@ -3067,24 +3312,39 @@
         "title": "StandardMatchStatus",
         "description": "표준조항 후보 선택 상태."
       },
+      "SuggestionOutcome": {
+        "type": "string",
+        "enum": [
+          "GENERATED",
+          "INSUFFICIENT_GROUNDING",
+          "REQUIRED_VALUE_MISSING",
+          "GENERATED_FACT_NOT_GROUNDED",
+          "LLM_OUTPUT_INVALID"
+        ],
+        "title": "SuggestionOutcome",
+        "description": "제안 생성 결과 유형."
+      },
       "SuggestionRequest": {
         "properties": {
           "user_clause_id": {
             "type": "string",
             "maxLength": 128,
             "minLength": 1,
-            "title": "User Clause Id"
+            "title": "User Clause Id",
+            "description": "협의 문구를 생성할 대상 사용자 조항 ID"
           },
           "purpose": {
             "type": "string",
             "maxLength": 500,
             "minLength": 1,
-            "title": "Purpose"
+            "title": "Purpose",
+            "description": "수정/협의 목적 및 희망 방향"
           },
           "inputs": {
             "additionalProperties": true,
             "type": "object",
-            "title": "Inputs"
+            "title": "Inputs",
+            "description": "추가 입력 변수 값"
           }
         },
         "type": "object",
@@ -3097,15 +3357,8 @@
       "SuggestionResponse": {
         "properties": {
           "outcome": {
-            "type": "string",
-            "enum": [
-              "GENERATED",
-              "INSUFFICIENT_GROUNDING",
-              "REQUIRED_VALUE_MISSING",
-              "GENERATED_FACT_NOT_GROUNDED",
-              "LLM_OUTPUT_INVALID"
-            ],
-            "title": "Outcome"
+            "$ref": "#/components/schemas/SuggestionOutcome",
+            "description": "제안 생성 결과 유형 (GENERATED, INSUFFICIENT_GROUNDING, REQUIRED_VALUE_MISSING, GENERATED_FACT_NOT_GROUNDED, LLM_OUTPUT_INVALID)"
           },
           "text": {
             "anyOf": [
@@ -3116,7 +3369,8 @@
                 "type": "null"
               }
             ],
-            "title": "Text"
+            "title": "Text",
+            "description": "제안 문구 내용"
           },
           "purpose": {
             "anyOf": [
@@ -3127,46 +3381,53 @@
                 "type": "null"
               }
             ],
-            "title": "Purpose"
+            "title": "Purpose",
+            "description": "요청된 수정 목적"
           },
           "key_changes": {
             "items": {
               "type": "string"
             },
             "type": "array",
-            "title": "Key Changes"
+            "title": "Key Changes",
+            "description": "주요 변경 요점 목록"
           },
           "standard_clause_ids": {
             "items": {
               "type": "string"
             },
             "type": "array",
-            "title": "Standard Clause Ids"
+            "title": "Standard Clause Ids",
+            "description": "참조 표준조항 ID 목록"
           },
           "grounding_source_ids": {
             "items": {
               "type": "string"
             },
             "type": "array",
-            "title": "Grounding Source Ids"
+            "title": "Grounding Source Ids",
+            "description": "참조 법령 근거 ID 목록"
           },
           "required_confirmations": {
             "items": {
               "$ref": "#/components/schemas/RequiredConfirmation"
             },
             "type": "array",
-            "title": "Required Confirmations"
+            "title": "Required Confirmations",
+            "description": "사용자 확인 필요 항목 목록"
           },
           "missing_inputs": {
             "items": {
               "type": "string"
             },
             "type": "array",
-            "title": "Missing Inputs"
+            "title": "Missing Inputs",
+            "description": "누락된 필수 입력값 목록"
           },
           "disclaimer": {
             "type": "string",
-            "title": "Disclaimer"
+            "title": "Disclaimer",
+            "description": "법률 자문 불가 면책 조항 문구"
           }
         },
         "type": "object",
@@ -3180,11 +3441,13 @@
         "properties": {
           "code": {
             "type": "string",
-            "title": "Code"
+            "title": "Code",
+            "description": "독소/주의 패턴 코드"
           },
           "label": {
             "type": "string",
-            "title": "Label"
+            "title": "Label",
+            "description": "독소/주의 패턴 표시명"
           },
           "category": {
             "anyOf": [
@@ -3195,11 +3458,13 @@
                 "type": "null"
               }
             ],
-            "title": "Category"
+            "title": "Category",
+            "description": "연관 카테고리 코드"
           },
           "example_count": {
             "type": "integer",
             "title": "Example Count",
+            "description": "예시 문구 개수",
             "default": 0
           }
         },
@@ -3214,15 +3479,18 @@
         "properties": {
           "file_name": {
             "type": "string",
-            "title": "File Name"
+            "title": "File Name",
+            "description": "업로드된 파일명"
           },
           "size_bytes": {
             "type": "integer",
-            "title": "Size Bytes"
+            "title": "Size Bytes",
+            "description": "파일 크기 (바이트)"
           },
           "extension": {
             "type": "string",
-            "title": "Extension"
+            "title": "Extension",
+            "description": "파일 확장자"
           }
         },
         "type": "object",

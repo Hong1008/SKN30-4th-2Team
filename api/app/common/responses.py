@@ -15,33 +15,33 @@ DataT = TypeVar("DataT")
 class ApiMeta(BaseModel):
     """성공·오류 응답에 공통으로 포함하는 요청 메타데이터."""
 
-    request_id: str
-    timestamp: datetime
+    request_id: str = Field(description="요청 고유 식별자")
+    timestamp: datetime = Field(description="응답 생성 일시 (ISO 8601)")
 
 
 class ApiResponse(BaseModel, Generic[DataT]):
     """JSON API의 공통 성공 응답."""
 
-    data: DataT
-    meta: ApiMeta
+    data: DataT = Field(description="성공 응답 데이터 본문")
+    meta: ApiMeta = Field(description="요청 메타데이터")
 
 
 class ApiError(BaseModel):
     """클라이언트가 코드로 분기할 수 있는 공통 오류 본문."""
 
-    code: str
-    message: str
-    field: str | None = None
-    retryable: bool = False
-    next_action: str | None = None
-    details: dict[str, Any] = Field(default_factory=dict)
+    code: str = Field(description="에러 코드 (예: MCP_TIMEOUT, IDEMPOTENCY_KEY_REUSED)")
+    message: str = Field(description="사용자 노출용 오류 메시지")
+    field: str | None = Field(default=None, description="오류 관련 요청 필드명")
+    retryable: bool = Field(default=False, description="재시도 가능 여부")
+    next_action: str | None = Field(default=None, description="권장 다음 행동 코드")
+    details: dict[str, Any] = Field(default_factory=dict, description="오류 상세 정보")
 
 
 class ApiErrorResponse(BaseModel):
     """JSON API의 공통 오류 응답."""
 
-    error: ApiError
-    meta: ApiMeta
+    error: ApiError = Field(description="오류 정보 본문")
+    meta: ApiMeta = Field(description="요청 메타데이터")
 
 
 COMMON_ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
