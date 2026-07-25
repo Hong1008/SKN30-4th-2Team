@@ -2,12 +2,14 @@
 
 import asyncio
 from contextlib import asynccontextmanager
+from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
 
 import httpx
 import pytest
 from fastapi import FastAPI
+from pypdf import PdfWriter
 
 from app.api.v1.router import router as v1_router
 from app.common.exception_handlers import register_exception_handlers
@@ -169,6 +171,14 @@ async def _wait_completed(client: httpx.AsyncClient, review_id: str) -> None:
 pytestmark = pytest.mark.asyncio
 
 
+def _pdf() -> bytes:
+    output = BytesIO()
+    writer = PdfWriter()
+    writer.add_blank_page(width=100, height=100)
+    writer.write(output)
+    return output.getvalue()
+
+
 async def test_full_mvp_flow_and_browser_isolation(tmp_path: Path) -> None:
     app, _ = create_mvp_app(tmp_path)
     transport = httpx.ASGITransport(app=app)
@@ -181,7 +191,7 @@ async def test_full_mvp_flow_and_browser_isolation(tmp_path: Path) -> None:
             files={
                 "file": (
                     "contract.pdf",
-                    b"%PDF-1.4\ncontract\n%%EOF",
+                    _pdf(),
                     "application/pdf",
                 )
             },

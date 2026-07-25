@@ -7,10 +7,15 @@ from datetime import UTC, datetime, timedelta
 from io import BytesIO
 from typing import Any
 
-import filetype
 from sqlalchemy.orm import Session
 
-from app.common.errors import AppValidationError, ConflictError, ExternalServiceError
+from app.common.errors import (
+    AppValidationError,
+    ConflictError,
+    ExternalServiceError,
+    PayloadTooLargeError,
+    UnsupportedMediaTypeError,
+)
 from app.config import Settings
 from app.llm.mcp.types import WorkShieldMCPRuntime
 from app.review_sessions.domain import (
@@ -19,7 +24,9 @@ from app.review_sessions.domain import (
     ScopeStatus,
     SelectionSource,
 )
+from app.review_sessions.file_validation import validate_document_content
 from app.review_sessions.repository import SqlAlchemyReviewSessionRepository
+from app.review_sessions.scope_normalization import normalize_scope_result
 from app.security.session_tokens import issue_access_token
 from app.storage.protocol import FileStorage
 
@@ -45,13 +52,13 @@ def _validate_upload(
         )
     extension = file_name.rsplit(".", 1)[1].lower()
     if extension not in settings.supported_file_extensions:
-        raise AppValidationError(
+        raise UnsupportedMediaTypeError(
             code="UNSUPPORTED_FILE_TYPE",
             message="지원하지 않는 파일 형식입니다.",
             next_action="REUPLOAD",
         )
     if len(content) > settings.max_upload_size_bytes:
-        raise AppValidationError(
+        raise PayloadTooLargeError(
             code="FILE_TOO_LARGE",
             message="파일 크기가 제한을 초과했습니다.",
             next_action="REUPLOAD",
@@ -63,21 +70,7 @@ def _validate_upload(
             next_action="REUPLOAD",
         )
 
-    detected = filetype.guess(content)
-    detected_extension = detected.extension.lower() if detected else None
-    office_zip_extensions = {"docx", "xlsx", "hwpx"}
-    if (
-        detected_extension is not None
-        and detected_extension != extension
-        and not (
-            detected_extension == "zip" and extension in office_zip_extensions
-        )
-    ):
-        raise AppValidationError(
-            code="FILE_TYPE_MISMATCH",
-            message="파일 확장자와 실제 형식이 일치하지 않습니다.",
-            next_action="REUPLOAD",
-        )
+    validate_document_content(extension, content)
     return extension
 
 
@@ -88,10 +81,14 @@ def _tool_payload(result: object) -> dict[str, Any]:
     structured = getattr(result, "structuredContent", None)
     if isinstance(structured, dict):
         return structured
-    content = getattr(result, "content", None)
+    content = result if isinstance(result, list) else getattr(result, "content", None)
     if isinstance(content, list):
         for item in content:
-            text = getattr(item, "text", None)
+            text = (
+                item.get("text")
+                if isinstance(item, dict)
+                else getattr(item, "text", None)
+            )
             if isinstance(text, str):
                 try:
                     parsed = json.loads(text)
@@ -137,19 +134,6 @@ async def _assess_scope(
     return _tool_payload(result)
 
 
-def _scope_status(value: object) -> ScopeStatus:
-    """MCP 상태를 안전한 제품 상태로 정규화한다."""
-    raw = str(value or "CONTRACT_TYPE_UNCERTAIN").upper()
-    try:
-        return ScopeStatus(raw)
-    except ValueError as error:
-        raise ExternalServiceError(
-            code="MCP_RESPONSE_INVALID",
-            message="검토 서비스의 범위 상태가 올바르지 않습니다.",
-            next_action="CONTACT_SUPPORT",
-        ) from error
-
-
 async def create_review_session(
     *,
     db_session: Session,
@@ -164,16 +148,16 @@ async def create_review_session(
     assert file_name is not None
     storage_key = storage.save(BytesIO(content), extension=extension)
     try:
-        scope_result = await _assess_scope(
-            runtime,
-            storage,
-            storage_key,
-            file_name,
-            content,
+        scope_result = normalize_scope_result(
+            await _assess_scope(
+                runtime,
+                storage,
+                storage_key,
+                file_name,
+                content,
+            )
         )
-        scope_status = _scope_status(
-            scope_result.get("scope_status", scope_result.get("status"))
-        )
+        scope_status = ScopeStatus(scope_result["status"])
         state = {
             ScopeStatus.EMPTY_DOCUMENT: ReviewSessionState.REUPLOAD_REQUIRED,
             ScopeStatus.OUT_OF_SCOPE: ReviewSessionState.OUT_OF_SCOPE_CONFIRMATION_REQUIRED,

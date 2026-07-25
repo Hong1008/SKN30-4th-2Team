@@ -492,7 +492,7 @@ FastAPI 예외 처리기가 HTTP 상태와 공통 오류 응답으로 변환한�
 테스트가 의도한 이유로 실패하는지 확인한다.
 
 ```bash
-uv run pytest tests/review_sessions/test_service.py -q
+uv run pytest tests/review_sessions/test_mcp_tool_payload.py -q
 ```
 
 Import 오류만 확인하고 끝내지 않는다. 최소 구조를 만든 뒤 비즈니스

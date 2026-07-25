@@ -17,10 +17,7 @@ Environment = Literal["local", "prod"]
 DEFAULT_SUPPORTED_FILE_EXTENSIONS = (
     "hwp",
     "hwpx",
-    "hwpml",
     "pdf",
-    "xls",
-    "xlsx",
     "docx",
 )
 
@@ -121,6 +118,11 @@ class Settings(BaseSettings):
         )
         if not extensions:
             raise ValueError("SUPPORTED_FILE_EXTENSIONS는 비어 있을 수 없습니다.")
+        unsupported = set(extensions) - set(DEFAULT_SUPPORTED_FILE_EXTENSIONS)
+        if unsupported:
+            raise ValueError(
+                "지원 파일 형식은 HWP, HWPX, PDF, DOCX로 제한됩니다."
+            )
         return extensions
 
     @model_validator(mode="after")

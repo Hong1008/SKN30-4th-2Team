@@ -187,7 +187,7 @@
     "selection_sources": [],
     "next_actions": [],
     "file_policy": {
-      "extensions": ["hwp", "hwpx", "hwpml", "pdf", "xls", "xlsx", "docx"],
+      "extensions": ["hwp", "hwpx", "pdf", "docx"],
       "max_size_bytes": 20971520,
       "single_file_only": true,
       "encrypted_file_allowed": false

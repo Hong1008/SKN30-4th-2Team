@@ -30,6 +30,14 @@ class AppValidationError(AppError):
     """형식은 유효하지만 애플리케이션 입력 규칙을 만족하지 못한 오류."""
 
 
+class UnsupportedMediaTypeError(AppError):
+    """업로드 미지원 형식 또는 확장자와 실제 형식 불일치 오류."""
+
+
+class PayloadTooLargeError(AppError):
+    """허용된 요청 본문 또는 업로드 크기를 초과한 오류."""
+
+
 class NotFoundError(AppError):
     """리소스가 없거나 요청 주체가 접근할 수 없는 오류."""
 

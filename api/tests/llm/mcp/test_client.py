@@ -3,6 +3,7 @@
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
 
+import anyio
 import pytest
 
 from app.config import Settings
@@ -166,3 +167,64 @@ async def test_does_not_wrap_application_error_after_startup(
             raise LookupError("application failure")
 
     assert client.closed is True
+
+
+@pytest.mark.asyncio
+async def test_ignores_only_closed_stdio_stream_error_on_shutdown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    result = SimpleNamespace(isError=False, structuredContent={"status": "OK"})
+    session = FakeSession(result)
+
+    class BrokenStreamOnCloseClient(FakeClient):
+        @asynccontextmanager
+        async def session(self, server_name: str):
+            self.session_names.append(server_name)
+            yield self.current_session
+            raise ExceptionGroup(
+                "stdio shutdown",
+                [anyio.BrokenResourceError()],
+            )
+
+    client = BrokenStreamOnCloseClient(session)
+
+    async def fake_load(current_session, **kwargs):
+        return [SimpleNamespace(name="get_mcp_capabilities")]
+
+    monkeypatch.setattr(
+        "app.llm.mcp.client.create_workshield_mcp_client",
+        lambda settings: client,
+    )
+    monkeypatch.setattr("app.llm.mcp.client.load_mcp_tools", fake_load)
+
+    async with open_workshield_mcp(_settings()) as runtime:
+        assert runtime.session is session
+
+
+@pytest.mark.asyncio
+async def test_does_not_hide_unexpected_shutdown_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    result = SimpleNamespace(isError=False, structuredContent={"status": "OK"})
+    session = FakeSession(result)
+
+    class UnexpectedCloseErrorClient(FakeClient):
+        @asynccontextmanager
+        async def session(self, server_name: str):
+            yield self.current_session
+            raise ExceptionGroup("stdio shutdown", [OSError("close failed")])
+
+    client = UnexpectedCloseErrorClient(session)
+
+    async def fake_load(current_session, **kwargs):
+        return [SimpleNamespace(name="get_mcp_capabilities")]
+
+    monkeypatch.setattr(
+        "app.llm.mcp.client.create_workshield_mcp_client",
+        lambda settings: client,
+    )
+    monkeypatch.setattr("app.llm.mcp.client.load_mcp_tools", fake_load)
+
+    with pytest.raises(ExceptionGroup, match="stdio shutdown"):
+        async with open_workshield_mcp(_settings()):
+            pass

@@ -8,6 +8,7 @@ from app.config import SettingsDep
 from app.db.dependencies import DbSessionDep
 from app.llm.mcp.dependencies import WorkShieldMCPRuntimeDep
 from app.review_sessions.schemas import (
+    ContractTypeCandidate,
     ContractTypeSelectionRequest,
     OutOfScopeConfirmationRequest,
     ReviewSessionResponse,
@@ -32,6 +33,19 @@ router = APIRouter(
 def _response(entity) -> ReviewSessionResponse:
     """Domain 세션을 API DTO로 변환한다."""
     can_start = entity.state.value == "READY_TO_REVIEW"
+    scope_result = entity.scope_result or {}
+    candidates = scope_result.get("candidates")
+    if not isinstance(candidates, list):
+        candidates = []
+    allowed_actions = {
+        "TYPE_SELECTION_REQUIRED": ["SELECT_CONTRACT_TYPE"],
+        "OUT_OF_SCOPE_CONFIRMATION_REQUIRED": [
+            "SELECT_CONTRACT_TYPE",
+            "CONFIRM_OUT_OF_SCOPE",
+        ],
+        "READY_TO_REVIEW": ["START_REVIEW"],
+        "REUPLOAD_REQUIRED": ["REUPLOAD"],
+    }.get(entity.state.value, [])
     return ReviewSessionResponse(
         session_id=entity.id,
         review_state=entity.state.value,
@@ -43,14 +57,27 @@ def _response(entity) -> ReviewSessionResponse:
             else "",
         ),
         scope_status=entity.scope_status.value if entity.scope_status else None,
-        scope_result=entity.scope_result,
+        scope_message=scope_result.get("message"),
         suggested_contract_type=entity.suggested_contract_type,
+        candidates=[
+            ContractTypeCandidate(
+                contract_type=item["contract_type"],
+                evidence_score=item["score"],
+            )
+            for item in candidates
+            if isinstance(item, dict)
+            and isinstance(item.get("contract_type"), str)
+            and isinstance(item.get("score"), int)
+        ],
+        matched_clause_count=scope_result.get("matched_clause_count", 0),
+        exclusion_markers=scope_result.get("exclusion_markers", []),
         selected_contract_type=entity.selected_contract_type,
         selection_source=(
             entity.selection_source.value if entity.selection_source else None
         ),
         out_of_scope_confirmed_at=entity.out_of_scope_confirmed_at,
         can_start_review=can_start,
+        allowed_actions=allowed_actions,
         expires_at=entity.expires_at,
     )
 

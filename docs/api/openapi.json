@@ -1934,6 +1934,25 @@
         ],
         "title": "ChatSource"
       },
+      "ContractTypeCandidate": {
+        "properties": {
+          "contract_type": {
+            "type": "string",
+            "title": "Contract Type"
+          },
+          "evidence_score": {
+            "type": "integer",
+            "title": "Evidence Score"
+          }
+        },
+        "type": "object",
+        "required": [
+          "contract_type",
+          "evidence_score"
+        ],
+        "title": "ContractTypeCandidate",
+        "description": "확률이 아닌 MCP 결정론적 근거 점수를 가진 계약 유형 후보."
+      },
       "ContractTypeSelectionRequest": {
         "properties": {
           "selected_contract_type": {
@@ -2555,17 +2574,16 @@
             ],
             "title": "Scope Status"
           },
-          "scope_result": {
+          "scope_message": {
             "anyOf": [
               {
-                "additionalProperties": true,
-                "type": "object"
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Scope Result"
+            "title": "Scope Message"
           },
           "suggested_contract_type": {
             "anyOf": [
@@ -2577,6 +2595,25 @@
               }
             ],
             "title": "Suggested Contract Type"
+          },
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/ContractTypeCandidate"
+            },
+            "type": "array",
+            "title": "Candidates"
+          },
+          "matched_clause_count": {
+            "type": "integer",
+            "title": "Matched Clause Count",
+            "default": 0
+          },
+          "exclusion_markers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Exclusion Markers"
           },
           "selected_contract_type": {
             "anyOf": [
@@ -2616,6 +2653,13 @@
             "type": "boolean",
             "title": "Can Start Review",
             "default": false
+          },
+          "allowed_actions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Allowed Actions"
           },
           "expires_at": {
             "type": "string",
