@@ -36,6 +36,8 @@ class ReviewRepository(Protocol):
 
     def has_active_for_session(self, session_id: str) -> bool: ...
 
+    def list_active(self) -> list[Review]: ...
+
     def delete(self, review_id: str) -> bool: ...
 
 
@@ -103,6 +105,15 @@ class SqlAlchemyReviewRepository:
             ReviewRow.state.in_(("QUEUED", "REVIEWING")),
         )
         return self._session.scalar(statement) is not None
+
+    def list_active(self) -> list[Review]:
+        statement = select(ReviewRow).where(
+            ReviewRow.state.in_(("QUEUED", "REVIEWING")),
+        )
+        return [
+            review_from_row(row)
+            for row in self._session.scalars(statement).all()
+        ]
 
     def delete(self, review_id: str) -> bool:
         row = self._session.get(ReviewRow, review_id)

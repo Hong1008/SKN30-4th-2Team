@@ -15,10 +15,10 @@
 
 | 작업 | 상태 | 담당 | 비고 |
 | --- | --- | --- | --- |
-| 공통 Enum | 예정 | A·B | 상태·진행 단계·허용 행동 |
-| 공통 오류 응답 | 예정 | A·B | `code`, `message`, `retryable`, `next_action` |
-| 세션 DTO | 예정 | A·B | A가 생성하고 B가 검토 시작 시 재검증 |
-| 검토 시작 조건 | 예정 | A·B | `READY_TO_REVIEW`, 유형 선택, 만료·중복 확인 |
+| 공통 Enum | 진행 중 | A·B | 구현·자동화 검증 완료, main 반영 대기 |
+| 공통 오류 응답 | 진행 중 | A·B | 구현·자동화 검증 완료, main 반영 대기 |
+| 세션 DTO | 진행 중 | A·B | 명시적 scope 후보 DTO와 시작 조건 재검증 구현 |
+| 검토 시작 조건 | 진행 중 | A·B | 유형 선택, 범위 외 확인, 만료·중복 확인 구현 |
 
 ## 백엔드 A
 
@@ -26,10 +26,10 @@
 
 | API | 작업 | 상태 | 비고 |
 | --- | --- | --- | --- |
-| `POST /api/v1/review-sessions` | 파일 업로드·검증·범위 판별 | 예정 | MCP `assess_contract_scope` 연동 |
-| `GET /api/v1/review-sessions/{session_id}` | 세션 상태 복구 | 예정 | 새로고침·화면 이동 대응 |
-| `PATCH /api/v1/review-sessions/{session_id}/contract-type` | 사용자 계약 유형 확정 | 예정 | 활성 MVP 유형 검증 |
-| `POST /api/v1/review-sessions/{session_id}/out-of-scope-confirmation` | 범위 외 계약 계속 진행 확인 | 예정 | 유형 선택 여부 함께 확인 |
+| `POST /api/v1/review-sessions` | 파일 업로드·검증·범위 판별 | 진행 중 | 실제 stdio MCP 사전 검증 통과, main 반영 대기 |
+| `GET /api/v1/review-sessions/{session_id}` | 세션 상태 복구 | 진행 중 | Cookie 소유권·만료 복구 자동화 검증 완료 |
+| `PATCH /api/v1/review-sessions/{session_id}/contract-type` | 사용자 계약 유형 확정 | 진행 중 | 활성 MVP 유형과 네 scope 상태 검증 완료 |
+| `POST /api/v1/review-sessions/{session_id}/out-of-scope-confirmation` | 범위 외 계약 계속 진행 확인 | 진행 중 | 유형 선택·확인 순서 검증 완료 |
 
 ### A 완료 기준
 
@@ -46,11 +46,22 @@
 
 | API | 작업 | 상태 | 비고 |
 | --- | --- | --- | --- |
-| `POST /api/v1/reviews` | 전체 계약 검토 시작 | 예정 | MCP `review_contract_candidates` 연동 |
-| `GET /api/v1/reviews/{review_id}` | 검토 상태 조회 | 예정 | 폴링·SSE 복구 |
-| `GET /api/v1/reviews/{review_id}/events` | SSE 진행 상황 전송 | 예정 | 순서·진행률 역행 방지 |
-| `POST /api/v1/reviews/{review_id}/retry` | 재시도 가능한 검토 재실행 | 예정 | 멱등성·세션 TTL 확인 |
-| `GET /api/v1/reviews/{review_id}/results` | 전체 검토 결과 조회 | 예정 | 조항 결과와 MISSING 분리 |
+| `POST /api/v1/reviews` | 전체 계약 검토 시작 | 진행 중 | 실제 stdio MCP Review 통과, main 반영 대기 |
+| `GET /api/v1/reviews/{review_id}` | 검토 상태 조회 | 진행 중 | 소유권·만료·재시작 복구 검증 완료 |
+| `GET /api/v1/reviews/{review_id}/events` | SSE 진행 상황 전송 | 진행 중 | 단조 sequence·terminal 종료 검증 완료 |
+| `POST /api/v1/reviews/{review_id}/retry` | 재시도 가능한 검토 재실행 | 진행 중 | fingerprint 멱등성과 파일 보존 검증 완료 |
+| `GET /api/v1/reviews/{review_id}/results` | 전체 검토 결과 조회 | 진행 중 | 조항 결과·MISSING·주의 신호 분리 검증 완료 |
+
+### 후속 API
+
+| API | 상태 | 비고 |
+| --- | --- | --- |
+| `GET /api/v1/metadata` | 진행 중 | 캐시·ETag·파일 정책 구현, main 반영 대기 |
+| `GET /api/v1/reviews/{review_id}/grounding` | 진행 중 | category와 출처 allowlist 구현, 운영 MCP E2E 대기 |
+| `POST /api/v1/reviews/{review_id}/chat/messages` | 진행 중 | API 안전 경계 구현, 운영 LLM 미승인 |
+| `POST /api/v1/reviews/{review_id}/suggestions` | 진행 중 | API 안전 경계 구현, 운영 LLM 미승인 |
+| `DELETE /api/v1/reviews/{review_id}` | 진행 중 | 결과 폐기형 취소·파일 정리 구현 |
+| 세션 TTL·orphan 정리 | 진행 중 | sliding TTL·재시작·반복 정리 검증 완료 |
 
 ### B 완료 기준
 
@@ -65,8 +76,10 @@
 
 | 날짜 | 담당 | 작업 | 상태 | 블로커·비고 |
 | --- | --- | --- | --- | --- |
-| 07-24 | A | 업로드·검토 세션 생성 API | 예정 | 없음 |
-| 07-24 | B | 검토 시작 API | 예정 | A 세션 DTO 필요 |
+| 07-24 | A | 업로드·검토 세션 생성 API | 진행 중 | 구현 완료, main 반영 대기 |
+| 07-24 | B | 검토 시작 API | 진행 중 | 공통 세션 DTO 연동 완료 |
+| 07-25 | A·B | 실제 stdio MCP BE-A·BE-B 사전 점검 | 진행 중 | 통과, 운영 HTTP E2E 대기 |
+| 07-26 | A·B | 파일·DTO·멱등성·SSE 보완 및 전체 회귀 | 진행 중 | 로컬 검증 완료, main 반영 대기 |
 
 ## 상태 기준
 

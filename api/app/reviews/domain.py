@@ -13,6 +13,7 @@ class ReviewState(StrEnum):
     REVIEWING = "REVIEWING"
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
+    CANCELLED = "CANCELLED"
     EXPIRED = "EXPIRED"
 
 

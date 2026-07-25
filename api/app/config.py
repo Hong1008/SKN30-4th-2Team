@@ -17,10 +17,7 @@ Environment = Literal["local", "prod"]
 DEFAULT_SUPPORTED_FILE_EXTENSIONS = (
     "hwp",
     "hwpx",
-    "hwpml",
     "pdf",
-    "xls",
-    "xlsx",
     "docx",
 )
 
@@ -89,7 +86,10 @@ class Settings(BaseSettings):
     )
     temp_upload_dir: Path = Path("data/99_uploads")
     session_ttl_seconds: int = Field(default=30 * 60, gt=0)
+    expired_tombstone_ttl_seconds: int = Field(default=24 * 60 * 60, gt=0)
     storage_cleanup_interval_seconds: int = Field(default=60, gt=0)
+    metadata_cache_ttl_seconds: int = Field(default=5 * 60, gt=0)
+    llm_timeout_seconds: float = Field(default=60.0, gt=0)
 
     @field_validator("cors_origins", mode="before")
     @classmethod
@@ -118,6 +118,11 @@ class Settings(BaseSettings):
         )
         if not extensions:
             raise ValueError("SUPPORTED_FILE_EXTENSIONS는 비어 있을 수 없습니다.")
+        unsupported = set(extensions) - set(DEFAULT_SUPPORTED_FILE_EXTENSIONS)
+        if unsupported:
+            raise ValueError(
+                "지원 파일 형식은 HWP, HWPX, PDF, DOCX로 제한됩니다."
+            )
         return extensions
 
     @model_validator(mode="after")

@@ -56,6 +56,3191 @@
           }
         }
       }
+    },
+    "/api/v1/metadata": {
+      "get": {
+        "tags": [
+          "metadata"
+        ],
+        "summary": "Metadata",
+        "description": "MCP 코드 목록과 제품 정책을 캐시 가능한 단일 응답으로 제공한다.",
+        "operationId": "metadata_api_v1_metadata_get",
+        "parameters": [
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-None-Match"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_MetadataResponse_"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "리소스가 없거나 현재 익명 세션에서 접근할 수 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "현재 상태 또는 멱등 키 충돌",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "익명 세션 만료",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "요청 값 검증 실패",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "외부 서비스 사용 불가",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "외부 서비스 시간 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/review-sessions": {
+      "post": {
+        "tags": [
+          "review-sessions"
+        ],
+        "summary": "Create Session",
+        "description": "계약서 파일을 저장하고 익명 검토 세션을 생성한다.",
+        "operationId": "create_session_api_v1_review_sessions_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_create_session_api_v1_review_sessions_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_ReviewSessionResponse_"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "리소스가 없거나 현재 익명 세션에서 접근할 수 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "현재 상태 또는 멱등 키 충돌",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "익명 세션 만료",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "요청 값 검증 실패",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "외부 서비스 사용 불가",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "외부 서비스 시간 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/review-sessions/{session_id}": {
+      "get": {
+        "tags": [
+          "review-sessions"
+        ],
+        "summary": "Get Session",
+        "description": "Cookie 소유자에게만 세션 상태를 반환한다.",
+        "operationId": "get_session_api_v1_review_sessions__session_id__get",
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_ReviewSessionResponse_"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "리소스가 없거나 현재 익명 세션에서 접근할 수 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "현재 상태 또는 멱등 키 충돌",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "익명 세션 만료",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "요청 값 검증 실패",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "외부 서비스 사용 불가",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "외부 서비스 시간 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/review-sessions/{session_id}/contract-type": {
+      "patch": {
+        "tags": [
+          "review-sessions"
+        ],
+        "summary": "Choose Contract Type",
+        "description": "소유 세션의 계약 유형을 확정한다.",
+        "operationId": "choose_contract_type_api_v1_review_sessions__session_id__contract_type_patch",
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContractTypeSelectionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_ReviewSessionResponse_"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "리소스가 없거나 현재 익명 세션에서 접근할 수 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "현재 상태 또는 멱등 키 충돌",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "익명 세션 만료",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "요청 값 검증 실패",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "외부 서비스 사용 불가",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "외부 서비스 시간 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/review-sessions/{session_id}/out-of-scope-confirmation": {
+      "post": {
+        "tags": [
+          "review-sessions"
+        ],
+        "summary": "Confirm Scope",
+        "description": "소유 세션의 범위 외 계속 진행을 확인한다.",
+        "operationId": "confirm_scope_api_v1_review_sessions__session_id__out_of_scope_confirmation_post",
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OutOfScopeConfirmationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_ReviewSessionResponse_"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "리소스가 없거나 현재 익명 세션에서 접근할 수 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "현재 상태 또는 멱등 키 충돌",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "익명 세션 만료",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "요청 값 검증 실패",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "외부 서비스 사용 불가",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "외부 서비스 시간 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reviews": {
+      "post": {
+        "tags": [
+          "reviews"
+        ],
+        "summary": "Start Review",
+        "description": "Cookie 소유 세션의 검토를 fingerprint 기준으로 멱등 접수한다.",
+        "operationId": "start_review_api_v1_reviews_post",
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_ReviewCreateResponse_"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "리소스가 없거나 현재 익명 세션에서 접근할 수 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "현재 상태 또는 멱등 키 충돌",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "익명 세션 만료",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "요청 값 검증 실패",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "외부 서비스 사용 불가",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "외부 서비스 시간 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reviews/{review_id}/results": {
+      "get": {
+        "tags": [
+          "reviews"
+        ],
+        "summary": "Get Results",
+        "operationId": "get_results_api_v1_reviews__review_id__results_get",
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "review_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Review Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_ReviewResultsResponse_"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "리소스가 없거나 현재 익명 세션에서 접근할 수 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "현재 상태 또는 멱등 키 충돌",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "익명 세션 만료",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "요청 값 검증 실패",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "외부 서비스 사용 불가",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "외부 서비스 시간 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reviews/{review_id}/grounding": {
+      "get": {
+        "tags": [
+          "reviews"
+        ],
+        "summary": "Get Grounding",
+        "description": "현재 검토 결과의 category에 해당하는 법령 참고자료를 조회한다.",
+        "operationId": "get_grounding_api_v1_reviews__review_id__grounding_get",
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "review_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Review Id"
+            }
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Category"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_GroundingResponse_"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "리소스가 없거나 현재 익명 세션에서 접근할 수 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "현재 상태 또는 멱등 키 충돌",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "익명 세션 만료",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "요청 값 검증 실패",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "외부 서비스 사용 불가",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "외부 서비스 시간 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reviews/{review_id}/chat/messages": {
+      "post": {
+        "tags": [
+          "reviews"
+        ],
+        "summary": "Chat Message",
+        "description": "대화 본문을 별도 영구 이력으로 남기지 않는 검토 범위 질의응답.",
+        "operationId": "chat_message_api_v1_reviews__review_id__chat_messages_post",
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "review_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Review Id"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_ChatResponse_"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "리소스가 없거나 현재 익명 세션에서 접근할 수 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "현재 상태 또는 멱등 키 충돌",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "익명 세션 만료",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "요청 값 검증 실패",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "외부 서비스 사용 불가",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "외부 서비스 시간 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reviews/{review_id}/suggestions": {
+      "post": {
+        "tags": [
+          "reviews"
+        ],
+        "summary": "Create Suggestion",
+        "description": "검증된 단일 사용자·표준조항과 grounding으로 협의 초안을 생성한다.",
+        "operationId": "create_suggestion_api_v1_reviews__review_id__suggestions_post",
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "review_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Review Id"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SuggestionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_SuggestionResponse_"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "리소스가 없거나 현재 익명 세션에서 접근할 수 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "현재 상태 또는 멱등 키 충돌",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "익명 세션 만료",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "요청 값 검증 실패",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "외부 서비스 사용 불가",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "외부 서비스 시간 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reviews/{review_id}/events": {
+      "get": {
+        "tags": [
+          "reviews"
+        ],
+        "summary": "Review Events",
+        "description": "저장된 MCP progress를 단조 sequence의 SSE로 전달한다.",
+        "operationId": "review_events_api_v1_reviews__review_id__events_get",
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "review_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Review Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "404": {
+            "description": "리소스가 없거나 현재 익명 세션에서 접근할 수 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "현재 상태 또는 멱등 키 충돌",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "익명 세션 만료",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "요청 값 검증 실패",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "외부 서비스 사용 불가",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "외부 서비스 시간 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reviews/{review_id}": {
+      "get": {
+        "tags": [
+          "reviews"
+        ],
+        "summary": "Get Review",
+        "operationId": "get_review_api_v1_reviews__review_id__get",
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "review_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Review Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_ReviewResponse_"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "리소스가 없거나 현재 익명 세션에서 접근할 수 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "현재 상태 또는 멱등 키 충돌",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "익명 세션 만료",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "요청 값 검증 실패",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "외부 서비스 사용 불가",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "외부 서비스 시간 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "reviews"
+        ],
+        "summary": "Cancel Review",
+        "description": "작업을 취소 표시하고 결과·원본 파일을 멱등하게 폐기한다.",
+        "operationId": "cancel_review_api_v1_reviews__review_id__delete",
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "review_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Review Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_ReviewCancelResponse_"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "리소스가 없거나 현재 익명 세션에서 접근할 수 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "현재 상태 또는 멱등 키 충돌",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "익명 세션 만료",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "요청 값 검증 실패",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "외부 서비스 사용 불가",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "외부 서비스 시간 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reviews/{review_id}/retry": {
+      "post": {
+        "tags": [
+          "reviews"
+        ],
+        "summary": "Retry",
+        "operationId": "retry_api_v1_reviews__review_id__retry_post",
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "review_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Review Id"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_ReviewCreateResponse_"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "리소스가 없거나 현재 익명 세션에서 접근할 수 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "현재 상태 또는 멱등 키 충돌",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "익명 세션 만료",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "요청 값 검증 실패",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "외부 서비스 사용 불가",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "외부 서비스 시간 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ApiError": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field"
+          },
+          "retryable": {
+            "type": "boolean",
+            "title": "Retryable",
+            "default": false
+          },
+          "next_action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Action"
+          },
+          "details": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Details"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "ApiError",
+        "description": "클라이언트가 코드로 분기할 수 있는 공통 오류 본문."
+      },
+      "ApiErrorResponse": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ApiError"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ApiMeta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "error",
+          "meta"
+        ],
+        "title": "ApiErrorResponse",
+        "description": "JSON API의 공통 오류 응답."
+      },
+      "ApiMeta": {
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "title": "Request Id"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp"
+          }
+        },
+        "type": "object",
+        "required": [
+          "request_id",
+          "timestamp"
+        ],
+        "title": "ApiMeta",
+        "description": "성공·오류 응답에 공통으로 포함하는 요청 메타데이터."
+      },
+      "ApiResponse_ChatResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ChatResponse"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ApiMeta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "title": "ApiResponse[ChatResponse]"
+      },
+      "ApiResponse_GroundingResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/GroundingResponse"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ApiMeta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "title": "ApiResponse[GroundingResponse]"
+      },
+      "ApiResponse_MetadataResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/MetadataResponse"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ApiMeta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "title": "ApiResponse[MetadataResponse]"
+      },
+      "ApiResponse_ReviewCancelResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ReviewCancelResponse"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ApiMeta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "title": "ApiResponse[ReviewCancelResponse]"
+      },
+      "ApiResponse_ReviewCreateResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ReviewCreateResponse"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ApiMeta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "title": "ApiResponse[ReviewCreateResponse]"
+      },
+      "ApiResponse_ReviewResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ReviewResponse"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ApiMeta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "title": "ApiResponse[ReviewResponse]"
+      },
+      "ApiResponse_ReviewResultsResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ReviewResultsResponse"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ApiMeta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "title": "ApiResponse[ReviewResultsResponse]"
+      },
+      "ApiResponse_ReviewSessionResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ReviewSessionResponse"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ApiMeta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "title": "ApiResponse[ReviewSessionResponse]"
+      },
+      "ApiResponse_SuggestionResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/SuggestionResponse"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ApiMeta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "title": "ApiResponse[SuggestionResponse]"
+      },
+      "Body_create_session_api_v1_review_sessions_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_create_session_api_v1_review_sessions_post"
+      },
+      "CategoryMetadata": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "anchors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Anchors"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "label"
+        ],
+        "title": "CategoryMetadata"
+      },
+      "ChatHistoryMessage": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "assistant"
+            ],
+            "title": "Role"
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Content"
+          }
+        },
+        "type": "object",
+        "required": [
+          "role",
+          "content"
+        ],
+        "title": "ChatHistoryMessage"
+      },
+      "ChatRequest": {
+        "properties": {
+          "message": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Message"
+          },
+          "focus_clause_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Focus Clause Id"
+          },
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/ChatHistoryMessage"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "History"
+          }
+        },
+        "type": "object",
+        "required": [
+          "message"
+        ],
+        "title": "ChatRequest"
+      },
+      "ChatResponse": {
+        "properties": {
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "ANSWERED",
+              "REFUSED",
+              "INSUFFICIENT_GROUNDING",
+              "LLM_OUTPUT_INVALID"
+            ],
+            "title": "Outcome"
+          },
+          "answer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer"
+          },
+          "refused": {
+            "type": "boolean",
+            "title": "Refused"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/ChatSource"
+            },
+            "type": "array",
+            "title": "Sources"
+          },
+          "limitations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Limitations"
+          },
+          "tool_status": {
+            "type": "string",
+            "title": "Tool Status"
+          },
+          "disclaimer": {
+            "type": "string",
+            "title": "Disclaimer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "outcome",
+          "refused",
+          "tool_status",
+          "disclaimer"
+        ],
+        "title": "ChatResponse"
+      },
+      "ChatSource": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "USER_CLAUSE",
+              "STANDARD_CLAUSE",
+              "LAW"
+            ],
+            "title": "Type"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "law_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Law Name"
+          },
+          "article": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Article"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type"
+        ],
+        "title": "ChatSource"
+      },
+      "CodeLabel": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "label"
+        ],
+        "title": "CodeLabel",
+        "description": "프론트가 하드코딩 없이 표시할 수 있는 코드와 표시명."
+      },
+      "ContractTypeCandidate": {
+        "properties": {
+          "contract_type": {
+            "type": "string",
+            "title": "Contract Type"
+          },
+          "evidence_score": {
+            "type": "integer",
+            "title": "Evidence Score"
+          }
+        },
+        "type": "object",
+        "required": [
+          "contract_type",
+          "evidence_score"
+        ],
+        "title": "ContractTypeCandidate",
+        "description": "확률이 아닌 MCP 결정론적 근거 점수를 가진 계약 유형 후보."
+      },
+      "ContractTypeSelectionRequest": {
+        "properties": {
+          "selected_contract_type": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Selected Contract Type"
+          },
+          "selection_source": {
+            "type": "string",
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Selection Source",
+            "default": "MANUAL"
+          }
+        },
+        "type": "object",
+        "required": [
+          "selected_contract_type"
+        ],
+        "title": "ContractTypeSelectionRequest",
+        "description": "계약 유형 선택 요청."
+      },
+      "FeatureFlags": {
+        "properties": {
+          "chat": {
+            "type": "boolean",
+            "title": "Chat",
+            "default": true
+          },
+          "basic_suggestion": {
+            "type": "boolean",
+            "title": "Basic Suggestion",
+            "default": true
+          },
+          "confidence_score": {
+            "type": "boolean",
+            "title": "Confidence Score",
+            "default": false
+          },
+          "suggestion_edit": {
+            "type": "boolean",
+            "title": "Suggestion Edit",
+            "default": false
+          },
+          "single_clause_rereview": {
+            "type": "boolean",
+            "title": "Single Clause Rereview",
+            "default": false
+          },
+          "server_side_cancel": {
+            "type": "boolean",
+            "title": "Server Side Cancel",
+            "default": true
+          }
+        },
+        "type": "object",
+        "title": "FeatureFlags"
+      },
+      "FilePolicy": {
+        "properties": {
+          "extensions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Extensions"
+          },
+          "max_size_bytes": {
+            "type": "integer",
+            "title": "Max Size Bytes"
+          },
+          "single_file_only": {
+            "type": "boolean",
+            "title": "Single File Only",
+            "default": true
+          },
+          "encrypted_file_allowed": {
+            "type": "boolean",
+            "title": "Encrypted File Allowed",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "extensions",
+          "max_size_bytes"
+        ],
+        "title": "FilePolicy"
+      },
+      "GroundingCategory": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "label"
+        ],
+        "title": "GroundingCategory"
+      },
+      "GroundingItem": {
+        "properties": {
+          "source_id": {
+            "type": "string",
+            "title": "Source Id"
+          },
+          "law_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Law Name"
+          },
+          "article": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Article"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_id",
+          "text"
+        ],
+        "title": "GroundingItem"
+      },
+      "GroundingResponse": {
+        "properties": {
+          "grounding_status": {
+            "type": "string",
+            "title": "Grounding Status"
+          },
+          "category": {
+            "$ref": "#/components/schemas/GroundingCategory"
+          },
+          "contract_type": {
+            "type": "string",
+            "title": "Contract Type"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/GroundingItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "grounding_status",
+          "category",
+          "contract_type",
+          "items"
+        ],
+        "title": "GroundingResponse"
+      },
+      "MetadataCode": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "enabled_for_mvp": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled For Mvp"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "label"
+        ],
+        "title": "MetadataCode"
+      },
+      "MetadataResponse": {
+        "properties": {
+          "schema_version": {
+            "type": "string",
+            "title": "Schema Version",
+            "default": "1.1"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "contract_types": {
+            "items": {
+              "$ref": "#/components/schemas/MetadataCode"
+            },
+            "type": "array",
+            "title": "Contract Types"
+          },
+          "categories": {
+            "items": {
+              "$ref": "#/components/schemas/CategoryMetadata"
+            },
+            "type": "array",
+            "title": "Categories"
+          },
+          "toxic_patterns": {
+            "items": {
+              "$ref": "#/components/schemas/ToxicPatternMetadata"
+            },
+            "type": "array",
+            "title": "Toxic Patterns"
+          },
+          "scope_statuses": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Scope Statuses"
+          },
+          "review_states": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Review States"
+          },
+          "result_codes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Result Codes"
+          },
+          "result_code_details": {
+            "items": {
+              "$ref": "#/components/schemas/ResultCodeMetadata"
+            },
+            "type": "array",
+            "title": "Result Code Details"
+          },
+          "progress_stages": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Progress Stages"
+          },
+          "grounding_statuses": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Grounding Statuses"
+          },
+          "chat_outcomes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Chat Outcomes"
+          },
+          "draft_outcomes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Draft Outcomes"
+          },
+          "error_codes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Error Codes"
+          },
+          "selection_sources": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Selection Sources"
+          },
+          "next_actions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Next Actions"
+          },
+          "file_policy": {
+            "$ref": "#/components/schemas/FilePolicy"
+          },
+          "features": {
+            "$ref": "#/components/schemas/FeatureFlags"
+          }
+        },
+        "type": "object",
+        "required": [
+          "updated_at",
+          "contract_types",
+          "categories",
+          "toxic_patterns",
+          "scope_statuses",
+          "review_states",
+          "result_codes",
+          "result_code_details",
+          "progress_stages",
+          "grounding_statuses",
+          "chat_outcomes",
+          "draft_outcomes",
+          "error_codes",
+          "selection_sources",
+          "next_actions",
+          "file_policy",
+          "features"
+        ],
+        "title": "MetadataResponse"
+      },
+      "MissingStandardClauseResponse": {
+        "properties": {
+          "result_type": {
+            "$ref": "#/components/schemas/CodeLabel"
+          },
+          "standard": {
+            "$ref": "#/components/schemas/ReviewResultStandardClause"
+          },
+          "explanation": {
+            "type": "string",
+            "title": "Explanation"
+          }
+        },
+        "type": "object",
+        "required": [
+          "result_type",
+          "standard",
+          "explanation"
+        ],
+        "title": "MissingStandardClauseResponse",
+        "description": "계약서 전체에서 대응 내용을 찾지 못한 표준조항 후보."
+      },
+      "OutOfScopeConfirmationRequest": {
+        "properties": {
+          "confirmed": {
+            "type": "boolean",
+            "title": "Confirmed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "confirmed"
+        ],
+        "title": "OutOfScopeConfirmationRequest",
+        "description": "범위 외 계속 진행 확인 요청."
+      },
+      "RequiredConfirmation": {
+        "properties": {
+          "field": {
+            "type": "string",
+            "title": "Field"
+          },
+          "placeholder": {
+            "type": "string",
+            "title": "Placeholder"
+          }
+        },
+        "type": "object",
+        "required": [
+          "field",
+          "placeholder"
+        ],
+        "title": "RequiredConfirmation"
+      },
+      "ResultCodeMetadata": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "label"
+        ],
+        "title": "ResultCodeMetadata"
+      },
+      "ReviewCancelResponse": {
+        "properties": {
+          "review_id": {
+            "type": "string",
+            "title": "Review Id"
+          },
+          "review_state": {
+            "type": "string",
+            "title": "Review State"
+          },
+          "deleted": {
+            "type": "boolean",
+            "title": "Deleted"
+          }
+        },
+        "type": "object",
+        "required": [
+          "review_id",
+          "review_state",
+          "deleted"
+        ],
+        "title": "ReviewCancelResponse",
+        "description": "검토 결과 폐기와 파일 정리 응답."
+      },
+      "ReviewClauseResultCounts": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Total"
+          },
+          "NONE": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "None"
+          },
+          "EXTRA": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Extra"
+          },
+          "NO_MATCH": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "No Match"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "NONE",
+          "EXTRA",
+          "NO_MATCH"
+        ],
+        "title": "ReviewClauseResultCounts",
+        "description": "사용자 조항 결과 코드별 개수."
+      },
+      "ReviewClauseResultResponse": {
+        "properties": {
+          "user_clause_id": {
+            "type": "string",
+            "title": "User Clause Id"
+          },
+          "user_clause": {
+            "type": "string",
+            "title": "User Clause"
+          },
+          "deviation": {
+            "$ref": "#/components/schemas/CodeLabel"
+          },
+          "match": {
+            "$ref": "#/components/schemas/ReviewResultMatch"
+          },
+          "explanation": {
+            "type": "string",
+            "title": "Explanation"
+          },
+          "toxic_patterns": {
+            "items": {
+              "$ref": "#/components/schemas/CodeLabel"
+            },
+            "type": "array",
+            "title": "Toxic Patterns"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_clause_id",
+          "user_clause",
+          "deviation",
+          "match",
+          "explanation",
+          "toxic_patterns"
+        ],
+        "title": "ReviewClauseResultResponse",
+        "description": "사용자 계약서에 실제로 존재하는 조항의 표시용 결과."
+      },
+      "ReviewCreateRequest": {
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Session Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "session_id"
+        ],
+        "title": "ReviewCreateRequest",
+        "description": "검토 시작 요청."
+      },
+      "ReviewCreateResponse": {
+        "properties": {
+          "review_id": {
+            "type": "string",
+            "title": "Review Id"
+          },
+          "review_state": {
+            "type": "string",
+            "title": "Review State"
+          },
+          "session_id": {
+            "type": "string",
+            "title": "Session Id"
+          },
+          "retry_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retry Of"
+          }
+        },
+        "type": "object",
+        "required": [
+          "review_id",
+          "review_state",
+          "session_id"
+        ],
+        "title": "ReviewCreateResponse",
+        "description": "비동기 검토 접수 응답."
+      },
+      "ReviewResponse": {
+        "properties": {
+          "review_id": {
+            "type": "string",
+            "title": "Review Id"
+          },
+          "session_id": {
+            "type": "string",
+            "title": "Session Id"
+          },
+          "review_state": {
+            "type": "string",
+            "title": "Review State"
+          },
+          "mcp_review_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mcp Review Status"
+          },
+          "progress": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Progress"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "review_id",
+          "session_id",
+          "review_state",
+          "expires_at"
+        ],
+        "title": "ReviewResponse",
+        "description": "검토 상태 조회 응답."
+      },
+      "ReviewResultMatch": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/StandardMatchStatus"
+          },
+          "standard": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewResultStandardClause"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "ReviewResultMatch",
+        "description": "표준조항 후보 선택 여부."
+      },
+      "ReviewResultMetadata": {
+        "properties": {
+          "review_id": {
+            "type": "string",
+            "title": "Review Id"
+          },
+          "review_state": {
+            "type": "string",
+            "title": "Review State"
+          },
+          "mcp_review_status": {
+            "type": "string",
+            "title": "Mcp Review Status"
+          },
+          "contract_type": {
+            "type": "string",
+            "title": "Contract Type"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          },
+          "disclaimer": {
+            "type": "string",
+            "title": "Disclaimer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "review_id",
+          "review_state",
+          "mcp_review_status",
+          "contract_type",
+          "started_at",
+          "completed_at",
+          "expires_at",
+          "disclaimer"
+        ],
+        "title": "ReviewResultMetadata",
+        "description": "완료된 검토 결과의 상태와 수명주기 메타데이터."
+      },
+      "ReviewResultStandardClause": {
+        "properties": {
+          "clause_id": {
+            "type": "string",
+            "title": "Clause Id"
+          },
+          "contract_type": {
+            "type": "string",
+            "title": "Contract Type"
+          },
+          "category": {
+            "$ref": "#/components/schemas/CodeLabel"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "clause_id",
+          "contract_type",
+          "category",
+          "title",
+          "text",
+          "source",
+          "version"
+        ],
+        "title": "ReviewResultStandardClause",
+        "description": "결과 화면에 노출하는 표준조항과 출처."
+      },
+      "ReviewResultsResponse": {
+        "properties": {
+          "review": {
+            "$ref": "#/components/schemas/ReviewResultMetadata"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/ReviewResultsSummary"
+          },
+          "clause_results": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewClauseResultResponse"
+            },
+            "type": "array",
+            "title": "Clause Results"
+          },
+          "missing_standard_clauses": {
+            "items": {
+              "$ref": "#/components/schemas/MissingStandardClauseResponse"
+            },
+            "type": "array",
+            "title": "Missing Standard Clauses"
+          }
+        },
+        "type": "object",
+        "required": [
+          "review",
+          "summary",
+          "clause_results",
+          "missing_standard_clauses"
+        ],
+        "title": "ReviewResultsResponse",
+        "description": "문서화된 검토 결과 조회 응답."
+      },
+      "ReviewResultsSummary": {
+        "properties": {
+          "clause_results": {
+            "$ref": "#/components/schemas/ReviewClauseResultCounts"
+          },
+          "missing_standard_clauses": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Missing Standard Clauses"
+          },
+          "toxic_pattern_candidates": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Toxic Pattern Candidates"
+          }
+        },
+        "type": "object",
+        "required": [
+          "clause_results",
+          "missing_standard_clauses",
+          "toxic_pattern_candidates"
+        ],
+        "title": "ReviewResultsSummary",
+        "description": "결과 화면 상단 요약."
+      },
+      "ReviewSessionResponse": {
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "title": "Session Id"
+          },
+          "review_state": {
+            "type": "string",
+            "title": "Review State"
+          },
+          "upload": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UploadInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "scope_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scope Status"
+          },
+          "scope_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scope Message"
+          },
+          "suggested_contract_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggested Contract Type"
+          },
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/ContractTypeCandidate"
+            },
+            "type": "array",
+            "title": "Candidates"
+          },
+          "matched_clause_count": {
+            "type": "integer",
+            "title": "Matched Clause Count",
+            "default": 0
+          },
+          "exclusion_markers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Exclusion Markers"
+          },
+          "selected_contract_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selected Contract Type"
+          },
+          "selection_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selection Source"
+          },
+          "out_of_scope_confirmed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Out Of Scope Confirmed At"
+          },
+          "can_start_review": {
+            "type": "boolean",
+            "title": "Can Start Review",
+            "default": false
+          },
+          "allowed_actions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Allowed Actions"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "session_id",
+          "review_state",
+          "expires_at"
+        ],
+        "title": "ReviewSessionResponse",
+        "description": "세션 생성·상태 복구 응답."
+      },
+      "StandardMatchStatus": {
+        "type": "string",
+        "enum": [
+          "CANDIDATE_SELECTED",
+          "NO_CANDIDATE"
+        ],
+        "title": "StandardMatchStatus",
+        "description": "표준조항 후보 선택 상태."
+      },
+      "SuggestionRequest": {
+        "properties": {
+          "user_clause_id": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "User Clause Id"
+          },
+          "purpose": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Purpose"
+          },
+          "inputs": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Inputs"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_clause_id",
+          "purpose"
+        ],
+        "title": "SuggestionRequest"
+      },
+      "SuggestionResponse": {
+        "properties": {
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "GENERATED",
+              "INSUFFICIENT_GROUNDING",
+              "REQUIRED_VALUE_MISSING",
+              "GENERATED_FACT_NOT_GROUNDED",
+              "LLM_OUTPUT_INVALID"
+            ],
+            "title": "Outcome"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "purpose": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Purpose"
+          },
+          "key_changes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Key Changes"
+          },
+          "standard_clause_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Standard Clause Ids"
+          },
+          "grounding_source_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Grounding Source Ids"
+          },
+          "required_confirmations": {
+            "items": {
+              "$ref": "#/components/schemas/RequiredConfirmation"
+            },
+            "type": "array",
+            "title": "Required Confirmations"
+          },
+          "missing_inputs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Missing Inputs"
+          },
+          "disclaimer": {
+            "type": "string",
+            "title": "Disclaimer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "outcome",
+          "disclaimer"
+        ],
+        "title": "SuggestionResponse"
+      },
+      "ToxicPatternMetadata": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "example_count": {
+            "type": "integer",
+            "title": "Example Count",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "label"
+        ],
+        "title": "ToxicPatternMetadata"
+      },
+      "UploadInfo": {
+        "properties": {
+          "file_name": {
+            "type": "string",
+            "title": "File Name"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "title": "Size Bytes"
+          },
+          "extension": {
+            "type": "string",
+            "title": "Extension"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file_name",
+          "size_bytes",
+          "extension"
+        ],
+        "title": "UploadInfo",
+        "description": "업로드 파일의 비민감 메타데이터."
+      }
+    },
+    "securitySchemes": {
+      "APIKeyCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "workshield_session"
+      }
     }
   }
 }

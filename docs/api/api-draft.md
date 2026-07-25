@@ -6,7 +6,7 @@
 
 ## 0. 현재 구현 경계
 
-현재 확인된 프로젝트 소스는 **MCP 서버와 MCP 도구 계약**이다. 이 문서의 REST API는 웹 애플리케이션 백엔드가 MCP를 감싸기 위한 목표 계약이며, 구현 완료 상태를 의미하지 않는다.
+현재 MVP REST API는 metadata, 세션 생성·복구, 계약 유형 확정, 범위 확인, 검토 접수·상태·결과·재시도·SSE, grounding, chat, suggestions, 결과 폐기형 취소까지 구현되어 있다. 멱등 요청은 `idempotency_records`의 scope·세션·요청 fingerprint로 검증하며, chat과 suggestions 응답 스냅샷은 세션 TTL 안에서만 보존한다.
 
 신규 연동은 다음 MCP 도구를 우선 사용한다.
 
@@ -57,7 +57,7 @@
 | 제안 | POST | `/api/v1/reviews/{review_id}/suggestions` | 단일 협의 문구 생성 | MVP |
 | 제안 편집 | PATCH | `/api/v1/reviews/{review_id}/suggestions/{suggestion_id}` | 제안 편집·임시 저장 | MVP 이후 |
 | 단일 조항 재검토 | POST | `/api/v1/reviews/{review_id}/clause-reviews` | 수정 문구 단일 조항 재검토 | MVP 이후 |
-| 취소 | DELETE | `/api/v1/reviews/{review_id}` | 검토 작업 취소 | MVP 이후 |
+| 취소 | DELETE | `/api/v1/reviews/{review_id}` | 결과 폐기·임시 파일 정리 | MVP |
 
 표준조항의 전체 본문·출처·버전은 `review_contract_candidates` 결과에 포함되므로 MVP에서는 별도 표준조항 조회 API를 필수로 두지 않는다.
 
@@ -178,7 +178,13 @@
     "toxic_patterns": [],
     "scope_statuses": [],
     "review_states": [],
-    "result_codes": [],
+    "result_codes": ["NONE", "EXTRA", "NO_MATCH", "MISSING"],
+    "result_code_details": [
+      {"code": "NONE", "label": "표준 대응 후보 있음"},
+      {"code": "EXTRA", "label": "별도 확인 필요"},
+      {"code": "NO_MATCH", "label": "표준조항 검색 후보 없음"},
+      {"code": "MISSING", "label": "표준조항 누락 가능성"}
+    ],
     "progress_stages": [],
     "grounding_statuses": [],
     "chat_outcomes": [],
@@ -187,8 +193,8 @@
     "selection_sources": [],
     "next_actions": [],
     "file_policy": {
-      "extensions": ["hwp", "hwpx", "hwpml", "pdf", "xls", "xlsx", "docx"],
-      "max_size_bytes": 20971520,
+      "extensions": ["hwp", "hwpx", "pdf", "docx"],
+      "max_size_bytes": 10485760,
       "single_file_only": true,
       "encrypted_file_allowed": false
     },
@@ -198,7 +204,7 @@
       "confidence_score": false,
       "suggestion_edit": false,
       "single_clause_rereview": false,
-      "server_side_cancel": false
+      "server_side_cancel": true
     }
   }
 }
@@ -571,7 +577,6 @@ PIPELINE_ERROR
 progress
 completed
 failed
-resync_required
 ```
 
 예시:
@@ -1048,15 +1053,25 @@ MVP에서는 제안 문구를 서버 리소스로 영구 저장하지 않으므�
 
 ---
 
-## 17. 미확정 사항
+## 17. 결정된 MVP 기본값과 미확정 사항
 
-1. 실제 최대 파일 크기
-2. 세션·결과 TTL
-3. 요청 빈도와 동시 검토 제한
-4. 인증 방식
-5. SSE 이벤트 보존 범위
-6. MCP progress의 실제 `current`, `total` 단위
-7. 모델·설정 버전의 수집 방법
-8. 사용자 조항의 원문 위치 좌표 제공 여부
-9. 외부 LLM 동의 기능의 도입 여부
-10. 협의 문구 목적의 고정 선택지
+### 17.1 결정된 MVP 기본값
+
+1. 업로드 최대 크기는 10 MiB다.
+2. 세션과 결과의 sliding TTL은 기본 1,800초다.
+3. 인증은 원본 토큰을 응답 본문에 노출하지 않는 익명 HttpOnly Cookie
+   소유권 방식이다.
+4. API 한 대, 파일형 SQLite와 로컬 FileStorage를 전제로 한다.
+5. 운영 환경에서는 외부 LLM provider와 자동 fallback을 허용하지 않는다.
+6. 운영 승인된 LLM이 없으므로 Chat과 Suggestions는 독립 기능 gate로
+   관리하고 MCP 기반 Review·Grounding과 분리한다.
+
+### 17.2 미확정 또는 MVP 이후 사항
+
+1. 요청 빈도와 전역 동시 검토 제한
+2. SSE 이벤트 영속 보존 범위
+3. MCP progress의 실제 `current`, `total` 단위
+4. 모델·설정 버전의 수집 방법
+5. 사용자 조항의 원문 위치 좌표 제공 여부
+6. 외부 LLM 동의 기능의 도입 여부
+7. 협의 문구 목적의 고정 선택지

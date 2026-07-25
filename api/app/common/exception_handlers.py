@@ -16,6 +16,8 @@ from app.common.errors import (
     ExternalServiceError,
     ExternalServiceTimeoutError,
     NotFoundError,
+    PayloadTooLargeError,
+    UnsupportedMediaTypeError,
 )
 from app.common.logging import log_event
 from app.common.request_id import REQUEST_ID_HEADER, get_request_id
@@ -24,6 +26,8 @@ from app.common.responses import ApiError, ApiErrorResponse, api_meta
 
 APP_ERROR_STATUS: tuple[tuple[type[AppError], int], ...] = (
     (AppValidationError, status.HTTP_422_UNPROCESSABLE_CONTENT),
+    (UnsupportedMediaTypeError, status.HTTP_415_UNSUPPORTED_MEDIA_TYPE),
+    (PayloadTooLargeError, status.HTTP_413_CONTENT_TOO_LARGE),
     (NotFoundError, status.HTTP_404_NOT_FOUND),
     (ConflictError, status.HTTP_409_CONFLICT),
     (ExpiredError, status.HTTP_410_GONE),

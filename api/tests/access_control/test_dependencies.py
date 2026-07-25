@@ -12,6 +12,7 @@ from app.db.database import Database
 from app.db.dependencies import get_database
 from app.review_sessions.repository import SqlAlchemyReviewSessionRepository
 from app.reviews.repository import SqlAlchemyReviewRepository
+from app.reviews.domain import ReviewState
 from app.security.cookies import SESSION_ACCESS_COOKIE
 from app.security.session_tokens import hash_access_token
 from tests.review_sessions.test_repository import review_session_entity
@@ -88,6 +89,11 @@ async def test_owned_expired_session_returns_410_but_other_browser_gets_404(
 ) -> None:
     owner_token, other_token, _ = _seed(database)
     with database.session() as session:
+        review_repository = SqlAlchemyReviewRepository(session)
+        review = review_repository.get("rev_owner")
+        assert review is not None
+        review.state = ReviewState.COMPLETED
+        review_repository.save(review)
         repository = SqlAlchemyReviewSessionRepository(session)
         entity = repository.get("ses_owner")
         assert entity is not None

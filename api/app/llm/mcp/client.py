@@ -3,6 +3,7 @@
 from collections.abc import AsyncIterator
 from contextlib import AsyncExitStack, asynccontextmanager
 
+import anyio
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain_mcp_adapters.tools import load_mcp_tools
 from mcp.types import CallToolResult
@@ -44,6 +45,14 @@ def _structured_capabilities(result: CallToolResult) -> dict[str, object]:
     return structured
 
 
+async def _close_mcp_stack(stack: AsyncExitStack) -> None:
+    """정상 stdio 종료 중 이미 닫힌 스트림 오류만 제한적으로 무시한다."""
+    try:
+        await stack.aclose()
+    except* (anyio.BrokenResourceError, anyio.ClosedResourceError):
+        pass
+
+
 @asynccontextmanager
 async def open_workshield_mcp(
     settings: Settings,
@@ -77,10 +86,10 @@ async def open_workshield_mcp(
         result = await session.call_tool(CAPABILITIES_TOOL_NAME, {})
         capabilities = _structured_capabilities(result)
     except (MCPCompatibilityError, MCPConfigurationError):
-        await stack.aclose()
+        await _close_mcp_stack(stack)
         raise
     except Exception as error:
-        await stack.aclose()
+        await _close_mcp_stack(stack)
         raise MCPConnectionError(
             "WorkShield MCP 서버 연결 또는 초기화에 실패했습니다."
         ) from error
@@ -96,4 +105,4 @@ async def open_workshield_mcp(
             ),
         )
     finally:
-        await stack.aclose()
+        await _close_mcp_stack(stack)

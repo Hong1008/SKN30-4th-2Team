@@ -79,6 +79,15 @@ def test_supported_file_extensions_accepts_comma_separated_value() -> None:
     assert settings.supported_file_extensions == ("pdf", "docx", "hwp")
 
 
+def test_supported_file_extensions_rejects_formats_outside_product_scope() -> None:
+    with pytest.raises(ValidationError, match="HWP, HWPX, PDF, DOCX"):
+        Settings(
+            app_env="local",
+            llm_provider="ollama",
+            supported_file_extensions="pdf,xlsx",
+        )
+
+
 @pytest.mark.parametrize(
     ("field_name", "invalid_value"),
     [

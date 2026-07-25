@@ -41,17 +41,17 @@
 - 도메인별 Repository
 - LLM과 WorkShield MCP 연결
 
-아직 구현하지 않은 범위:
+이후 MVP 구현으로 다음 범위도 추가되었다.
 
-- 업로드·유형 선택·검토 API Router와 Pydantic DTO
-- Application Service
-- 파일 검증과 임시 파일 수명주기
-- 검토 작업 실행기
-- 결과 정규화
-- SSE
+- 업로드·범위 판별·유형 선택·검토 API와 명시적 Pydantic DTO
+- 암호화·손상 파일 구조 검증과 FileStorage 수명주기
+- `review_contract_candidates` 실행기와 엄격한 결과 DTO 정규화
+- MCP progress 저장과 SSE 전달
+- Metadata, Grounding, Chat, Suggestions API
+- fingerprint 기반 멱등 응답과 sliding TTL 정리
 
-구현되지 않은 계층을 예시 코드와 혼동하지 않도록 주의한다. 이 문서의
-Application Service와 Router 예시는 이후 기능 개발 시 적용할 규칙이다.
+현재 구현 상태와 예시가 다를 때는 `app/`의 실제 코드, OpenAPI,
+`api-draft.md` 순서로 확인한다.
 
 ## 3. 요청 처리 구조
 
@@ -492,7 +492,7 @@ FastAPI 예외 처리기가 HTTP 상태와 공통 오류 응답으로 변환한�
 테스트가 의도한 이유로 실패하는지 확인한다.
 
 ```bash
-uv run pytest tests/review_sessions/test_service.py -q
+uv run pytest tests/review_sessions/test_mcp_tool_payload.py -q
 ```
 
 Import 오류만 확인하고 끝내지 않는다. 최소 구조를 만든 뒤 비즈니스

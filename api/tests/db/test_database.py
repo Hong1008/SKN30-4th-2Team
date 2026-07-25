@@ -35,6 +35,7 @@ def test_create_schema_uses_file_sqlite(tmp_path: Path) -> None:
 
     assert database_path.is_file()
     assert set(inspect(database.engine).get_table_names()) == {
+        "idempotency_records",
         "review_sessions",
         "reviews",
     }

@@ -44,6 +44,19 @@ class ApiErrorResponse(BaseModel):
     meta: ApiMeta
 
 
+COMMON_ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
+    404: {
+        "model": ApiErrorResponse,
+        "description": "리소스가 없거나 현재 익명 세션에서 접근할 수 없음",
+    },
+    409: {"model": ApiErrorResponse, "description": "현재 상태 또는 멱등 키 충돌"},
+    410: {"model": ApiErrorResponse, "description": "익명 세션 만료"},
+    422: {"model": ApiErrorResponse, "description": "요청 값 검증 실패"},
+    503: {"model": ApiErrorResponse, "description": "외부 서비스 사용 불가"},
+    504: {"model": ApiErrorResponse, "description": "외부 서비스 시간 초과"},
+}
+
+
 def api_meta(request: Request) -> ApiMeta:
     """현재 요청의 공통 메타데이터를 만든다."""
     return ApiMeta(

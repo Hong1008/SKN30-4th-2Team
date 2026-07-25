@@ -95,3 +95,32 @@ class ReviewRow(Base):
         DateTime(timezone=True),
         index=True,
     )
+
+
+class IdempotencyRecordRow(Base):
+    """API 멱등 키와 요청 지문, 재사용할 응답 스냅샷을 보관한다."""
+
+    __tablename__ = "idempotency_records"
+    __table_args__ = (
+        UniqueConstraint(
+            "scope",
+            "session_id",
+            "idempotency_key",
+            name="uq_idempotency_scope_session_key",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    scope: Mapped[str] = mapped_column(String(96))
+    session_id: Mapped[str] = mapped_column(
+        ForeignKey("review_sessions.id", ondelete="CASCADE"),
+        index=True,
+    )
+    idempotency_key: Mapped[str] = mapped_column(String(128))
+    request_fingerprint: Mapped[str] = mapped_column(String(64))
+    response_snapshot: Mapped[dict[str, Any]] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        index=True,
+    )

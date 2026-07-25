@@ -32,6 +32,8 @@ class ReviewSessionRepository(Protocol):
 
     def list_expired(self, now: datetime) -> list[ReviewSession]: ...
 
+    def list_expired_tombstones(self, cutoff: datetime) -> list[ReviewSession]: ...
+
     def list_storage_keys(self) -> set[str]: ...
 
     def delete(self, session_id: str) -> bool: ...
@@ -72,6 +74,16 @@ class SqlAlchemyReviewSessionRepository:
         statement = select(ReviewSessionRow).where(
             ReviewSessionRow.expires_at <= now,
             ReviewSessionRow.state != "EXPIRED",
+        )
+        return [
+            review_session_from_row(row)
+            for row in self._session.scalars(statement).all()
+        ]
+
+    def list_expired_tombstones(self, cutoff: datetime) -> list[ReviewSession]:
+        statement = select(ReviewSessionRow).where(
+            ReviewSessionRow.state == "EXPIRED",
+            ReviewSessionRow.updated_at <= cutoff,
         )
         return [
             review_session_from_row(row)
