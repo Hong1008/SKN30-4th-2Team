@@ -189,6 +189,22 @@ payload로 해석하는지 검증한다.
 실제 stdio 연동에서 발견된 “도구 결과가 dict가 아니라 text content 목록으로
 반환되는 경우”를 회귀 테스트로 고정한 것이다.
 
+### `tests/metadata/test_service.py`
+
+WorkShield MCP의 카테고리와 주의 문구 메타데이터를 프론트용 DTO로 정규화하는
+경계 조건을 검증한다.
+
+- 카테고리의 `value`, `description`, `anchors`를 코드·표시명·설명·앵커 목록으로
+  변환한다.
+- 주의 문구의 `pattern`, `title`, `category`, `example_count`를 명시적 DTO로
+  변환한다.
+- 누락, `null`, 배열이 아닌 응답을 빈 목록으로 안전하게 처리한다.
+- 식별자가 없거나 예시 수가 잘못된 항목을 결과에서 제외한다.
+- 문자열 목록을 반환하는 이전 MCP 응답과의 호환성을 유지한다.
+
+결과 코드의 기존 문자열 배열은 유지하면서, 프론트가 표시명을 하드코딩하지 않도록
+`result_code_details`를 함께 제공하는지도 API 통합 테스트에서 검증한다.
+
 ### `tests/integration/test_real_workshield_flow.py`
 
 Mock 도구가 아니라 실제 WorkShield MCP와 API 애플리케이션을 함께 실행하는 선택형
@@ -227,8 +243,8 @@ BE-B 연동 경계에서는 다음을 검증한다.
 
 ### 테스트 실행 결과
 
-- 파일 검증 및 scope 정규화 관련 기본 테스트를 포함한 전체 기본 테스트:
-  `136 passed, 2 skipped`
+- 파일 검증, scope 및 metadata 정규화 관련 기본 테스트를 포함한 전체 기본 테스트:
+  `140 passed, 2 skipped`
 - 파일명 정리 후 scope 정규화와 MCP payload 단위 테스트:
   `15 passed`
 - 실제 WorkShield MCP stdio 기반 BE-A 세션 흐름: 통과

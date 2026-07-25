@@ -132,12 +132,29 @@ def create_mvp_app(tmp_path: Path) -> tuple[FastAPI, dict[str, int]]:
         ),
         FakeTool(
             "list_categories",
-            {"categories": [{"code": "LIABILITY", "label": "책임·손해배상"}]},
+            {
+                "categories": [
+                    {
+                        "value": "LIABILITY",
+                        "description": "책임·손해배상",
+                        "anchors": ["손해배상", "책임"],
+                    }
+                ]
+            },
             calls,
         ),
         FakeTool(
             "list_toxic_pattern_details",
-            {"toxic_patterns": [{"code": "UNILATERAL_CHANGE", "label": "일방 변경"}]},
+            {
+                "patterns": [
+                    {
+                        "pattern": "UNILATERAL_CHANGE",
+                        "title": "일방 변경",
+                        "category": "CHANGE",
+                        "example_count": 3,
+                    }
+                ]
+            },
             calls,
         ),
     )
@@ -302,6 +319,28 @@ async def test_metadata_cache_and_etag(tmp_path: Path) -> None:
     assert calls["list_contract_types"] == 1
     assert calls["list_categories"] == 1
     assert calls["list_toxic_pattern_details"] == 1
+    assert first.json()["data"]["categories"] == [
+        {
+            "code": "LIABILITY",
+            "label": "책임·손해배상",
+            "description": "책임·손해배상",
+            "anchors": ["손해배상", "책임"],
+        }
+    ]
+    assert first.json()["data"]["toxic_patterns"] == [
+        {
+            "code": "UNILATERAL_CHANGE",
+            "label": "일방 변경",
+            "category": "CHANGE",
+            "example_count": 3,
+        }
+    ]
+    assert first.json()["data"]["result_code_details"] == [
+        {"code": "NONE", "label": "표준 대응 후보 있음"},
+        {"code": "EXTRA", "label": "별도 확인 필요"},
+        {"code": "NO_MATCH", "label": "표준조항 검색 후보 없음"},
+        {"code": "MISSING", "label": "표준조항 누락 가능성"},
+    ]
     enabled = {
         item["code"]
         for item in first.json()["data"]["contract_types"]

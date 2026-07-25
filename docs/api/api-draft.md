@@ -178,7 +178,13 @@
     "toxic_patterns": [],
     "scope_statuses": [],
     "review_states": [],
-    "result_codes": [],
+    "result_codes": ["NONE", "EXTRA", "NO_MATCH", "MISSING"],
+    "result_code_details": [
+      {"code": "NONE", "label": "표준 대응 후보 있음"},
+      {"code": "EXTRA", "label": "별도 확인 필요"},
+      {"code": "NO_MATCH", "label": "표준조항 검색 후보 없음"},
+      {"code": "MISSING", "label": "표준조항 누락 가능성"}
+    ],
     "progress_stages": [],
     "grounding_statuses": [],
     "chat_outcomes": [],
@@ -188,7 +194,7 @@
     "next_actions": [],
     "file_policy": {
       "extensions": ["hwp", "hwpx", "pdf", "docx"],
-      "max_size_bytes": 20971520,
+      "max_size_bytes": 10485760,
       "single_file_only": true,
       "encrypted_file_allowed": false
     },

@@ -12,10 +12,13 @@ from app.common.errors import ExternalServiceError
 from app.config import Settings
 from app.llm.mcp.types import WorkShieldMCPRuntime
 from app.metadata.schemas import (
+    CategoryMetadata,
     FeatureFlags,
     FilePolicy,
     MetadataCode,
     MetadataResponse,
+    ResultCodeMetadata,
+    ToxicPatternMetadata,
 )
 from app.review_sessions.domain import ReviewSessionState, ScopeStatus, SelectionSource
 from app.review_sessions.service import MVP_CONTRACT_TYPES, _tool_payload
@@ -50,6 +53,12 @@ ERROR_CODES = [
     "LLM_OUTPUT_INVALID",
     "GENERATED_FACT_NOT_GROUNDED",
 ]
+RESULT_CODE_LABELS = {
+    "NONE": "표준 대응 후보 있음",
+    "EXTRA": "별도 확인 필요",
+    "NO_MATCH": "표준조항 검색 후보 없음",
+    "MISSING": "표준조항 누락 가능성",
+}
 
 
 def _items(payload: dict[str, Any], *keys: str) -> list[Any]:
@@ -88,6 +97,116 @@ def _code_items(values: list[Any]) -> list[MetadataCode]:
                 label=label,
                 description=description,
                 enabled_for_mvp=code in MVP_CONTRACT_TYPES,
+            )
+        )
+    return normalized
+
+
+def _optional_text(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip()
+    return normalized or None
+
+
+def _categories(values: list[Any]) -> list[CategoryMetadata]:
+    normalized: list[CategoryMetadata] = []
+    seen: set[str] = set()
+    for value in values:
+        if isinstance(value, str):
+            code = value.strip()
+            if not code:
+                continue
+            label = code
+            description = None
+            anchors: list[str] = []
+        elif isinstance(value, dict):
+            code = _optional_text(
+                value.get("code")
+                or value.get("id")
+                or value.get("value")
+            )
+            if code is None:
+                continue
+            description = _optional_text(value.get("description"))
+            label = (
+                _optional_text(value.get("label"))
+                or _optional_text(value.get("name"))
+                or description
+                or code
+            )
+            raw_anchors = value.get("anchors")
+            anchors = (
+                [
+                    anchor
+                    for item in raw_anchors
+                    if (anchor := _optional_text(item)) is not None
+                ]
+                if isinstance(raw_anchors, list)
+                else []
+            )
+        else:
+            continue
+        if code in seen:
+            continue
+        seen.add(code)
+        normalized.append(
+            CategoryMetadata(
+                code=code,
+                label=label,
+                description=description,
+                anchors=anchors,
+            )
+        )
+    return normalized
+
+
+def _toxic_patterns(values: list[Any]) -> list[ToxicPatternMetadata]:
+    normalized: list[ToxicPatternMetadata] = []
+    seen: set[str] = set()
+    for value in values:
+        if isinstance(value, str):
+            code = value.strip()
+            if not code:
+                continue
+            label = code
+            category = None
+            example_count = 0
+        elif isinstance(value, dict):
+            code = _optional_text(
+                value.get("pattern")
+                or value.get("code")
+                or value.get("id")
+                or value.get("value")
+            )
+            if code is None:
+                continue
+            label = (
+                _optional_text(value.get("title"))
+                or _optional_text(value.get("label"))
+                or _optional_text(value.get("name"))
+                or code
+            )
+            category = _optional_text(value.get("category"))
+            raw_example_count = value.get("example_count", 0)
+            if (
+                not isinstance(raw_example_count, int)
+                or isinstance(raw_example_count, bool)
+                or raw_example_count < 0
+            ):
+                continue
+            example_count = raw_example_count
+        else:
+            continue
+        if code in seen:
+            continue
+        seen.add(code)
+        normalized.append(
+            ToxicPatternMetadata(
+                code=code,
+                label=label,
+                category=category,
+                example_count=example_count,
             )
         )
     return normalized
@@ -146,14 +265,12 @@ async def get_metadata(
                         enabled_for_mvp=True,
                     )
                 )
-        categories = _code_items(
+        categories = _categories(
             _items(categories_payload, "categories", "items")
         )
-        toxic_patterns = [
-            item
-            for item in _items(toxic_payload, "toxic_patterns", "patterns", "items")
-            if isinstance(item, dict)
-        ]
+        toxic_patterns = _toxic_patterns(
+            _items(toxic_payload, "toxic_patterns", "patterns", "items")
+        )
         payload = MetadataResponse(
             updated_at=now,
             contract_types=contract_types,
@@ -166,7 +283,11 @@ async def get_metadata(
                     + [value.value for value in ReviewState]
                 )
             ),
-            result_codes=["NONE", "EXTRA", "NO_MATCH", "MISSING"],
+            result_codes=list(RESULT_CODE_LABELS),
+            result_code_details=[
+                ResultCodeMetadata(code=code, label=label)
+                for code, label in RESULT_CODE_LABELS.items()
+            ],
             progress_stages=PROGRESS_STAGES,
             grounding_statuses=[
                 "OK",

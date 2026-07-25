@@ -1765,6 +1765,42 @@
         ],
         "title": "Body_create_session_api_v1_review_sessions_post"
       },
+      "CategoryMetadata": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "anchors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Anchors"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "label"
+        ],
+        "title": "CategoryMetadata"
+      },
       "ChatHistoryMessage": {
         "properties": {
           "role": {
@@ -2225,15 +2261,14 @@
           },
           "categories": {
             "items": {
-              "$ref": "#/components/schemas/MetadataCode"
+              "$ref": "#/components/schemas/CategoryMetadata"
             },
             "type": "array",
             "title": "Categories"
           },
           "toxic_patterns": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/ToxicPatternMetadata"
             },
             "type": "array",
             "title": "Toxic Patterns"
@@ -2258,6 +2293,13 @@
             },
             "type": "array",
             "title": "Result Codes"
+          },
+          "result_code_details": {
+            "items": {
+              "$ref": "#/components/schemas/ResultCodeMetadata"
+            },
+            "type": "array",
+            "title": "Result Code Details"
           },
           "progress_stages": {
             "items": {
@@ -2320,9 +2362,11 @@
           "updated_at",
           "contract_types",
           "categories",
+          "toxic_patterns",
           "scope_statuses",
           "review_states",
           "result_codes",
+          "result_code_details",
           "progress_stages",
           "grounding_statuses",
           "chat_outcomes",
@@ -2366,6 +2410,24 @@
           "placeholder"
         ],
         "title": "RequiredConfirmation"
+      },
+      "ResultCodeMetadata": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "label"
+        ],
+        "title": "ResultCodeMetadata"
       },
       "ReviewCancelResponse": {
         "properties": {
@@ -2784,6 +2846,40 @@
           "disclaimer"
         ],
         "title": "SuggestionResponse"
+      },
+      "ToxicPatternMetadata": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "example_count": {
+            "type": "integer",
+            "title": "Example Count",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "label"
+        ],
+        "title": "ToxicPatternMetadata"
       },
       "UploadInfo": {
         "properties": {
