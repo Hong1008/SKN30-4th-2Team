@@ -1,13 +1,16 @@
 # 로컬 LLM 아키텍처 및 운영 방식 결정
 
-* 상태: Proposed
+* 상태: Proposed (LLM 기능 운영 승인 전)
 * 작성일: 2026-07-24
+* 최근 검토일: 2026-07-26
 * 결정 대상: WorkShield LLM 연동 및 운영 구조
 * 관련 문서:
 
   * 로컬 LLM 연동 기술적 위험 검토
   * WorkShield MCP 명세
   * 서비스 요구사항
+  * [Ollama Qwen3.5 4B 검증](./0725-ollama-qwen35-4b-validation.md)
+  * [Gemini Gemma 4 31B 검증](./0725-gemini-gemma4-31b-validation.md)
   * [LLM 운영·검증 GitHub Issue](https://github.com/SKNETWORKS-FAMILY-AICAMP/SKN30-4th-2Team/issues/8)
 
 ## 1. 배경
@@ -155,6 +158,31 @@ MCP는 판정과 근거 생성을 담당하고, LLM은 설명과 문구 초안�
 * 성능 및 메모리 테스트
 * 장애 및 재시도 테스트
 
+### 4.2.1 2026-07-26 MVP 적용 범위
+
+MCP 기반 파일 업로드, 범위 판별, Review, 결과 조회와 선택적 Grounding을
+MVP의 운영 필수 범위로 확정한다. 이 결정론적 흐름은 LLM 장애나 운영 승인
+여부와 무관하게 동작해야 한다.
+
+Chat과 Suggestions는 서로 독립된 선택 기능으로 관리한다. API 구현과 서버
+출처 검증이 존재한다는 사실만으로 운영 승인을 의미하지 않는다. 한 기능의
+검증 통과도 다른 기능의 승인을 의미하지 않는다.
+
+2026-07-25의 실제 모델 검증 결과를 다음과 같이 반영한다.
+
+* `hf.co/unsloth/Qwen3.5-4B-GGUF:Q4_K_M`은 개발·실험 전용이다.
+  Chat은 구조·출처 검증을 통과했지만 표현 품질 평가가 남았고,
+  Suggestions는 출처 ID 누락이 반복되어 운영하지 않는다.
+* Gemini API의 `gemma-4-31b-it`는 비민감 합성 fixture 평가에만 사용할 수
+  있다. 실제 계약서와 사용자 데이터의 외부 전송, 운영 사용과 자동
+  fallback은 허용하지 않는다.
+* Qwen3.5 9B Q4 계열과 24GB급 RunPod GPU는 계속 운영 후보일 뿐이다.
+  정확한 모델 태그와 대상 환경 검증 전에는 채택한 모델로 간주하지 않는다.
+
+따라서 현재 승인된 운영 LLM은 없다. 운영 모델 승인 전에는 배포 설정과
+metadata가 Chat과 Suggestions를 활성 기능으로 광고해서는 안 되며, 해당
+기능의 비활성화가 Review와 Grounding을 막아서도 안 된다.
+
 ### 4.3 MCP와 LLM 역할 분리
 
 MCP는 다음 데이터를 결정하는 유일한 주체다.
@@ -242,37 +270,20 @@ LLM에 다음 권한을 부여하지 않는다.
 
 ### 4.6 출처 식별 방식
 
-LLM에 실제 내부 식별자를 직접 생성하도록 요구하지 않는다.
+백엔드는 현재 Review 결과와 이번 요청에서 조회한 Grounding으로 출처
+allowlist를 구성한다. LLM은 컨텍스트에 제공된 실제 식별자를 문자열 그대로
+반환하고 새로운 식별자를 만들지 않는다.
 
-백엔드는 현재 요청에서 사용할 근거에 임시 출처 키를 부여한다.
+* 사용자 조항: API가 Review 정규화 시 생성한 canonical
+  `user_clause_id`
+* 표준조항: MCP 결과의 `standard.clause_id`
+* 법령 참고자료: 이번 요청의 Grounding `source_id`
 
-```json
-{
-  "SRC_1": {
-    "type": "USER_CLAUSE",
-    "id": "현재 세션 사용자 조항 ID"
-  },
-  "SRC_2": {
-    "type": "STANDARD_CLAUSE",
-    "id": "표준조항 ID"
-  },
-  "SRC_3": {
-    "type": "LAW",
-    "id": "법령 출처 ID"
-  }
-}
-```
-
-LLM은 `SRC_1`, `SRC_2`와 같은 키만 반환한다.
-
-백엔드는 다음을 검증한다.
-
-* 현재 요청에 등록된 출처 키인지
-* 현재 세션의 데이터인지
-* 실제 MCP 결과에 존재하는지
-* 출처 유형이 답변 내용과 일치하는지
-
-검증되지 않은 출처가 포함되면 응답 전체를 표시하지 않는다.
+Chat은 `sources[].type`과 `sources[].id`를 반환하고, Suggestions는
+`standard_clause_ids`와 `grounding_source_ids`를 반환한다. 백엔드는
+식별자가 현재 세션·Review와 이번 Grounding 응답에 실제로 존재하는지
+검증한다. 누락되거나 allowlist 밖의 출처가 하나라도 있으면
+`LLM_OUTPUT_INVALID`로 전체 생성을 차단한다.
 
 ### 4.7 구조화 출력
 
@@ -282,11 +293,15 @@ LLM은 `SRC_1`, `SRC_2`와 같은 키만 반환한다.
 
 ```json
 {
+  "outcome": "ANSWERED",
   "answer": "근거 기반 설명",
-  "refused": false,
-  "source_keys": ["SRC_1", "SRC_2"],
-  "limitations": [],
-  "tool_status": "OK"
+  "sources": [
+    {
+      "type": "USER_CLAUSE",
+      "id": "uc_rev_..._1"
+    }
+  ],
+  "limitations": []
 }
 ```
 
@@ -294,12 +309,12 @@ LLM은 `SRC_1`, `SRC_2`와 같은 키만 반환한다.
 
 ```json
 {
-  "suggestion": "제안 문구",
-  "purpose": "변경 목적",
-  "major_changes": ["주요 변경사항"],
-  "source_keys": ["SRC_1", "SRC_2"],
-  "placeholders": [],
-  "limitations": []
+  "outcome": "GENERATED",
+  "text": "제안 문구",
+  "key_changes": ["주요 변경사항"],
+  "standard_clause_ids": ["표준조항 ID"],
+  "grounding_source_ids": ["법령 출처 ID"],
+  "required_confirmations": []
 }
 ```
 
@@ -363,48 +378,36 @@ LLM은 계약서와 근거에 없는 다음 값을 새로 생성할 수 없다.
 
 ### 4.10 오류와 재시도
 
-자동 재시도는 최대 1회로 제한한다.
+MVP API는 잘못된 JSON, 빈 응답, 스키마 또는 출처 검증 실패를 자동으로
+보정하거나 재생성하지 않는다. 검증 실패는 `LLM_OUTPUT_INVALID`로 즉시
+안전 차단하며 원본 모델 출력을 사용자에게 노출하지 않는다.
 
-| 오류           | 처리               |
-| ------------ | ---------------- |
-| 일시적 연결 실패    | 1회 재시도 가능        |
-| 잘못된 JSON     | 보정 프롬프트로 1회 재시도  |
-| 출처 검증 실패     | 1회 재생성 후 실패      |
-| GPU OOM      | 동일 입력 자동 재시도 금지  |
-| 입력 길이 초과     | 컨텍스트 축소 후에만 재실행  |
-| 모델 미설치       | 즉시 실패            |
-| Ollama 연결 불가 | 즉시 오류 상태 반환      |
-| 빈 응답         | 1회 재시도 후 실패      |
-| 타임아웃         | 작업 결과 폐기 후 오류 처리 |
+| 오류 | 처리 |
+| --- | --- |
+| 잘못된 JSON·빈 응답 | `LLM_OUTPUT_INVALID` |
+| 출처·스키마 검증 실패 | `LLM_OUTPUT_INVALID` |
+| 근거에 없는 수치 생성 | `GENERATED_FACT_NOT_GROUNDED` |
+| 타임아웃 | `LLM_TIMEOUT`, 작업 결과 폐기 |
+| GPU OOM·모델 미설치·연결 불가 | 외부 서비스 오류, 자동 재실행 금지 |
+| 입력 길이 초과 | 컨텍스트 정책을 조정한 새 요청에서만 재실행 |
 
-재시도 요청에도 동일한 세션과 요청 식별자를 사용하며, 중복 GPU 작업을 방지하기 위해 idempotency를 적용한다.
+클라이언트가 재요청할 때는 동일 요청에 같은 idempotency key를 사용한다.
+백엔드는 동일 요청의 저장 응답을 재생하고, 같은 키를 다른 Review나 다른
+본문에 재사용하면 `IDEMPOTENCY_KEY_REUSED`로 차단한다.
 
 ### 4.11 상태 처리
 
-LLM 기능은 다음 상태를 사용한다.
+MVP API는 별도의 장기 실행 LLM 작업 상태를 저장하지 않고 요청 결과
+outcome을 반환한다.
 
-#### 챗봇
+* Chat: `ANSWERED`, `REFUSED`, `INSUFFICIENT_GROUNDING`,
+  `LLM_OUTPUT_INVALID`
+* Suggestions: `GENERATED`, `INSUFFICIENT_GROUNDING`,
+  `REQUIRED_VALUE_MISSING`, `GENERATED_FACT_NOT_GROUNDED`,
+  `LLM_OUTPUT_INVALID`
 
-* `DISABLED`
-* `READY`
-* `ANSWERING`
-* `ANSWERED`
-* `REFUSED`
-* `ERROR`
-* `EXPIRED`
-
-#### 문구 초안
-
-* `IDLE`
-* `SOURCE_SELECTED`
-* `GENERATING`
-* `GENERATED`
-* `INSUFFICIENT_GROUNDING`
-* `ERROR`
-
-정책 범위 밖 질문이나 법률적 결론 요청은 `REFUSED`로 처리한다.
-
-근거가 부족한 경우 임의 답변 대신 `REFUSED` 또는 `INSUFFICIENT_GROUNDING`을 반환한다.
+정책 범위 밖 질문이나 법률적 결론 요청은 `REFUSED`로 처리한다. 근거가
+부족한 경우 임의 답변 대신 `INSUFFICIENT_GROUNDING`을 반환한다.
 
 ### 4.12 보안 및 데이터 처리
 
@@ -428,9 +431,55 @@ LLM 기능은 다음 상태를 사용한다.
 * 오류 유형
 * 재시도 횟수
 
-계약서와 생성 결과는 완료, 실패, 취소 또는 TTL 만료 시 삭제한다.
+Chat 대화와 Suggestions 생성 결과는 별도 장기 이력으로 저장하지 않는다.
+멱등 응답 snapshot은 세션 TTL 동안만 보존한다. 원본 파일과 Review
+snapshot은 상태별 정책을 따른다.
+
+* 완료 또는 재시도 가능한 실패: 세션 TTL까지 유지
+* 재시도 불가능한 실패와 취소: 원본 파일 즉시 삭제
+* 세션 만료: 파일, 범위 판별 원문, Review 결과와 오류 삭제
+* tombstone과 멱등 레코드: 각 보존 기한이 끝나면 삭제
 
 외부 LLM으로 자동 전환하지 않는다.
+
+### 4.13 운영 배포 구성과 E2E 게이트
+
+MVP 배포는 API 한 대, 파일형 SQLite와 로컬 FileStorage를 전제로 한다.
+여러 API 인스턴스, 분산 작업 queue와 공유 파일 저장소는 현재 범위에
+포함하지 않는다. 배포 플랫폼에는 API 실행 명령, 영속 volume, 네트워크와
+재시작 정책을 재현 가능하게 기록한다.
+
+운영 환경변수는 최소한 다음 값을 명시적으로 고정한다.
+
+* `APP_ENV=prod`
+* `LLM_PROVIDER=ollama`
+* LLM 기능을 활성화할 때의 정확한 `LLM_MODEL`과 `OLLAMA_BASE_URL`
+* `WORKSHIELD_MCP_TRANSPORT=streamable_http`
+* 실제 MCP 서비스의 `WORKSHIELD_MCP_URL`
+* 배포 프론트 origin의 `CORS_ORIGINS`
+* SQLite와 임시 파일 저장 경로 및 volume
+
+API와 MCP가 서로 다른 프로세스나 컨테이너라면 `localhost`는 각 컨테이너
+자신을 가리키므로 서비스 주소를 사용한다. API 포트와 MCP URL을 동일하게
+설정해 API가 자기 자신을 호출하지 않도록 한다. streamable HTTP에서는
+로컬 경로 대신 `file_content + file_name`만 전송한다.
+
+익명 소유권 Cookie의 `SameSite=Lax`는 프론트와 API가 같은 site에서
+HTTPS로 제공된다는 전제다. 서로 다른 site에 배포하려면 credential CORS와
+Cookie 정책을 함께 재설계하고 별도 보안 검증을 통과해야 한다.
+
+2026-07-25 로컬 stdio 실제 MCP 검증은 사전 점검으로 인정하지만 운영
+streamable HTTP 검증을 대체하지 않는다. 배포 전 다음 E2E를 모두
+확인한다.
+
+1. readiness에서 SQLite, MCP handshake와 필수 도구 발견
+2. 실제 파일의 HTTP 전송, 범위 판별, Review, progress/SSE와 결과 DTO
+3. 실제 `get_category_grounding`의 상태·출처 필드 호환성
+4. MCP timeout, 연결 중단, 잘못된 설정과 재시작 복구
+5. 긴 입력의 처리 시간과 파일·결과 TTL 정리
+6. API, reverse proxy, MCP, Ollama와 GPU 로그의 민감 본문 미수집
+7. LLM 기능을 켤 경우 정확한 운영 모델의 cold/warm 지연, OOM,
+   timeout, 구조·출처·표현 품질과 기능별 fail-closed
 
 ## 5. 검토한 대안
 
@@ -511,6 +560,7 @@ LLM 기능은 다음 상태를 사용한다.
 
 다음 위험은 본 결정만으로 제거되지 않는다.
 
+* 운영 Ollama 모델 미선정
 * 운영 모델의 실제 한국어 품질
 * 긴 입력에서의 처리 지연
 * GPU OOM
@@ -519,8 +569,10 @@ LLM 기능은 다음 상태를 사용한다.
 * Ollama 또는 컨테이너 로그의 민감정보 기록
 * 사용자 취소 후 GPU 연산 지속
 * 모델 업데이트에 따른 출력 품질 변화
+* 운영 streamable HTTP MCP의 네트워크·파일 전송
+* LLM 기능 비활성 상태와 metadata·라우트 노출의 불일치
 
-잔여 위험은 별도의 운영·검증 GitHub Issue에서 테스트한다.
+운영 검증 기록에서 잔여 위험별 결과와 재검증 조건을 관리한다.
 
 ## 8. 승인 조건
 
@@ -529,7 +581,8 @@ LLM 기능은 다음 상태를 사용한다.
 * 정확한 모델 태그와 양자화 고정
 * 운영 GPU에서 모델 정상 로딩
 * 최대 입력 조건에서 OOM 미발생
-* 구조화 출력 최종 성공률 99% 이상
+* 사전에 고정한 대표 fixture를 모두 통과하고 별도 반복 평가에서
+  구조화 출력 최종 성공률 목표를 충족
 * 검증되지 않은 응답 노출 0건
 * 존재하지 않는 출처 허용 0건
 * 다른 세션의 출처 허용 0건
@@ -559,4 +612,11 @@ WorkShield는 MCP를 검토 판정과 근거의 유일한 원천으로 사용한
 
 로컬 LLM은 백엔드가 선별한 현재 세션의 근거만 입력받아 설명과 문구 초안을 생성한다. 모든 출력은 구조화 스키마, 출처 allowlist, 상태 불변성, 금지 표현 및 수치 생성 검증을 통과한 경우에만 사용자에게 표시한다.
 
-Ollama 기반 Qwen3.5 9B Q4 계열과 24GB급 GPU를 운영 후보로 사용하되, 운영·검증 체크리스트를 모두 통과하기 전까지 본 결정의 상태는 `Proposed`로 유지한다.
+MCP 기반 업로드·범위 판별·Review·Grounding은 LLM과 독립된 MVP 운영
+범위다. Chat과 Suggestions는 각각 별도 승인이 필요한 선택 기능이며 현재
+승인된 운영 LLM은 없다.
+
+Ollama 기반 Qwen3.5 9B Q4 계열과 24GB급 GPU를 운영 후보로 사용하되,
+정확한 모델과 배포 구성을 고정하고 기능별 운영·검증 체크리스트를 통과하기
+전까지 본 결정의 상태는 `Proposed`로 유지한다. 4B Ollama와 외부 Gemini
+검증 결과는 후보 비교 근거이며 운영 승인을 뜻하지 않는다.

@@ -577,7 +577,6 @@ PIPELINE_ERROR
 progress
 completed
 failed
-resync_required
 ```
 
 예시:
@@ -1054,15 +1053,25 @@ MVP에서는 제안 문구를 서버 리소스로 영구 저장하지 않으므�
 
 ---
 
-## 17. 미확정 사항
+## 17. 결정된 MVP 기본값과 미확정 사항
 
-1. 실제 최대 파일 크기
-2. 세션·결과 TTL
-3. 요청 빈도와 동시 검토 제한
-4. 인증 방식
-5. SSE 이벤트 보존 범위
-6. MCP progress의 실제 `current`, `total` 단위
-7. 모델·설정 버전의 수집 방법
-8. 사용자 조항의 원문 위치 좌표 제공 여부
-9. 외부 LLM 동의 기능의 도입 여부
-10. 협의 문구 목적의 고정 선택지
+### 17.1 결정된 MVP 기본값
+
+1. 업로드 최대 크기는 10 MiB다.
+2. 세션과 결과의 sliding TTL은 기본 1,800초다.
+3. 인증은 원본 토큰을 응답 본문에 노출하지 않는 익명 HttpOnly Cookie
+   소유권 방식이다.
+4. API 한 대, 파일형 SQLite와 로컬 FileStorage를 전제로 한다.
+5. 운영 환경에서는 외부 LLM provider와 자동 fallback을 허용하지 않는다.
+6. 운영 승인된 LLM이 없으므로 Chat과 Suggestions는 독립 기능 gate로
+   관리하고 MCP 기반 Review·Grounding과 분리한다.
+
+### 17.2 미확정 또는 MVP 이후 사항
+
+1. 요청 빈도와 전역 동시 검토 제한
+2. SSE 이벤트 영속 보존 범위
+3. MCP progress의 실제 `current`, `total` 단위
+4. 모델·설정 버전의 수집 방법
+5. 사용자 조항의 원문 위치 좌표 제공 여부
+6. 외부 LLM 동의 기능의 도입 여부
+7. 협의 문구 목적의 고정 선택지
