@@ -21,6 +21,7 @@ from app.core.common.responses import (
     success_response,
 )
 from app.core.db.dependencies import DatabaseDep, DbSessionDep
+from app.core.idempotency import IdempotencyContextDep, idempotent
 from app.core.idempotency.service import (
     find_replay,
     internal_operation_key,
@@ -266,66 +267,43 @@ def get_review(request: Request, owned: OwnedReviewDep):
     status_code=202,
     response_model=ApiResponse[ReviewCreateResponse],
 )
+@idempotent(
+    scope="reviews.retry",
+    response_model=ReviewCreateResponse,
+    get_session_id=lambda *, owned, **kw: owned.session_id,
+    get_fingerprint_payload=lambda *, owned, **kw: {"review_id": owned.id},
+    use_guard=False,
+    post_commit=lambda *, database, response_data, storage, runtime, idem_ctx, **kw: _schedule_review(
+        idem_ctx.request,
+        database=database,
+        review_id=response_data.review_id,
+        storage=storage,
+        runtime=runtime,
+        settings=idem_ctx.settings,
+    ),
+)
 async def retry(
-    request: Request,
     owned: OwnedReviewDep,
-    db_session: DbSessionDep,
     database: DatabaseDep,
-    settings: SettingsDep,
+    idem_ctx: IdempotencyContextDep,
     runtime: WorkShieldMCPRuntimeDep = None,
     storage: FileStorageDep = None,
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
-    key = require_idempotency_key(idempotency_key)
-    fingerprint = request_fingerprint({"review_id": owned.id})
-    replay = find_replay(
-        db_session,
-        scope="reviews.retry",
-        session_id=owned.session_id,
-        idempotency_key=key,
-        fingerprint=fingerprint,
-    )
-    if replay is not None:
-        return success_response(
-            request,
-            ReviewCreateResponse.model_validate(replay),
-        )
     entity = retry_review(
-        db_session,
+        idem_ctx.db_session,
         owned,
-        idempotency_key=internal_operation_key("reviews.retry", key),
-        settings=settings,
+        idempotency_key=internal_operation_key(
+            "reviews.retry", idem_ctx.request.state.idempotency_key
+        ),
+        settings=idem_ctx.settings,
     )
-    response_data = ReviewCreateResponse(
+    return ReviewCreateResponse(
         review_id=entity.id,
         review_state=entity.state.value,
         session_id=entity.session_id,
         retry_of=entity.retry_of_review_id,
     )
-    raced_replay = save_response(
-        db_session,
-        scope="reviews.retry",
-        session_id=owned.session_id,
-        idempotency_key=key,
-        fingerprint=fingerprint,
-        response_snapshot=response_data.model_dump(mode="json"),
-        ttl_seconds=settings.session_ttl_seconds,
-    )
-    if raced_replay is not None:
-        return success_response(
-            request,
-            ReviewCreateResponse.model_validate(raced_replay),
-        )
-    db_session.commit()
-    _schedule_review(
-        request,
-        database=database,
-        review_id=entity.id,
-        storage=storage,
-        runtime=runtime,
-        settings=settings,
-    )
-    return success_response(request, response_data)
+
 
 
 @router.delete(

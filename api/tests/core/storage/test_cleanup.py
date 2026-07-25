@@ -11,8 +11,8 @@ from app.domains.reviews.domain import ReviewState
 from app.domains.reviews.repository import SqlAlchemyReviewRepository
 from app.core.storage.cleanup import SessionFileLifecycle
 from app.core.storage.local import LocalFileStorage
-from tests.review_sessions.test_repository import review_session_entity
-from tests.reviews.test_repository import review_entity
+from tests.domains.review_sessions.test_repository import review_session_entity
+from tests.domains.reviews.test_repository import review_entity
 
 
 def _seed_session_with_file(

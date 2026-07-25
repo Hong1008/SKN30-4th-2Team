@@ -277,6 +277,53 @@ async def get_review_session(
 저장·열기·삭제한다. Application Service와 MCP 연동 코드는 저장 루트를
 조합하거나 `Path.unlink()`를 직접 호출하지 않는다.
 
+### 5.7 멱등성(Idempotency) 처리와 AOP 데코레이터
+
+네트워크 재요청이나 중복 호출 시 동일 작업이 중복으로 생성·실행되지 않도록, `Idempotency-Key` 헤더와 AOP 데코레이터(`@idempotent`)를 사용한다.
+
+#### 1) 멱등성 처리 흐름 및 역할
+- **`Idempotency-Key` 헤더 바인딩**: 클라이언트가 요청 헤더(`Idempotency-Key`)로 전달하며, `require_idempotency_key()`를 통해 존재 여부 및 길이(128자 이하)를 검증한다.
+- **Fingerprint(지문) 생성**: 요청 객체/Payload를 canonical JSON 기반 SHA-256 지문(`request_fingerprint`)으로 변환하여 동일 요청 여부를 판단한다.
+- **Replay(응답 재연)**: 이미 동일한 멱등 키와 지문으로 처리된 요청이 존재하면, 비즈니스 로직 및 외부 연동 작업을 다시 실행하지 않고 DB에 저장된 이전 응답 스냅샷을 즉시 반환한다(`find_replay`).
+- **응답 저장**: 신규 처리 성공 시 응답 스냅샷을 저장하고(`save_response`), session TTL 동안 보존한다.
+
+#### 2) `@idempotent` 데코레이터와 `IdempotencyContextDep` 사용법
+반복되는 멱등 검증/조회/저장 보일러플레이트 코드를 방지하기 위해 `app/core/idempotency` 패키지의 `@idempotent` 데코레이터와 `IdempotencyContextDep` 의존성을 적용한다.
+
+```python
+@router.post(
+    "/{review_id}/chat/messages",
+    response_model=ApiResponse[ChatResponse],
+)
+@idempotent(
+    scope="reviews.chat",
+    response_model=ChatResponse,
+    get_session_id=lambda *, owned, **kw: owned.session_id,
+    get_fingerprint_payload=lambda *, owned, payload, **kw: {
+        "review_id": owned.id,
+        "payload": payload.model_dump(mode="json"),
+    },
+    use_guard=True,
+)
+async def chat_message(
+    owned: OwnedReviewDep,
+    payload: ChatRequest,
+    runtime: WorkShieldMCPRuntimeDep,
+    model: ChatModelDep,
+    idem_ctx: IdempotencyContextDep,
+):
+    return await answer_review_question(
+        owned,
+        payload,
+        runtime=runtime,
+        model=model,
+        settings=idem_ctx.settings,
+    )
+```
+
+- 라우터 핸들러는 `IdempotencyContextDep` (`Request`, `DbSessionDep`, `SettingsDep`, `Header` 복합 의존성)를 주입받는다.
+- DB Unique 제약을 직접 사용하는 경우 `use_guard=False`로 설정하며, Commit 후 백그라운드 작업 실행이 필요한 경우 `post_commit` 훅을 지정한다.
+
 ## 6. 파일형 SQLite 사용법
 
 기본 DB 경로:

@@ -10,7 +10,7 @@ from app.core.security.session_tokens import (
     access_token_matches,
     issue_access_token,
 )
-from tests.review_sessions.test_repository import review_session_entity
+from tests.domains.review_sessions.test_repository import review_session_entity
 
 
 def test_access_token_is_random_and_only_digest_is_reusable() -> None:

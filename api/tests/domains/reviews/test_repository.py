@@ -10,7 +10,7 @@ from app.domains.review_sessions.repository import SqlAlchemyReviewSessionReposi
 from app.domains.reviews.domain import MCPReviewStatus, Review, ReviewState
 from app.domains.reviews.mapper import review_from_row, review_to_row
 from app.domains.reviews.repository import SqlAlchemyReviewRepository
-from tests.review_sessions.test_repository import review_session_entity
+from tests.domains.review_sessions.test_repository import review_session_entity
 
 
 def review_entity(
