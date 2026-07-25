@@ -33,5 +33,5 @@ dev = [
 pythonpath = ["."]
 testpaths = ["tests"]
 markers = [
-    "integration: 실제 외부 WorkShield MCP 연결이 필요한 opt-in 테스트",
+    "integration: 실제 WorkShield MCP 또는 Ollama 연결이 필요한 opt-in 테스트",
 ]
