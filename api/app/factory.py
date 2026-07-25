@@ -7,8 +7,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.router import router as api_router
-from app.common.exception_handlers import register_exception_handlers
-from app.common.request_id import register_request_id_middleware
+from app.core.common.exception_handlers import register_exception_handlers
+from app.core.common.request_id import register_request_id_middleware
 from app.config import get_settings
 from app.lifespan import lifespan
 

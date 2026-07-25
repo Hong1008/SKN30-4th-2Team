@@ -9,9 +9,9 @@ import pytest
 import app.lifespan as lifespan_module
 import app.factory as factory_module
 from app.config import Settings
-from app.db.database import Database
+from app.core.db.database import Database
 from app.factory import create_app
-from app.llm.mcp.types import WorkShieldMCPRuntime
+from app.core.llm.mcp.types import WorkShieldMCPRuntime
 from app.lifespan import lifespan
 from main import app
 

@@ -2,16 +2,15 @@
 
 from fastapi import APIRouter, Header, Request, Response, status
 
-from app.common.responses import (
+from app.config import SettingsDep
+from app.core.common.responses import (
     ApiResponse,
     COMMON_ERROR_RESPONSES,
     success_response,
 )
-from app.config import SettingsDep
-from app.llm.mcp.dependencies import WorkShieldMCPRuntimeDep
-from app.metadata.schemas import MetadataResponse
-from app.metadata.service import get_metadata
-
+from app.core.llm.mcp.dependencies import WorkShieldMCPRuntimeDep
+from app.domains.metadata.schemas import MetadataResponse
+from app.domains.metadata.service import get_metadata
 
 router = APIRouter(tags=["metadata"], responses=COMMON_ERROR_RESPONSES)
 

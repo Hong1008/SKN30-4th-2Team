@@ -67,7 +67,7 @@
 ## 5. 설정 및 의존성 주입 (DI) 가이드라인
 
 - **전역 설정 금지**: 모듈이나 라우터 내에서 `Settings()` 인스턴스를 직접 생성하지 않으며, `app/config.py`의 `SettingsDep`를 주입받아 사용합니다.
-- **도메인별 의존성 분리**: `SettingsDep`를 제외한 각 도메인 패키지 전용 의존성(예: `ChatModelDep`, `MCPRuntimeDep`, `MCPToolsDep`)은 해당 패키지의 `dependencies.py`(예: `app/llm/dependencies.py`)에서 각각 독립적으로 작성 및 관리합니다.
+- **도메인별 의존성 분리**: `SettingsDep`를 제외한 각 도메인 패키지 전용 의존성(예: `ChatModelDep`, `MCPRuntimeDep`, `MCPToolsDep`)은 해당 패키지의 `dependencies.py`(예: `app/core/llm/dependencies.py`)에서 각각 독립적으로 작성 및 관리합니다.
 - **테스트 대체성**: 테스트 시에는 `get_settings.cache_clear()` 또는 FastAPI `dependency_overrides`를 활용합니다.
 
 ---

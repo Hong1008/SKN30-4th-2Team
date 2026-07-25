@@ -9,13 +9,13 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.chat.schemas import ChatRequest
-from app.chat.service import answer_review_question
+from app.domains.chat.schemas import ChatRequest
+from app.domains.chat.service import answer_review_question
 from app.config import Settings
-from app.llm.factory import create_chat_model
-from app.reviews.domain import MCPReviewStatus, Review, ReviewState
-from app.suggestions.schemas import SuggestionRequest
-from app.suggestions.service import generate_suggestion
+from app.core.llm.factory import create_chat_model
+from app.domains.reviews.domain import MCPReviewStatus, Review, ReviewState
+from app.domains.suggestions.schemas import SuggestionRequest
+from app.domains.suggestions.service import generate_suggestion
 
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration]

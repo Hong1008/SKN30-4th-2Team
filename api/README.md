@@ -85,7 +85,7 @@ WorkShield API는 모듈 간 결합도를 낮추고 테스트 용이성을 확�
    - 애플리케이션 전체 공통 설정은 `app/config.py`에서 제공하는 `SettingsDep`를 매개변수 타입으로 선언하여 주입받습니다.
 2. **도메인별 의존성 분리 (`dependencies.py`)**:
    - `SettingsDep`를 제외한 각 패키지/도메인 전용 의존성은 해당 도메인 패키지의 `dependencies.py` 파일에서 각각 독립적으로 관리합니다.
-   - (예: LLM provider 모델 인스턴스는 `app/llm/dependencies.py`의 `ChatModelDep`, MCP session/tools는 `app/llm/dependencies.py`의 `MCPRuntimeDep`, `MCPToolsDep` 사용)
+   - (예: LLM provider 모델 인스턴스는 `app/core/llm/dependencies.py`의 `ChatModelDep`, MCP session/tools는 `app/core/llm/dependencies.py`의 `MCPRuntimeDep`, `MCPToolsDep` 사용)
 
 ```python
 # 예시: 라우터/서비스에서의 의존성 주입 사용

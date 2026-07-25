@@ -85,51 +85,24 @@ import하면 계층이 섞인 것이다.
 
 ```text
 api/app/
-├── factory.py
-├── lifespan.py
-├── config.py
-├── api/
-│   ├── router.py
-│   ├── system.py
-│   └── v1/
-│       └── router.py
-├── common/
-│   ├── errors.py
-│   ├── exception_handlers.py
-│   ├── request_id.py
-│   └── responses.py
-├── db/
-│   ├── base.py
-│   ├── database.py
-│   ├── dependencies.py
-│   └── models.py
-├── review_sessions/
-│   ├── domain.py
-│   ├── mapper.py
-│   └── repository.py
-├── reviews/
-│   ├── domain.py
-│   ├── mapper.py
-│   └── repository.py
-└── llm/
+├── config.py         # 애플리케이션 환경 설정 및 SettingsDep 주입
+├── factory.py        # FastAPI 애플리케이션 생성 및 미들웨어/예외 처리기 등록
+├── lifespan.py       # DB, MCP 등 외부 자원 수명주기(Lifespan) 관리
+├── api/              # 시스템 API (/health) 및 버전별 API Router (/api/v1)
+├── domains/          # 비즈니스 도메인 모듈 (metadata, review_sessions, reviews, grounding, chat, suggestions)
+└── core/             # 공통 기술 인프라 모듈 (access_control, common, db, idempotency, llm, security, storage)
 ```
 
 | 위치 | 책임 |
 | --- | --- |
-| `factory.py` | FastAPI 앱과 공통 미들웨어·예외 처리 등록 |
-| `lifespan.py` | SQLite와 MCP 연결의 시작·종료 |
-| `config.py` | 환경 설정과 `SettingsDep` |
-| `api/` | 시스템 API와 버전별 Router 조립 |
-| `common/` | 공통 응답·오류·Request ID |
-| `db/` | Engine, Session, ORM Row |
-| `*/domain.py` | 순수 도메인 Enum과 Entity |
-| `*/mapper.py` | ORM Row와 Domain Entity 변환 |
-| `*/repository.py` | 도메인별 저장 계약과 SQLAlchemy 구현 |
-| `llm/` | 기존 LLM provider와 WorkShield MCP 연결 |
+| `config.py` | 애플리케이션 전역 환경 설정 관리 및 `SettingsDep` 주입 |
+| `factory.py` | FastAPI 앱 생성, CORS, 공통 미들웨어 및 예외 처리기 등록 |
+| `lifespan.py` | SQLite DB 엔진, MCP 런타임 등 외부 공유 자원의 시작·종료 관리 |
+| `api/` | 헬스체크 시스템 API와 버전별(`v1/`) HTTP 라우터 엔드포인트 조립 |
+| `domains/` | 개별 비즈니스 도메인 패키지 (도메인 엔티티, DTO 스키마, 비즈니스 서비스, 리포지토리) |
+| `core/` | 공통 기술 인프라 및 교차 관심사 패키지 (DB, LLM/MCP 어댑터, 세션 보안, 멱등성, 파일 저장소, 응답/오류 공통 처리) |
 
-기능이 추가되면 해당 도메인 패키지에 `schemas.py`, `service.py`,
-`router.py`, `dependencies.py`를 필요한 시점에 추가한다. 사용하지 않는
-빈 파일을 미리 만들지 않는다.
+새로운 비즈니스 기능이 추가되면 `domains/` 하위에 해당 도메인 패키지를 추가하고, 필요한 시점에 `schemas.py`, `service.py`, `repository.py`, `domain.py` 등을 작성한다. 공통 기술 기반이나 어댑터가 추가되는 경우 `core/` 하위에 모듈을 배치한다.
 
 ## 5. 계층별 구현 규칙
 
@@ -149,8 +122,8 @@ api/app/
 - SQLAlchemy
 - MCP·LLM client
 
-현재 예시는 `app/review_sessions/domain.py`와
-`app/reviews/domain.py`에서 확인할 수 있다.
+현재 예시는 `app/domains/review_sessions/domain.py`와
+`app/domains/reviews/domain.py`에서 확인할 수 있다.
 
 ```python
 @dataclass(slots=True)
@@ -186,7 +159,7 @@ ORM Row에 다음 기능을 넣지 않는다.
 - API 응답 생성
 - 오류 메시지 결정
 
-현재 ORM Row는 `app/db/models.py`에서 관리한다. 테이블이 많아져 파일을
+현재 ORM Row는 `app/core/db/models.py`에서 관리한다. 테이블이 많아져 파일을
 읽기 어려워질 때 도메인별 파일로 분리한다.
 
 ### 5.3 Mapper
@@ -295,12 +268,12 @@ async def get_review_session(
 않는다.
 
 세션 또는 검토 하위 리소스 Router는 ID만으로 Repository를 조회하지
-않는다. `app/access_control/dependencies.py`의 `OwnedReviewSessionDep` 또는
+않는다. `app/core/access_control/dependencies.py`의 `OwnedReviewSessionDep` 또는
 `OwnedReviewDep`를 주입받아 HttpOnly Cookie의 익명 세션 소유권을 먼저
 검증한다. 존재하지 않는 리소스와 다른 세션의 리소스는 모두 동일한 404로
 처리하며, 소유권이 확인된 만료 세션만 410으로 처리한다.
 
-사용자 파일은 `app/storage/protocol.py`의 `FileStorage`를 통해서만
+사용자 파일은 `app/core/storage/protocol.py`의 `FileStorage`를 통해서만
 저장·열기·삭제한다. Application Service와 MCP 연동 코드는 저장 루트를
 조합하거나 `Path.unlink()`를 직접 호출하지 않는다.
 
@@ -320,7 +293,7 @@ DATABASE_ECHO=false
 ```
 
 `app/lifespan.py`는 서버 시작 시 Engine과 테이블을 만들고 종료 시 연결
-풀을 정리한다. `app/db/database.py`는 상대 경로를 `api/` 기준 절대경로로
+풀을 정리한다. `app/core/db/database.py`는 상대 경로를 `api/` 기준 절대경로로
 바꾼다.
 
 SQLite DB 파일과 보조 파일은 Git에 올리지 않는다.
@@ -452,7 +425,7 @@ Application Service 메서드에 한정하고 ADR로 결정한다.
 }
 ```
 
-Application Service는 `app/common/errors.py`의 오류를 사용한다.
+Application Service는 `app/core/common/errors.py`의 오류를 사용한다.
 
 ```python
 raise NotFoundError(
@@ -492,7 +465,7 @@ FastAPI 예외 처리기가 HTTP 상태와 공통 오류 응답으로 변환한�
 테스트가 의도한 이유로 실패하는지 확인한다.
 
 ```bash
-uv run pytest tests/review_sessions/test_mcp_tool_payload.py -q
+uv run pytest tests/domains/review_sessions/test_mcp_tool_payload.py -q
 ```
 
 Import 오류만 확인하고 끝내지 않는다. 최소 구조를 만든 뒤 비즈니스
@@ -580,8 +553,8 @@ uv run pytest -q
 특정 도메인 테스트:
 
 ```bash
-uv run pytest tests/review_sessions -q
-uv run pytest tests/reviews -q
+uv run pytest tests/domains/review_sessions -q
+uv run pytest tests/domains/reviews -q
 ```
 
 린트:

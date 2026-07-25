@@ -2,26 +2,29 @@
 
 from fastapi import APIRouter, File, Request, Response, UploadFile
 
-from app.access_control.dependencies import OwnedReviewSessionDep
-from app.common.responses import ApiResponse, COMMON_ERROR_RESPONSES, success_response
 from app.config import SettingsDep
-from app.db.dependencies import DbSessionDep
-from app.llm.mcp.dependencies import WorkShieldMCPRuntimeDep
-from app.review_sessions.schemas import (
+from app.core.access_control.dependencies import OwnedReviewSessionDep
+from app.core.common.responses import (
+    ApiResponse,
+    COMMON_ERROR_RESPONSES,
+    success_response,
+)
+from app.core.db.dependencies import DbSessionDep
+from app.core.llm.mcp.dependencies import WorkShieldMCPRuntimeDep
+from app.core.security.cookies import set_session_access_cookie
+from app.core.storage.dependencies import FileStorageDep
+from app.domains.review_sessions.schemas import (
     ContractTypeCandidate,
     ContractTypeSelectionRequest,
     OutOfScopeConfirmationRequest,
     ReviewSessionResponse,
     UploadInfo,
 )
-from app.review_sessions.service import (
+from app.domains.review_sessions.service import (
     confirm_out_of_scope,
     create_review_session,
     select_contract_type,
 )
-from app.security.cookies import set_session_access_cookie
-from app.storage.dependencies import FileStorageDep
-
 
 router = APIRouter(
     prefix="/review-sessions",
@@ -48,7 +51,7 @@ def _response(entity) -> ReviewSessionResponse:
     }.get(entity.state.value, [])
     return ReviewSessionResponse(
         session_id=entity.id,
-        review_state=entity.state.value,
+        review_state=entity.state,
         upload=UploadInfo(
             file_name=entity.original_file_name,
             size_bytes=entity.file_size_bytes,
@@ -56,7 +59,7 @@ def _response(entity) -> ReviewSessionResponse:
             if "." in entity.original_file_name
             else "",
         ),
-        scope_status=entity.scope_status.value if entity.scope_status else None,
+        scope_status=entity.scope_status,
         scope_message=scope_result.get("message"),
         suggested_contract_type=entity.suggested_contract_type,
         candidates=[
@@ -72,9 +75,7 @@ def _response(entity) -> ReviewSessionResponse:
         matched_clause_count=scope_result.get("matched_clause_count", 0),
         exclusion_markers=scope_result.get("exclusion_markers", []),
         selected_contract_type=entity.selected_contract_type,
-        selection_source=(
-            entity.selection_source.value if entity.selection_source else None
-        ),
+        selection_source=entity.selection_source,
         out_of_scope_confirmed_at=entity.out_of_scope_confirmed_at,
         can_start_review=can_start,
         allowed_actions=allowed_actions,

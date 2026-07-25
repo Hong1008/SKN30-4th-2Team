@@ -2,9 +2,9 @@
 
 from fastapi import APIRouter
 
-from app.common.errors import ExternalServiceError
-from app.db.dependencies import DatabaseDep
-from app.llm.dependencies import MCPRuntimeDep
+from app.core.common.errors import ExternalServiceError
+from app.core.db.dependencies import DatabaseDep
+from app.core.llm.dependencies import MCPRuntimeDep
 
 
 router = APIRouter(prefix="/health", tags=["system"])

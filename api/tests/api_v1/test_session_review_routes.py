@@ -12,13 +12,13 @@ from fastapi import FastAPI
 from pypdf import PdfWriter
 
 from app.api.v1.router import router as v1_router
-from app.common.exception_handlers import register_exception_handlers
+from app.core.common.exception_handlers import register_exception_handlers
 from app.config import Settings, get_settings
-from app.db.database import Database
-from app.db.dependencies import get_database
-from app.llm.mcp.dependencies import get_workshield_runtime
-from app.storage.dependencies import get_file_storage
-from app.storage.local import LocalFileStorage
+from app.core.db.database import Database
+from app.core.db.dependencies import get_database
+from app.core.llm.mcp.dependencies import get_workshield_runtime
+from app.core.storage.dependencies import get_file_storage
+from app.core.storage.local import LocalFileStorage
 
 
 class FakeTool:
