@@ -7,51 +7,42 @@ from collections.abc import AsyncIterator
 from fastapi import APIRouter, Header, Request
 from sse_starlette.sse import EventSourceResponse
 
-from app.access_control.dependencies import (
+from app.config import SettingsDep
+from app.core.access_control.dependencies import (
     OwnedReviewDep,
     SessionCookie,
     resolve_owned_review,
     resolve_owned_session,
 )
-from app.chat.schemas import ChatRequest, ChatResponse
-from app.chat.service import answer_review_question
-from app.common.errors import ConflictError
-from app.common.responses import (
+from app.core.common.errors import ConflictError
+from app.core.common.responses import (
     ApiResponse,
     COMMON_ERROR_RESPONSES,
     success_response,
 )
-from app.config import SettingsDep
-from app.db.dependencies import DatabaseDep, DbSessionDep
-from app.grounding.schemas import GroundingResponse
-from app.grounding.service import get_review_grounding
-from app.idempotency.service import (
+from app.core.db.dependencies import DatabaseDep, DbSessionDep
+from app.core.idempotency.service import (
     find_replay,
-    idempotency_guard,
     internal_operation_key,
     request_fingerprint,
     require_idempotency_key,
     save_response,
 )
-from app.llm.dependencies import ChatModelDep
-from app.llm.mcp.dependencies import WorkShieldMCPRuntimeDep
-from app.review_sessions.repository import SqlAlchemyReviewSessionRepository
-from app.reviews.domain import ReviewState
-from app.reviews.repository import SqlAlchemyReviewRepository
-from app.reviews.runner import execute_review
-from app.reviews.presentation import present_review_results
-from app.reviews.schemas import (
+from app.core.llm.mcp.dependencies import WorkShieldMCPRuntimeDep
+from app.core.storage.dependencies import FileStorageDep
+from app.domains.review_sessions.repository import SqlAlchemyReviewSessionRepository
+from app.domains.reviews.domain import ReviewState
+from app.domains.reviews.presentation import present_review_results
+from app.domains.reviews.repository import SqlAlchemyReviewRepository
+from app.domains.reviews.runner import execute_review
+from app.domains.reviews.schemas import (
     ReviewCancelResponse,
     ReviewCreateRequest,
     ReviewCreateResponse,
     ReviewResponse,
     ReviewResultsResponse,
 )
-from app.reviews.service import create_review, retry_review
-from app.storage.dependencies import FileStorageDep
-from app.suggestions.schemas import SuggestionRequest, SuggestionResponse
-from app.suggestions.service import generate_suggestion
-
+from app.domains.reviews.service import create_review, retry_review
 
 router = APIRouter(
     prefix="/reviews",
@@ -191,143 +182,6 @@ def get_results(request: Request, owned: OwnedReviewDep):
             metadata_cache=getattr(request.app.state, "metadata_cache", None),
         ),
     )
-
-
-@router.get(
-    "/{review_id}/grounding",
-    response_model=ApiResponse[GroundingResponse],
-)
-async def get_grounding(
-    request: Request,
-    owned: OwnedReviewDep,
-    runtime: WorkShieldMCPRuntimeDep,
-    settings: SettingsDep,
-    category: str,
-):
-    """현재 검토 결과의 category에 해당하는 법령 참고자료를 조회한다."""
-    data = await get_review_grounding(owned, category, runtime, settings)
-    return success_response(request, data)
-
-
-@router.post(
-    "/{review_id}/chat/messages",
-    response_model=ApiResponse[ChatResponse],
-)
-async def chat_message(
-    request: Request,
-    owned: OwnedReviewDep,
-    payload: ChatRequest,
-    db_session: DbSessionDep,
-    runtime: WorkShieldMCPRuntimeDep,
-    model: ChatModelDep,
-    settings: SettingsDep,
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
-):
-    """대화 본문을 별도 영구 이력으로 남기지 않는 검토 범위 질의응답."""
-    key = require_idempotency_key(idempotency_key)
-    fingerprint = request_fingerprint(
-        {
-            "review_id": owned.id,
-            "payload": payload.model_dump(mode="json"),
-        }
-    )
-    async with idempotency_guard(
-        scope="reviews.chat",
-        session_id=owned.session_id,
-        idempotency_key=key,
-    ):
-        replay = find_replay(
-            db_session,
-            scope="reviews.chat",
-            session_id=owned.session_id,
-            idempotency_key=key,
-            fingerprint=fingerprint,
-        )
-        if replay is not None:
-            return success_response(request, ChatResponse.model_validate(replay))
-        data = await answer_review_question(
-            owned,
-            payload,
-            runtime=runtime,
-            model=model,
-            settings=settings,
-        )
-        raced_replay = save_response(
-            db_session,
-            scope="reviews.chat",
-            session_id=owned.session_id,
-            idempotency_key=key,
-            fingerprint=fingerprint,
-            response_snapshot=data.model_dump(mode="json"),
-            ttl_seconds=settings.session_ttl_seconds,
-        )
-        if raced_replay is not None:
-            data = ChatResponse.model_validate(raced_replay)
-        else:
-            db_session.commit()
-        return success_response(request, data)
-
-
-@router.post(
-    "/{review_id}/suggestions",
-    response_model=ApiResponse[SuggestionResponse],
-)
-async def create_suggestion(
-    request: Request,
-    owned: OwnedReviewDep,
-    payload: SuggestionRequest,
-    db_session: DbSessionDep,
-    runtime: WorkShieldMCPRuntimeDep,
-    model: ChatModelDep,
-    settings: SettingsDep,
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
-):
-    """검증된 단일 사용자·표준조항과 grounding으로 협의 초안을 생성한다."""
-    key = require_idempotency_key(idempotency_key)
-    fingerprint = request_fingerprint(
-        {
-            "review_id": owned.id,
-            "payload": payload.model_dump(mode="json"),
-        }
-    )
-    async with idempotency_guard(
-        scope="reviews.suggestions",
-        session_id=owned.session_id,
-        idempotency_key=key,
-    ):
-        replay = find_replay(
-            db_session,
-            scope="reviews.suggestions",
-            session_id=owned.session_id,
-            idempotency_key=key,
-            fingerprint=fingerprint,
-        )
-        if replay is not None:
-            return success_response(
-                request,
-                SuggestionResponse.model_validate(replay),
-            )
-        data = await generate_suggestion(
-            owned,
-            payload,
-            runtime=runtime,
-            model=model,
-            settings=settings,
-        )
-        raced_replay = save_response(
-            db_session,
-            scope="reviews.suggestions",
-            session_id=owned.session_id,
-            idempotency_key=key,
-            fingerprint=fingerprint,
-            response_snapshot=data.model_dump(mode="json"),
-            ttl_seconds=settings.session_ttl_seconds,
-        )
-        if raced_replay is not None:
-            data = SuggestionResponse.model_validate(raced_replay)
-        else:
-            db_session.commit()
-        return success_response(request, data)
 
 
 @router.get("/{review_id}/events")

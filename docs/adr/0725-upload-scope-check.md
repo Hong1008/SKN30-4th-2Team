@@ -158,7 +158,7 @@ WorkShield MCP 프로세스를 이용한 transport E2E는 배포 환경에서 �
 실제 MCP 통합 테스트의 책임을 분리해, 기본 테스트는 외부 프로세스 없이 반복 실행할
 수 있고 실제 연동 검증은 필요한 경우에만 명시적으로 실행하도록 구성했다.
 
-### `tests/review_sessions/test_file_validation.py`
+### `tests/domains/review_sessions/test_file_validation.py`
 
 업로드된 파일의 확장자만 확인하지 않고 실제 문서 구조를 검사하는 규칙을 검증한다.
 
@@ -173,7 +173,7 @@ WorkShield MCP 프로세스를 이용한 transport E2E는 배포 환경에서 �
 이 테스트는 미지원 파일과 손상·암호화 파일이 FileStorage 저장 및 MCP 호출 전에
 차단되는지를 보장한다.
 
-### `tests/review_sessions/test_scope_normalization.py`
+### `tests/domains/review_sessions/test_scope_normalization.py`
 
 WorkShield MCP의 `assess_contract_scope` 응답을 제품 세션 상태로 정규화하는 규칙을
 검증한다.
@@ -187,7 +187,7 @@ WorkShield MCP의 `assess_contract_scope` 응답을 제품 세션 상태로 정�
 
 이 테스트는 MCP 응답 변경이나 누락이 API 내부 상태를 조용히 오염시키지 않도록 한다.
 
-### `tests/review_sessions/test_mcp_tool_payload.py`
+### `tests/domains/review_sessions/test_mcp_tool_payload.py`
 
 LangChain MCP 도구가 반환할 수 있는 여러 응답 포맷을 API 공통 파서가 동일한
 payload로 해석하는지 검증한다.
@@ -200,7 +200,7 @@ payload로 해석하는지 검증한다.
 실제 stdio 연동에서 발견된 “도구 결과가 dict가 아니라 text content 목록으로
 반환되는 경우”를 회귀 테스트로 고정한 것이다.
 
-### `tests/metadata/test_service.py`
+### `tests/domains/metadata/test_service.py`
 
 WorkShield MCP의 카테고리와 주의 문구 메타데이터를 프론트용 DTO로 정규화하는
 경계 조건을 검증한다.

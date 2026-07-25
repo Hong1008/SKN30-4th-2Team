@@ -66,7 +66,7 @@ MCP의 결정론적 검토 결과와 LLM 설명을 분리하고, 로컬 개발�
 
 ## 추가 기록: LLM provider 구현
 
-`api/app/llm/`에 OpenAI, Gemini, Ollama의 LangChain chat model 생성 계층을 추가했다.
+`api/app/core/llm/`에 OpenAI, Gemini, Ollama의 LangChain chat model 생성 계층을 추가했다.
 각 구현체는 모델명을 고정하지 않고 `Settings.llm_model`을 사용하며, factory는
 `Settings.llm_provider`에 따라 `BaseChatModel` 구현체를 선택한다. 선택한 외부 provider의
 API 키와 모델명이 없으면 `LLMConfigurationError`로 생성 단계에서 실패한다.
@@ -114,7 +114,7 @@ WorkShield MCP 공개 DTO와 불일치하는 32개 요구사항의 `비고` 끝�
 
 ## 추가 기록: WorkShield MCP client 구현
 
-`api/app/llm/mcp/`에 WorkShield MCP client 계층을 추가했다. 공개 transport는
+`api/app/core/llm/mcp/`에 WorkShield MCP client 계층을 추가했다. 공개 transport는
 `streamable_http`와 `stdio` 두 가지로 제한했다. 로컬 `uv` 실행은 별도 transport가 아니라
 stdio의 WorkShield 전용 실행 preset으로 구현한다.
 
@@ -131,7 +131,7 @@ stdio의 WorkShield 전용 실행 preset으로 구현한다.
 `get_mcp_capabilities` 도구의 존재와 구조화 응답을 확인하며, 연결·초기화 실패는 API 시작을
 중단한다.
 
-MCP runtime과 도구 목록 의존성은 별도 모듈을 만들지 않고 기존 `api/app/llm/dependencies.py`에
+MCP runtime과 도구 목록 의존성은 별도 모듈을 만들지 않고 기존 `api/app/core/llm/dependencies.py`에
 `MCPRuntimeDep`, `MCPToolsDep`로 추가했다. lifespan 이전 접근은 503으로 처리한다. runtime의
 `supports_file_path`는 stdio에서만 참이며, HTTP에서는 계약 파일을 `file_path`가 아닌 base64
 `file_content`와 `file_name`으로 전달해야 한다.

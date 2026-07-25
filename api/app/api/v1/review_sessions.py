@@ -2,26 +2,29 @@
 
 from fastapi import APIRouter, File, Request, Response, UploadFile
 
-from app.access_control.dependencies import OwnedReviewSessionDep
-from app.common.responses import ApiResponse, COMMON_ERROR_RESPONSES, success_response
 from app.config import SettingsDep
-from app.db.dependencies import DbSessionDep
-from app.llm.mcp.dependencies import WorkShieldMCPRuntimeDep
-from app.review_sessions.schemas import (
+from app.core.access_control.dependencies import OwnedReviewSessionDep
+from app.core.common.responses import (
+    ApiResponse,
+    COMMON_ERROR_RESPONSES,
+    success_response,
+)
+from app.core.db.dependencies import DbSessionDep
+from app.core.llm.mcp.dependencies import WorkShieldMCPRuntimeDep
+from app.core.security.cookies import set_session_access_cookie
+from app.core.storage.dependencies import FileStorageDep
+from app.domains.review_sessions.schemas import (
     ContractTypeCandidate,
     ContractTypeSelectionRequest,
     OutOfScopeConfirmationRequest,
     ReviewSessionResponse,
     UploadInfo,
 )
-from app.review_sessions.service import (
+from app.domains.review_sessions.service import (
     confirm_out_of_scope,
     create_review_session,
     select_contract_type,
 )
-from app.security.cookies import set_session_access_cookie
-from app.storage.dependencies import FileStorageDep
-
 
 router = APIRouter(
     prefix="/review-sessions",

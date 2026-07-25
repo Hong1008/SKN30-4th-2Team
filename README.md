@@ -46,7 +46,7 @@ just setup
 just build-db
 ```
 
-- **로컬 자동 실행 안내**: 로컬 기본값인 `stdio` transport 환경에서는 API 서버가 `uv`를 활용해 MCP 서버 프로세스를 자식 프로세스로 자동 실행하므로([api/app/llm/mcp/connection.py](api/app/llm/mcp/connection.py)), 별도로 `just run-mcp`를 직접 실행하지 않아도 됩니다.
+- **로컬 자동 실행 안내**: 로컬 기본값인 `stdio` transport 환경에서는 API 서버가 `uv`를 활용해 MCP 서버 프로세스를 자식 프로세스로 자동 실행하므로([api/app/core/llm/mcp/connection.py](api/app/core/llm/mcp/connection.py)), 별도로 `just run-mcp`를 직접 실행하지 않아도 됩니다.
 - (MCP Inspector 독립 테스트(`just run-mcp-ui`) 또는 Streamable HTTP 모드 실행 시에만 수동으로 구동합니다.)
 
 #### 2. API 서버 구동 (`api`)

@@ -7,10 +7,10 @@ import pytest
 from fastapi import FastAPI
 
 from app.api.system import router as system_router
-from app.common.exception_handlers import register_exception_handlers
-from app.common.request_id import register_request_id_middleware
-from app.db.database import Database
-from app.llm.mcp.types import WorkShieldMCPRuntime
+from app.core.common.exception_handlers import register_exception_handlers
+from app.core.common.request_id import register_request_id_middleware
+from app.core.db.database import Database
+from app.core.llm.mcp.types import WorkShieldMCPRuntime
 
 
 pytestmark = pytest.mark.asyncio

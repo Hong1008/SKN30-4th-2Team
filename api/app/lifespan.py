@@ -9,14 +9,14 @@ from datetime import UTC, datetime
 from fastapi import FastAPI
 
 from app.config import API_ROOT, get_settings
-from app.common.logging import log_event
-from app.db.database import Database
-from app.llm.mcp import open_workshield_mcp
-from app.review_sessions.activity import resume_ttl_after_review
-from app.reviews.domain import ReviewState
-from app.reviews.repository import SqlAlchemyReviewRepository
-from app.storage.cleanup import SessionFileLifecycle
-from app.storage.local import LocalFileStorage
+from app.core.common.logging import log_event
+from app.core.db.database import Database
+from app.core.llm.mcp import open_workshield_mcp
+from app.domains.review_sessions.activity import resume_ttl_after_review
+from app.domains.reviews.domain import ReviewState
+from app.domains.reviews.repository import SqlAlchemyReviewRepository
+from app.core.storage.cleanup import SessionFileLifecycle
+from app.core.storage.local import LocalFileStorage
 
 
 async def _periodic_storage_cleanup(
