@@ -2,11 +2,11 @@
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Annotated, Any, Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from app.domains.reviews.domain import ReviewState
+from app.domains.reviews.domain import ProgressStage, ReviewState
 
 
 class MCPReviewResultStatus(StrEnum):
@@ -265,6 +265,53 @@ class ReviewResultsResponse(BaseModel):
     )
 
 
+class ReviewProgressSnapshot(BaseModel):
+    """상태 조회와 SSE에 공통으로 사용하는 정규화된 진행 스냅샷."""
+
+    sequence: int = Field(ge=0, description="단조 증가하는 진행 이벤트 식별자")
+    stage: ProgressStage = Field(description="현재 검토 진행 단계")
+    current: float = Field(ge=0, description="현재 진행 단위")
+    total: float | None = Field(default=None, ge=0, description="전체 진행 단위")
+    percent: int = Field(ge=0, le=100, description="단조 증가하는 진행률(%)")
+    message: str | None = Field(
+        default=None,
+        max_length=300,
+        description="화면 표시용 진행 안내 문구",
+    )
+
+
+class ReviewExecutionError(BaseModel):
+    """백그라운드 검토 실패 시 상태 조회와 SSE가 제공하는 오류 정보."""
+
+    code: str = Field(description="검토 실패 코드")
+    retryable: bool = Field(default=False, description="재시도 가능 여부")
+    next_action: str | None = Field(
+        default=None,
+        description="권장 다음 행동 코드 (예: RETRY_REVIEW)",
+    )
+
+
+class ReviewSseEvent(BaseModel):
+    """SSE data 필드에 JSON으로 직렬화되는 검토 상태 이벤트."""
+
+    review_id: str = Field(description="검토 식별자")
+    sequence: int = Field(ge=0, description="SSE id와 같은 단조 증가 sequence")
+    review_state: ReviewState = Field(description="이벤트 시점의 검토 상태")
+    stage: ProgressStage | None = Field(default=None, description="현재 진행 단계")
+    current: float | None = Field(default=None, ge=0, description="현재 진행 단위")
+    total: float | None = Field(default=None, ge=0, description="전체 진행 단위")
+    percent: int | None = Field(default=None, ge=0, le=100, description="진행률(%)")
+    message: str | None = Field(default=None, description="화면 표시용 진행 안내 문구")
+    mcp_review_status: MCPReviewResultStatus | None = Field(
+        default=None,
+        description="completed/failed 이벤트의 MCP 원본 상태",
+    )
+    error: ReviewExecutionError | None = Field(
+        default=None,
+        description="completed/failed 이벤트의 검토 실패 정보",
+    )
+
+
 class ReviewCreateRequest(BaseModel):
     """검토 시작 요청."""
 
@@ -284,14 +331,17 @@ class ReviewResponse(BaseModel):
     mcp_review_status: MCPReviewResultStatus | None = Field(
         default=None, description="MCP 검토 원본 상태"
     )
-    progress: dict[str, Any] | None = Field(
-        default=None, description="진행률 및 단계 정보"
+    progress: ReviewProgressSnapshot | None = Field(
+        default=None,
+        description="정규화된 최신 진행률 및 단계 정보",
     )
-    result: dict[str, Any] | None = Field(
-        default=None, description="검토 원본 결과 스냅샷"
+    result: NormalizedReviewResult | None = Field(
+        default=None,
+        description="완료된 검토의 정규화된 내부 결과 스냅샷",
     )
-    error: dict[str, Any] | None = Field(
-        default=None, description="검토 실패 시 에러 정보"
+    error: ReviewExecutionError | None = Field(
+        default=None,
+        description="검토 실패 시 오류 정보. 재시도 UI는 retryable=true일 때만 표시",
     )
     started_at: datetime | None = Field(default=None, description="검토 시작 일시")
     completed_at: datetime | None = Field(default=None, description="검토 완료 일시")

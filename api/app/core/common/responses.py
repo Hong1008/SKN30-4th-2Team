@@ -57,6 +57,28 @@ COMMON_ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
 }
 
 
+UPLOAD_ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
+    422: {
+        "model": ApiErrorResponse,
+        "description": (
+            "업로드 입력 또는 파일 내용 검증 실패 "
+            "(FILE_EXTENSION_MISSING, ENCRYPTED_FILE, CORRUPTED_FILE, VALIDATION_ERROR)"
+        ),
+    },
+    413: {
+        "model": ApiErrorResponse,
+        "description": "업로드 파일이 최대 허용 크기를 초과함 (FILE_TOO_LARGE)",
+    },
+    415: {
+        "model": ApiErrorResponse,
+        "description": (
+            "지원하지 않는 확장자 또는 확장자와 실제 형식 불일치 "
+            "(UNSUPPORTED_FILE_TYPE, FILE_TYPE_MISMATCH)"
+        ),
+    },
+}
+
+
 def api_meta(request: Request) -> ApiMeta:
     """현재 요청의 공통 메타데이터를 만든다."""
     return ApiMeta(
