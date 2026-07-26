@@ -66,10 +66,10 @@ async def test_opens_one_session_and_loads_capabilities(
         return tools
 
     monkeypatch.setattr(
-        "app.llm.mcp.client.create_workshield_mcp_client",
+        "app.core.llm.mcp.client.create_workshield_mcp_client",
         lambda settings: client,
     )
-    monkeypatch.setattr("app.llm.mcp.client.load_mcp_tools", fake_load)
+    monkeypatch.setattr("app.core.llm.mcp.client.load_mcp_tools", fake_load)
 
     async with open_workshield_mcp(_settings()) as runtime:
         assert runtime.session is session
@@ -96,10 +96,10 @@ async def test_http_runtime_disables_file_path(
         return [SimpleNamespace(name="get_mcp_capabilities")]
 
     monkeypatch.setattr(
-        "app.llm.mcp.client.create_workshield_mcp_client",
+        "app.core.llm.mcp.client.create_workshield_mcp_client",
         lambda settings: client,
     )
-    monkeypatch.setattr("app.llm.mcp.client.load_mcp_tools", fake_load)
+    monkeypatch.setattr("app.core.llm.mcp.client.load_mcp_tools", fake_load)
 
     async with open_workshield_mcp(_settings("streamable_http")) as runtime:
         assert runtime.supports_file_path is False
@@ -116,10 +116,10 @@ async def test_rejects_server_without_capabilities_tool(
         return [SimpleNamespace(name="other_tool")]
 
     monkeypatch.setattr(
-        "app.llm.mcp.client.create_workshield_mcp_client",
+        "app.core.llm.mcp.client.create_workshield_mcp_client",
         lambda settings: client,
     )
-    monkeypatch.setattr("app.llm.mcp.client.load_mcp_tools", fake_load)
+    monkeypatch.setattr("app.core.llm.mcp.client.load_mcp_tools", fake_load)
 
     with pytest.raises(MCPCompatibilityError, match="get_mcp_capabilities"):
         async with open_workshield_mcp(_settings()):
@@ -137,7 +137,7 @@ async def test_wraps_transport_initialization_error(
             yield
 
     monkeypatch.setattr(
-        "app.llm.mcp.client.create_workshield_mcp_client",
+        "app.core.llm.mcp.client.create_workshield_mcp_client",
         lambda settings: FailingClient(),
     )
 
@@ -157,10 +157,10 @@ async def test_does_not_wrap_application_error_after_startup(
         return [SimpleNamespace(name="get_mcp_capabilities")]
 
     monkeypatch.setattr(
-        "app.llm.mcp.client.create_workshield_mcp_client",
+        "app.core.llm.mcp.client.create_workshield_mcp_client",
         lambda settings: client,
     )
-    monkeypatch.setattr("app.llm.mcp.client.load_mcp_tools", fake_load)
+    monkeypatch.setattr("app.core.llm.mcp.client.load_mcp_tools", fake_load)
 
     with pytest.raises(LookupError, match="application failure"):
         async with open_workshield_mcp(_settings()):
@@ -192,10 +192,10 @@ async def test_ignores_only_closed_stdio_stream_error_on_shutdown(
         return [SimpleNamespace(name="get_mcp_capabilities")]
 
     monkeypatch.setattr(
-        "app.llm.mcp.client.create_workshield_mcp_client",
+        "app.core.llm.mcp.client.create_workshield_mcp_client",
         lambda settings: client,
     )
-    monkeypatch.setattr("app.llm.mcp.client.load_mcp_tools", fake_load)
+    monkeypatch.setattr("app.core.llm.mcp.client.load_mcp_tools", fake_load)
 
     async with open_workshield_mcp(_settings()) as runtime:
         assert runtime.session is session
@@ -220,10 +220,10 @@ async def test_does_not_hide_unexpected_shutdown_error(
         return [SimpleNamespace(name="get_mcp_capabilities")]
 
     monkeypatch.setattr(
-        "app.llm.mcp.client.create_workshield_mcp_client",
+        "app.core.llm.mcp.client.create_workshield_mcp_client",
         lambda settings: client,
     )
-    monkeypatch.setattr("app.llm.mcp.client.load_mcp_tools", fake_load)
+    monkeypatch.setattr("app.core.llm.mcp.client.load_mcp_tools", fake_load)
 
     with pytest.raises(ExceptionGroup, match="stdio shutdown"):
         async with open_workshield_mcp(_settings()):

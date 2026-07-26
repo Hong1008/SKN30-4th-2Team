@@ -41,7 +41,7 @@ def test_get_chat_model_defaults_reasoning_to_off(monkeypatch) -> None:
         calls.append((current_settings, reasoning))
         return expected
 
-    monkeypatch.setattr("app.llm.dependencies.create_chat_model", fake_create)
+    monkeypatch.setattr("app.core.llm.dependencies.create_chat_model", fake_create)
 
     assert get_chat_model(settings) is expected
     assert calls == [(settings, ReasoningMode.OFF)]

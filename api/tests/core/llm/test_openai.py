@@ -50,7 +50,7 @@ def test_openai_maps_reasoning(
     mode: ReasoningMode,
     effort: str,
 ) -> None:
-    monkeypatch.setattr("app.llm.provider.openai.ChatOpenAI", FakeOpenAIModel)
+    monkeypatch.setattr("app.core.llm.provider.openai.ChatOpenAI", FakeOpenAIModel)
 
     build_openai_model(_settings(), mode)
 
@@ -60,7 +60,7 @@ def test_openai_maps_reasoning(
 def test_openai_passes_runtime_model_and_selected_api_key(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("app.llm.provider.openai.ChatOpenAI", FakeOpenAIModel)
+    monkeypatch.setattr("app.core.llm.provider.openai.ChatOpenAI", FakeOpenAIModel)
 
     build_openai_model(_settings(), ReasoningMode.OFF)
 
@@ -78,7 +78,7 @@ def test_openai_rejects_off_for_always_on_model(
         "reasoning_effort_levels": ["high"],
         "reasoning_effort_default": "high",
     }
-    monkeypatch.setattr("app.llm.provider.openai.ChatOpenAI", FakeOpenAIModel)
+    monkeypatch.setattr("app.core.llm.provider.openai.ChatOpenAI", FakeOpenAIModel)
 
     with pytest.raises(LLMConfigurationError, match="추론을 끌 수 없습니다"):
         build_openai_model(_settings(), ReasoningMode.OFF)
@@ -88,7 +88,7 @@ def test_openai_rejects_on_for_unsupported_model(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     FakeOpenAIModel.profile_override = {"reasoning_output": False}
-    monkeypatch.setattr("app.llm.provider.openai.ChatOpenAI", FakeOpenAIModel)
+    monkeypatch.setattr("app.core.llm.provider.openai.ChatOpenAI", FakeOpenAIModel)
 
     with pytest.raises(LLMConfigurationError, match="추론을 지원하지 않습니다"):
         build_openai_model(_settings(), ReasoningMode.ON)
