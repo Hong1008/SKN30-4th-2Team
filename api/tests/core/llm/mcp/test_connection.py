@@ -52,7 +52,7 @@ def test_builds_local_uv_stdio_connection(
 ) -> None:
     project = _mcp_project(tmp_path)
     monkeypatch.setattr(
-        "app.llm.mcp.connection.shutil.which",
+        "app.core.llm.mcp.connection.shutil.which",
         lambda command: "/usr/bin/uv" if command == "uv" else None,
     )
 
@@ -86,7 +86,7 @@ def test_stdio_requires_uv(
     tmp_path: Path,
 ) -> None:
     project = _mcp_project(tmp_path)
-    monkeypatch.setattr("app.llm.mcp.connection.shutil.which", lambda command: None)
+    monkeypatch.setattr("app.core.llm.mcp.connection.shutil.which", lambda command: None)
 
     with pytest.raises(MCPConfigurationError, match="uv"):
         build_workshield_connection(
@@ -103,7 +103,7 @@ def test_stdio_requires_workshield_entrypoint(
 ) -> None:
     project = tmp_path / "missing-project"
     project.mkdir()
-    monkeypatch.setattr("app.llm.mcp.connection.shutil.which", lambda command: "uv")
+    monkeypatch.setattr("app.core.llm.mcp.connection.shutil.which", lambda command: "uv")
 
     with pytest.raises(MCPConfigurationError, match="pyproject.toml"):
         build_workshield_connection(

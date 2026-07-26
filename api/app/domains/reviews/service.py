@@ -4,6 +4,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from app.core.common.errors import ConflictError, ExpiredError
 from app.config import Settings
@@ -70,30 +71,33 @@ def create_review(
         )
     now = datetime.now(UTC)
     for previous in repository.list_by_session(session.id):
-        previous.state = ReviewState.EXPIRED
-        previous.progress = None
-        previous.result = None
-        previous.error = None
-        previous.expires_at = now
+        if previous.state is ReviewState.EXPIRED:
+            continue
+        previous.expire(at=now)
         repository.save(previous)
-    entity = Review(
-        id=f"rev_{uuid.uuid4().hex}",
+    entity = Review.queued(
+        review_id=f"rev_{uuid.uuid4().hex}",
         session_id=session.id,
         idempotency_key=idempotency_key,
-        state=ReviewState.QUEUED,
         contract_type=session.selected_contract_type,
         created_at=now,
         expires_at=now + timedelta(seconds=settings.session_ttl_seconds),
-        progress={
-            "sequence": 0,
-            "stage": "PREPARE",
-            "current": 0,
-            "total": None,
-            "percent": 0,
-            "message": "검토를 준비하고 있습니다.",
-        },
     )
     repository.add(entity)
+    try:
+        db_session.flush()
+    except IntegrityError as error:
+        db_session.rollback()
+        raced = repository.find_by_idempotency_key(
+            session.id,
+            idempotency_key,
+        )
+        if raced is not None:
+            return raced
+        raise ConflictError(
+            code="REVIEW_ALREADY_RUNNING",
+            message="이미 실행 중인 검토가 있습니다.",
+        ) from error
     touch_session(
         db_session,
         session,
@@ -125,17 +129,34 @@ def retry_review(
     existing = repository.find_by_idempotency_key(review.session_id, idempotency_key)
     if existing is not None:
         return existing
+    if repository.has_active_for_session(review.session_id):
+        raise ConflictError(
+            code="REVIEW_ALREADY_RUNNING",
+            message="이미 실행 중인 검토가 있습니다.",
+        )
     now = datetime.now(UTC)
-    retried = Review(
-        id=f"rev_{uuid.uuid4().hex}",
+    retried = Review.queued(
+        review_id=f"rev_{uuid.uuid4().hex}",
         session_id=review.session_id,
         idempotency_key=idempotency_key,
-        state=ReviewState.QUEUED,
         contract_type=review.contract_type,
         created_at=now,
         expires_at=now + timedelta(seconds=settings.session_ttl_seconds),
         retry_of_review_id=review.id,
-        progress={"sequence": 0, "stage": "PREPARE", "percent": 0},
     )
     repository.add(retried)
+    try:
+        db_session.flush()
+    except IntegrityError as error:
+        db_session.rollback()
+        raced = repository.find_by_idempotency_key(
+            review.session_id,
+            idempotency_key,
+        )
+        if raced is not None:
+            return raced
+        raise ConflictError(
+            code="REVIEW_ALREADY_RUNNING",
+            message="이미 실행 중인 검토가 있습니다.",
+        ) from error
     return retried

@@ -39,7 +39,7 @@ def test_ollama_maps_reasoning_without_model_name_branch(
     mode: ReasoningMode,
     enabled: bool,
 ) -> None:
-    monkeypatch.setattr("app.llm.provider.ollama.ChatOllama", FakeOllamaModel)
+    monkeypatch.setattr("app.core.llm.provider.ollama.ChatOllama", FakeOllamaModel)
 
     build_ollama_model(_settings(), mode)
 

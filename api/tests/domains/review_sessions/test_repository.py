@@ -84,16 +84,15 @@ def test_review_session_repository_does_not_commit(database: Database) -> None:
 def test_review_session_repository_delete_cascades_reviews(
     database: Database,
 ) -> None:
-    from app.domains.reviews.domain import Review, ReviewState
+    from app.domains.reviews.domain import Review
     from app.domains.reviews.repository import SqlAlchemyReviewRepository
 
     entity = review_session_entity("ses_delete")
     now = datetime.now(UTC)
-    review = Review(
-        id="rev_delete",
+    review = Review.queued(
+        review_id="rev_delete",
         session_id=entity.id,
         idempotency_key="idem-delete",
-        state=ReviewState.QUEUED,
         contract_type="SW_FREELANCE",
         created_at=now,
         expires_at=now + timedelta(hours=1),

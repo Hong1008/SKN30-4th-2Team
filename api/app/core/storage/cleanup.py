@@ -69,6 +69,7 @@ class SessionFileLifecycle:
         expired_count = 0
         tombstone_count = 0
         idempotency_count = 0
+        storage_keys_to_delete: list[str] = []
 
         with self._database.session() as db_session:
             session_repository = SqlAlchemyReviewSessionRepository(db_session)
@@ -78,7 +79,7 @@ class SessionFileLifecycle:
                     continue
 
                 if entity.storage_key is not None:
-                    self._storage.delete(entity.storage_key)
+                    storage_keys_to_delete.append(entity.storage_key)
                 entity.storage_key = None
                 entity.scope_result = None
                 entity.state = ReviewSessionState.EXPIRED
@@ -86,10 +87,9 @@ class SessionFileLifecycle:
                 session_repository.save(entity)
 
                 for review in review_repository.list_by_session(entity.id):
-                    review.state = ReviewState.EXPIRED
-                    review.progress = None
-                    review.result = None
-                    review.error = None
+                    if review.state is ReviewState.EXPIRED:
+                        continue
+                    review.expire(at=cleanup_time)
                     review_repository.save(review)
                 expired_count += 1
             idempotency_count = delete_expired_records(db_session, cleanup_time)
@@ -102,6 +102,9 @@ class SessionFileLifecycle:
                 if session_repository.delete(entity.id):
                     tombstone_count += 1
             db_session.commit()
+
+        for storage_key in storage_keys_to_delete:
+            self._storage.delete(storage_key)
 
         orphan_count = 0
         if remove_orphans:

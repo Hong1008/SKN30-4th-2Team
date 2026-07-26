@@ -74,6 +74,7 @@ class ReviewRow(Base):
     )
     idempotency_key: Mapped[str] = mapped_column(String(128))
     state: Mapped[str] = mapped_column(String(32))
+    version: Mapped[int] = mapped_column(default=0, nullable=False)
     mcp_review_status: Mapped[str | None] = mapped_column(
         String(32),
         nullable=True,

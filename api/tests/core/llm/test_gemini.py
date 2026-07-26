@@ -44,7 +44,7 @@ def _settings(**overrides: object) -> Settings:
 def test_gemini_maps_reasoning_on_without_model_name_branch(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("app.llm.provider.gemini.ChatGoogleGenerativeAI", FakeGeminiModel)
+    monkeypatch.setattr("app.core.llm.provider.gemini.ChatGoogleGenerativeAI", FakeGeminiModel)
 
     build_gemini_model(_settings(), ReasoningMode.ON)
 
@@ -62,7 +62,7 @@ def test_gemma_style_boolean_reasoning_maps_to_minimal_and_high(
     thinking_level: str,
 ) -> None:
     FakeGeminiModel.profile_override = {"reasoning_output": True}
-    monkeypatch.setattr("app.llm.provider.gemini.ChatGoogleGenerativeAI", FakeGeminiModel)
+    monkeypatch.setattr("app.core.llm.provider.gemini.ChatGoogleGenerativeAI", FakeGeminiModel)
 
     build_gemini_model(_settings(), mode)
 
@@ -71,7 +71,7 @@ def test_gemma_style_boolean_reasoning_maps_to_minimal_and_high(
 
 def test_gemini_passes_selected_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
     FakeGeminiModel.profile_override = {"reasoning_output": True}
-    monkeypatch.setattr("app.llm.provider.gemini.ChatGoogleGenerativeAI", FakeGeminiModel)
+    monkeypatch.setattr("app.core.llm.provider.gemini.ChatGoogleGenerativeAI", FakeGeminiModel)
 
     build_gemini_model(_settings(), ReasoningMode.OFF)
 
@@ -84,7 +84,7 @@ def test_gemini_rejects_reasoning_on_for_unsupported_model(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     FakeGeminiModel.profile_override = {"reasoning_output": False}
-    monkeypatch.setattr("app.llm.provider.gemini.ChatGoogleGenerativeAI", FakeGeminiModel)
+    monkeypatch.setattr("app.core.llm.provider.gemini.ChatGoogleGenerativeAI", FakeGeminiModel)
 
     with pytest.raises(LLMConfigurationError, match="추론을 지원하지 않습니다"):
         build_gemini_model(_settings(), ReasoningMode.ON)
@@ -97,7 +97,7 @@ def test_gemini_rejects_unavailable_reasoning_level(
         "reasoning_output": True,
         "reasoning_effort_levels": ["minimal", "low"],
     }
-    monkeypatch.setattr("app.llm.provider.gemini.ChatGoogleGenerativeAI", FakeGeminiModel)
+    monkeypatch.setattr("app.core.llm.provider.gemini.ChatGoogleGenerativeAI", FakeGeminiModel)
 
     with pytest.raises(LLMConfigurationError, match="high 추론 수준"):
         build_gemini_model(_settings(), ReasoningMode.ON)
@@ -111,7 +111,7 @@ def test_gemini_rejects_off_for_default_on_reasoning_model(
         "reasoning_effort_levels": ["minimal", "low", "medium", "high"],
         "reasoning_effort_default": "minimal",
     }
-    monkeypatch.setattr("app.llm.provider.gemini.ChatGoogleGenerativeAI", FakeGeminiModel)
+    monkeypatch.setattr("app.core.llm.provider.gemini.ChatGoogleGenerativeAI", FakeGeminiModel)
 
     with pytest.raises(LLMConfigurationError, match="추론을 끌 수 없습니다"):
         build_gemini_model(_settings(), ReasoningMode.OFF)

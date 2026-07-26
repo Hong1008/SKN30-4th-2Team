@@ -9,8 +9,8 @@ from app.domains.reviews.presentation import present_review_results
 
 def test_result_presentation_uses_metadata_labels_and_separates_missing() -> None:
     now = datetime.now(UTC)
-    review = Review(
-        id="rev_result",
+    review = Review.restore(
+        review_id="rev_result",
         session_id="ses_result",
         idempotency_key="operation",
         state=ReviewState.COMPLETED,

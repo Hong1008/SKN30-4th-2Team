@@ -30,7 +30,7 @@ def test_factory_creates_selected_provider(monkeypatch: pytest.MonkeyPatch) -> N
         calls.append((settings, reasoning))
         return expected
 
-    monkeypatch.setattr("app.llm.factory.PROVIDER_BUILDERS", {"gemini": fake_builder})
+    monkeypatch.setattr("app.core.llm.factory.PROVIDER_BUILDERS", {"gemini": fake_builder})
     settings = _settings("gemini")
 
     result = create_chat_model(settings)
@@ -62,7 +62,7 @@ def test_configuration_error_does_not_expose_secret() -> None:
 def test_factory_rejects_unknown_provider_builder(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("app.llm.factory.PROVIDER_BUILDERS", {})
+    monkeypatch.setattr("app.core.llm.factory.PROVIDER_BUILDERS", {})
 
     with pytest.raises(LLMConfigurationError, match="지원하지 않는 LLM provider"):
         create_chat_model(_settings("openai"))
@@ -73,7 +73,7 @@ def test_factory_returns_langchain_model_from_builder(
 ) -> None:
     model = SimpleNamespace(model="configured-model")
     monkeypatch.setattr(
-        "app.llm.factory.PROVIDER_BUILDERS",
+        "app.core.llm.factory.PROVIDER_BUILDERS",
         {"ollama": lambda settings, reasoning: model},
     )
 

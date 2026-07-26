@@ -12,7 +12,7 @@ from app.core.db.database import Database
 from app.core.db.dependencies import get_database
 from app.domains.review_sessions.repository import SqlAlchemyReviewSessionRepository
 from app.domains.reviews.repository import SqlAlchemyReviewRepository
-from app.domains.reviews.domain import ReviewState
+from app.domains.reviews.domain import MCPReviewStatus
 from app.core.security.cookies import SESSION_ACCESS_COOKIE
 from app.core.security.session_tokens import hash_access_token
 from tests.domains.review_sessions.test_repository import review_session_entity
@@ -92,7 +92,7 @@ async def test_owned_expired_session_returns_410_but_other_browser_gets_404(
         review_repository = SqlAlchemyReviewRepository(session)
         review = review_repository.get("rev_owner")
         assert review is not None
-        review.state = ReviewState.COMPLETED
+        review.complete(MCPReviewStatus.OK, {}, at=datetime.now(UTC))
         review_repository.save(review)
         repository = SqlAlchemyReviewSessionRepository(session)
         entity = repository.get("ses_owner")
