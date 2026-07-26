@@ -26,6 +26,34 @@ def test_create_app_registers_common_routes() -> None:
     assert "/health/ready" in route_paths
 
 
+def test_openapi_describes_common_idempotency_and_review_progress_contracts() -> None:
+    """구현된 공통 계약과 SSE/업로드의 비표준 응답을 명세에 고정한다."""
+    schema = create_app().openapi()
+
+    description = schema["info"]["description"]
+    assert "Idempotency-Key" in description
+    assert "Last-Event-ID" in description
+
+    start_review = schema["paths"]["/api/v1/reviews"]["post"]
+    idempotency_header = next(
+        parameter
+        for parameter in start_review["parameters"]
+        if parameter["name"] == "Idempotency-Key"
+    )
+    assert idempotency_header["required"] is True
+    assert idempotency_header["schema"]["maxLength"] == 128
+
+    upload_responses = schema["paths"]["/api/v1/review-sessions"]["post"][
+        "responses"
+    ]
+    assert {"413", "415", "422"}.issubset(upload_responses)
+
+    event_response = schema["paths"]["/api/v1/reviews/{review_id}/events"][
+        "get"
+    ]["responses"]["200"]
+    assert set(event_response["content"]) == {"text/event-stream"}
+
+
 def test_production_can_disable_debug_and_openapi(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

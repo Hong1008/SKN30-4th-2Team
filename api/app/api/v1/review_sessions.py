@@ -7,6 +7,7 @@ from app.core.access_control.dependencies import OwnedReviewSessionDep
 from app.core.common.responses import (
     ApiResponse,
     COMMON_ERROR_RESPONSES,
+    UPLOAD_ERROR_RESPONSES,
     success_response,
 )
 from app.core.db.dependencies import DbSessionDep
@@ -87,6 +88,7 @@ def _response(entity) -> ReviewSessionResponse:
     "",
     status_code=201,
     response_model=ApiResponse[ReviewSessionResponse],
+    responses=UPLOAD_ERROR_RESPONSES,
 )
 async def create_session(
     request: Request,

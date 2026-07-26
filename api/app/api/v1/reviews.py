@@ -17,6 +17,7 @@ from app.core.access_control.dependencies import (
 )
 from app.core.common.errors import ConflictError
 from app.core.common.responses import (
+    ApiErrorResponse,
     ApiResponse,
     COMMON_ERROR_RESPONSES,
     success_response,
@@ -43,6 +44,7 @@ from app.domains.reviews.schemas import (
     ReviewCancelResponse,
     ReviewCreateRequest,
     ReviewCreateResponse,
+    ReviewSseEvent,
     ReviewResponse,
     ReviewResultsResponse,
 )
@@ -177,6 +179,12 @@ async def start_review(
     "/{review_id}/results",
     response_model=ApiResponse[ReviewResultsResponse],
     response_model_exclude_none=True,
+    responses={
+        409: {
+            "model": ApiErrorResponse,
+            "description": "검토가 아직 완료되지 않음 (REVIEW_NOT_COMPLETED)",
+        },
+    },
 )
 def get_results(request: Request, owned: OwnedReviewDep):
     if owned.state is not ReviewState.COMPLETED:
@@ -193,14 +201,36 @@ def get_results(request: Request, owned: OwnedReviewDep):
     )
 
 
-@router.get("/{review_id}/events")
+@router.get(
+    "/{review_id}/events",
+    response_class=EventSourceResponse,
+    responses={
+        200: {
+            "model": ReviewSseEvent,
+            "description": (
+                "text/event-stream. event는 progress, completed, failed 중 하나이고, "
+                "data는 ReviewSseEvent JSON이다. id는 data.sequence와 같다."
+            ),
+            "content": {
+                "text/event-stream": {
+                    "schema": {"$ref": "#/components/schemas/ReviewSseEvent"}
+                }
+            },
+        },
+    },
+)
 async def review_events(
     request: Request,
     owned: OwnedReviewDep,
     database: DatabaseDep,
     access_token: SessionCookie = None,
 ):
-    """저장된 MCP progress를 단조 sequence의 SSE로 전달한다."""
+    """저장된 MCP progress를 단조 sequence의 SSE로 전달한다.
+
+    재연결 요청의 ``Last-Event-ID``가 숫자이면 해당 sequence 이하의 progress는
+    다시 보내지 않는다. terminal 상태는 completed 또는 failed 이벤트를 한 번
+    전송한 뒤 스트림을 종료한다.
+    """
 
     async def stream() -> AsyncIterator[dict[str, str]]:
         current = owned

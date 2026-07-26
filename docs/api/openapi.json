@@ -2,6 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "WorkShield API",
+    "description": "WorkShield는 업로드한 계약서를 표준계약서와 비교해 검토 후보를 제공하는 API입니다.\n응답은 SSE를 제외하고 모두 `{ \"data\": ..., \"meta\": ... }` 형식이며, 오류는\n`{ \"error\": { \"code\", \"message\", \"retryable\", \"next_action\" }, \"meta\": ... }`\n형식입니다.\n\n## 익명 세션 Cookie\n\n세션 생성(`POST /api/v1/review-sessions`)은 `workshield_session` HttpOnly Cookie를\n설정합니다. 이후 세션·검토 API는 해당 Cookie의 소유자만 접근할 수 있습니다. 클라이언트는\nCookie 기반 요청에 `credentials: \"include\"`(Axios는 `withCredentials: true`)를 사용해야 하며,\n토큰을 브라우저 저장소나 URL에 저장하지 않습니다.\n\n## 멱등성 요청\n\n`Idempotency-Key`가 명시된 POST API는 이 헤더가 필수입니다(공백 제외 최대 128자).\n네트워크 재전송을 포함한 **같은 논리 요청**에는 같은 키를 사용하면 기존 성공 응답을\n재생합니다. 새 논리 요청에는 새 키를 사용해야 합니다. 같은 세션·같은 API 작업 범위에서\n같은 키를 다른 요청 본문 또는 다른 review에 재사용하면 `409 IDEMPOTENCY_KEY_REUSED`를\n반환합니다. 키와 응답 스냅샷은 익명 세션 TTL 동안 보존됩니다.\n\n## 검토 진행 SSE\n\n`GET /api/v1/reviews/{review_id}/events`는 `text/event-stream`으로 진행 상태를 제공합니다.\n이벤트 ID는 단조 증가 `sequence`이며, 재연결 시 `Last-Event-ID` 헤더를 보내면 그 이하\nsequence는 재전송하지 않습니다. 연결이 끊기거나 SSE를 사용할 수 없으면\n`GET /api/v1/reviews/{review_id}`를 폴링해 상태를 복구할 수 있습니다.",
     "version": "0.1.0"
   },
   "paths": {
@@ -217,7 +218,7 @@
             }
           },
           "422": {
-            "description": "요청 값 검증 실패",
+            "description": "업로드 입력 또는 파일 내용 검증 실패 (FILE_EXTENSION_MISSING, ENCRYPTED_FILE, CORRUPTED_FILE, VALIDATION_ERROR)",
             "content": {
               "application/json": {
                 "schema": {
@@ -238,6 +239,26 @@
           },
           "504": {
             "description": "외부 서비스 시간 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "업로드 파일이 최대 허용 크기를 초과함 (FILE_TOO_LARGE)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "지원하지 않는 확장자 또는 확장자와 실제 형식 불일치 (UNSUPPORTED_FILE_TYPE, FILE_TYPE_MISMATCH)",
             "content": {
               "application/json": {
                 "schema": {
@@ -580,7 +601,7 @@
           {
             "name": "Idempotency-Key",
             "in": "header",
-            "required": false,
+            "required": true,
             "schema": {
               "anyOf": [
                 {
@@ -590,8 +611,10 @@
                   "type": "null"
                 }
               ],
-              "title": "Idempotency-Key"
-            }
+              "title": "Idempotency-Key",
+              "maxLength": 128
+            },
+            "description": "필수. 같은 논리 요청의 재전송에는 같은 키를 사용하고, 새 논리 요청에는 새 키를 사용합니다. 최대 128자입니다."
           }
         ],
         "requestBody": {
@@ -723,7 +746,7 @@
             }
           },
           "409": {
-            "description": "현재 상태 또는 멱등 키 충돌",
+            "description": "검토가 아직 완료되지 않음 (REVIEW_NOT_COMPLETED)",
             "content": {
               "application/json": {
                 "schema": {
@@ -781,7 +804,7 @@
           "reviews"
         ],
         "summary": "Review Events",
-        "description": "저장된 MCP progress를 단조 sequence의 SSE로 전달한다.",
+        "description": "저장된 MCP progress를 단조 sequence의 SSE로 전달한다.\n\n재연결 요청의 ``Last-Event-ID``가 숫자이면 해당 sequence 이하의 progress는\n다시 보내지 않는다. terminal 상태는 completed 또는 failed 이벤트를 한 번\n전송한 뒤 스트림을 종료한다.",
         "operationId": "review_events_api_v1_reviews__review_id__events_get",
         "security": [
           {
@@ -801,10 +824,12 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "text/event-stream. event는 progress, completed, failed 중 하나이고, data는 ReviewSseEvent JSON이다. id는 data.sequence와 같다.",
             "content": {
-              "application/json": {
-                "schema": {}
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewSseEvent"
+                }
               }
             }
           },
@@ -1089,7 +1114,7 @@
           {
             "name": "Idempotency-Key",
             "in": "header",
-            "required": false,
+            "required": true,
             "schema": {
               "anyOf": [
                 {
@@ -1099,8 +1124,10 @@
                   "type": "null"
                 }
               ],
-              "title": "Idempotency-Key"
-            }
+              "title": "Idempotency-Key",
+              "maxLength": 128
+            },
+            "description": "필수. 같은 논리 요청의 재전송에는 같은 키를 사용하고, 새 논리 요청에는 새 키를 사용합니다. 최대 128자입니다."
           }
         ],
         "responses": {
@@ -1310,7 +1337,7 @@
           {
             "name": "Idempotency-Key",
             "in": "header",
-            "required": false,
+            "required": true,
             "schema": {
               "anyOf": [
                 {
@@ -1320,8 +1347,10 @@
                   "type": "null"
                 }
               ],
-              "title": "Idempotency-Key"
-            }
+              "title": "Idempotency-Key",
+              "maxLength": 128
+            },
+            "description": "필수. 같은 논리 요청의 재전송에는 같은 키를 사용하고, 새 논리 요청에는 새 키를 사용합니다. 최대 128자입니다."
           }
         ],
         "requestBody": {
@@ -1434,7 +1463,7 @@
           {
             "name": "Idempotency-Key",
             "in": "header",
-            "required": false,
+            "required": true,
             "schema": {
               "anyOf": [
                 {
@@ -1444,8 +1473,10 @@
                   "type": "null"
                 }
               ],
-              "title": "Idempotency-Key"
-            }
+              "title": "Idempotency-Key",
+              "maxLength": 128
+            },
+            "description": "필수. 같은 논리 요청의 재전송에는 같은 키를 사용하고, 새 논리 요청에는 새 키를 사용합니다. 최대 128자입니다."
           }
         ],
         "requestBody": {
@@ -2046,6 +2077,16 @@
         "title": "ChatSourceType",
         "description": "참조 근거 유형."
       },
+      "ClauseDeviation": {
+        "type": "string",
+        "enum": [
+          "NONE",
+          "EXTRA",
+          "NO_MATCH"
+        ],
+        "title": "ClauseDeviation",
+        "description": "사용자 조항의 표준 대비 검토 후보 표식."
+      },
       "CodeLabel": {
         "properties": {
           "code": {
@@ -2077,7 +2118,7 @@
           "evidence_score": {
             "type": "integer",
             "title": "Evidence Score",
-            "description": "MCP 결정론적 근거 점수"
+            "description": "MCP 결정론적 근거 점수이며 확률 또는 신뢰도가 아님"
           }
         },
         "type": "object",
@@ -2332,6 +2373,68 @@
         "title": "GroundingStatus",
         "description": "법령 근거 조회 상태."
       },
+      "MCPCandidateSelected": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "CANDIDATE_SELECTED",
+            "title": "Status",
+            "description": "표준조항 후보 선택 상태"
+          },
+          "standard": {
+            "$ref": "#/components/schemas/MCPStandardClause",
+            "description": "매칭된 표준조항 상세 정보"
+          },
+          "score": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Score",
+            "description": "매칭 유사도 점수 (0.0~1.0)"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "status",
+          "standard",
+          "score"
+        ],
+        "title": "MCPCandidateSelected",
+        "description": "비교할 표준조항 후보가 선택된 match 분기."
+      },
+      "MCPMissingStandardCandidate": {
+        "properties": {
+          "standard": {
+            "$ref": "#/components/schemas/MCPStandardClause",
+            "description": "누락된 표준조항 정보"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "standard"
+        ],
+        "title": "MCPMissingStandardCandidate",
+        "description": "계약서 전체에서 대응 조항을 찾지 못한 표준조항 후보."
+      },
+      "MCPNoCandidate": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "NO_CANDIDATE",
+            "title": "Status",
+            "description": "표준조항 후보 없음 상태"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "MCPNoCandidate",
+        "description": "비교할 표준조항 후보가 없는 match 분기."
+      },
       "MCPReviewResultStatus": {
         "type": "string",
         "enum": [
@@ -2343,6 +2446,58 @@
         ],
         "title": "MCPReviewResultStatus",
         "description": "WorkShield 전체 검토 공개 응답 상태."
+      },
+      "MCPStandardClause": {
+        "properties": {
+          "clause_id": {
+            "type": "string",
+            "title": "Clause Id",
+            "description": "표준조항 식별자"
+          },
+          "contract_type": {
+            "type": "string",
+            "title": "Contract Type",
+            "description": "계약 유형 코드"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category",
+            "description": "카테고리 코드"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "description": "표준조항 제목"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text",
+            "description": "표준조항 본문"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "description": "표준조항 출처"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version",
+            "description": "표준조항 버전"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "clause_id",
+          "contract_type",
+          "category",
+          "title",
+          "text",
+          "source",
+          "version"
+        ],
+        "title": "MCPStandardClause",
+        "description": "MCP가 반환하는 표준조항 원문과 출처."
       },
       "MetadataCode": {
         "properties": {
@@ -2570,6 +2725,57 @@
         "title": "MissingStandardClauseResponse",
         "description": "계약서 전체에서 대응 내용을 찾지 못한 표준조항 후보."
       },
+      "NormalizedReviewResult": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/MCPReviewResultStatus",
+            "description": "MCP 검토 상태"
+          },
+          "contract_type": {
+            "type": "string",
+            "title": "Contract Type",
+            "description": "계약 유형"
+          },
+          "clause_results": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewClauseResult"
+            },
+            "type": "array",
+            "title": "Clause Results",
+            "description": "식별자가 부여된 사용자 조항 검토 결과 목록"
+          },
+          "missing_standard_clauses": {
+            "items": {
+              "$ref": "#/components/schemas/MCPMissingStandardCandidate"
+            },
+            "type": "array",
+            "title": "Missing Standard Clauses",
+            "description": "누락된 표준조항 체크리스트 목록"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message",
+            "description": "결과 안내 메시지"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "status",
+          "contract_type",
+          "clause_results",
+          "missing_standard_clauses"
+        ],
+        "title": "NormalizedReviewResult",
+        "description": "검증된 MCP 결과에 API 소유 식별자를 결합한 저장 스냅샷."
+      },
       "OutOfScopeConfirmationRequest": {
         "properties": {
           "confirmed": {
@@ -2584,6 +2790,19 @@
         ],
         "title": "OutOfScopeConfirmationRequest",
         "description": "범위 외 계속 진행 확인 요청."
+      },
+      "ProgressStage": {
+        "type": "string",
+        "enum": [
+          "PREPARE",
+          "BATCH_SEARCH",
+          "RERANK",
+          "CLAUSE_REVIEW",
+          "MISSING_DETECTION",
+          "RESULT_ASSEMBLY"
+        ],
+        "title": "ProgressStage",
+        "description": "화면에 노출하는 검토 진행 단계."
       },
       "RequiredConfirmation": {
         "properties": {
@@ -2650,6 +2869,63 @@
         ],
         "title": "ReviewCancelResponse",
         "description": "검토 결과 폐기와 파일 정리 응답."
+      },
+      "ReviewClauseResult": {
+        "properties": {
+          "user_clause": {
+            "type": "string",
+            "minLength": 1,
+            "title": "User Clause",
+            "description": "사용자 계약서 조항 원문"
+          },
+          "deviation": {
+            "$ref": "#/components/schemas/ClauseDeviation",
+            "description": "표준 대비 변형/차이 코드 (NONE, EXTRA, NO_MATCH)"
+          },
+          "match": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/MCPCandidateSelected"
+              },
+              {
+                "$ref": "#/components/schemas/MCPNoCandidate"
+              }
+            ],
+            "title": "Match",
+            "description": "표준조항 매칭 정보",
+            "discriminator": {
+              "propertyName": "status",
+              "mapping": {
+                "CANDIDATE_SELECTED": "#/components/schemas/MCPCandidateSelected",
+                "NO_CANDIDATE": "#/components/schemas/MCPNoCandidate"
+              }
+            }
+          },
+          "toxic_patterns": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Toxic Patterns",
+            "description": "탐지된 독소/주의 패턴 코드 목록"
+          },
+          "user_clause_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "User Clause Id",
+            "description": "사용자 조항 식별자 (예: uc_rev_01J_1)"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "user_clause",
+          "deviation",
+          "match",
+          "user_clause_id"
+        ],
+        "title": "ReviewClauseResult",
+        "description": "백엔드가 결정적 사용자 조항 ID를 부여한 공개 결과."
       },
       "ReviewClauseResultCounts": {
         "properties": {
@@ -2789,6 +3065,101 @@
         "title": "ReviewCreateResponse",
         "description": "비동기 검토 접수 응답."
       },
+      "ReviewExecutionError": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code",
+            "description": "검토 실패 코드"
+          },
+          "retryable": {
+            "type": "boolean",
+            "title": "Retryable",
+            "description": "재시도 가능 여부",
+            "default": false
+          },
+          "next_action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Action",
+            "description": "권장 다음 행동 코드 (예: RETRY_REVIEW)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code"
+        ],
+        "title": "ReviewExecutionError",
+        "description": "백그라운드 검토 실패 시 상태 조회와 SSE가 제공하는 오류 정보."
+      },
+      "ReviewProgressSnapshot": {
+        "properties": {
+          "sequence": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Sequence",
+            "description": "단조 증가하는 진행 이벤트 식별자"
+          },
+          "stage": {
+            "$ref": "#/components/schemas/ProgressStage",
+            "description": "현재 검토 진행 단계"
+          },
+          "current": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Current",
+            "description": "현재 진행 단위"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total",
+            "description": "전체 진행 단위"
+          },
+          "percent": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Percent",
+            "description": "단조 증가하는 진행률(%)"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message",
+            "description": "화면 표시용 진행 안내 문구"
+          }
+        },
+        "type": "object",
+        "required": [
+          "sequence",
+          "stage",
+          "current",
+          "percent"
+        ],
+        "title": "ReviewProgressSnapshot",
+        "description": "상태 조회와 SSE에 공통으로 사용하는 정규화된 진행 스냅샷."
+      },
       "ReviewResponse": {
         "properties": {
           "review_id": {
@@ -2819,41 +3190,35 @@
           "progress": {
             "anyOf": [
               {
-                "additionalProperties": true,
-                "type": "object"
+                "$ref": "#/components/schemas/ReviewProgressSnapshot"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Progress",
-            "description": "진행률 및 단계 정보"
+            "description": "정규화된 최신 진행률 및 단계 정보"
           },
           "result": {
             "anyOf": [
               {
-                "additionalProperties": true,
-                "type": "object"
+                "$ref": "#/components/schemas/NormalizedReviewResult"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Result",
-            "description": "검토 원본 결과 스냅샷"
+            "description": "완료된 검토의 정규화된 내부 결과 스냅샷"
           },
           "error": {
             "anyOf": [
               {
-                "additionalProperties": true,
-                "type": "object"
+                "$ref": "#/components/schemas/ReviewExecutionError"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Error",
-            "description": "검토 실패 시 에러 정보"
+            "description": "검토 실패 시 오류 정보. 재시도 UI는 retryable=true일 때만 표시"
           },
           "started_at": {
             "anyOf": [
@@ -3141,7 +3506,7 @@
                 "type": "null"
               }
             ],
-            "description": "계약 범위 판별 상태"
+            "description": "계약 범위 판별 상태. EMPTY_DOCUMENT는 파일 손상이 아니라 검토 가능한 조항을 추출하지 못한 상태이며 재업로드가 필요함"
           },
           "scope_message": {
             "anyOf": [
@@ -3228,7 +3593,7 @@
           "can_start_review": {
             "type": "boolean",
             "title": "Can Start Review",
-            "description": "검토 시작 가능 여부",
+            "description": "검토 시작 가능 여부. 시작 버튼 활성화의 최종 기준으로 사용",
             "default": false
           },
           "allowed_actions": {
@@ -3237,7 +3602,7 @@
             },
             "type": "array",
             "title": "Allowed Actions",
-            "description": "현재 상태에서 허용된 사용자 행동 목록"
+            "description": "현재 상태에서 허용된 사용자 행동 목록 (SELECT_CONTRACT_TYPE, CONFIRM_OUT_OF_SCOPE, START_REVIEW, REUPLOAD)"
           },
           "expires_at": {
             "type": "string",
@@ -3268,6 +3633,118 @@
         ],
         "title": "ReviewSessionState",
         "description": "계약 유형 확정 전후의 검토 세션 상태."
+      },
+      "ReviewSseEvent": {
+        "properties": {
+          "review_id": {
+            "type": "string",
+            "title": "Review Id",
+            "description": "검토 식별자"
+          },
+          "sequence": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Sequence",
+            "description": "SSE id와 같은 단조 증가 sequence"
+          },
+          "review_state": {
+            "$ref": "#/components/schemas/ReviewState",
+            "description": "이벤트 시점의 검토 상태"
+          },
+          "stage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProgressStage"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "현재 진행 단계"
+          },
+          "current": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current",
+            "description": "현재 진행 단위"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total",
+            "description": "전체 진행 단위"
+          },
+          "percent": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Percent",
+            "description": "진행률(%)"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message",
+            "description": "화면 표시용 진행 안내 문구"
+          },
+          "mcp_review_status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MCPReviewResultStatus"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "completed/failed 이벤트의 MCP 원본 상태"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewExecutionError"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "completed/failed 이벤트의 검토 실패 정보"
+          }
+        },
+        "type": "object",
+        "required": [
+          "review_id",
+          "sequence",
+          "review_state"
+        ],
+        "title": "ReviewSseEvent",
+        "description": "SSE data 필드에 JSON으로 직렬화되는 검토 상태 이벤트."
       },
       "ReviewState": {
         "type": "string",

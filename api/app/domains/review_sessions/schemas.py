@@ -23,7 +23,9 @@ class ContractTypeCandidate(BaseModel):
     """확률이 아닌 MCP 결정론적 근거 점수를 가진 계약 유형 후보."""
 
     contract_type: str = Field(description="추천 계약 유형 코드")
-    evidence_score: int = Field(description="MCP 결정론적 근거 점수")
+    evidence_score: int = Field(
+        description="MCP 결정론적 근거 점수이며 확률 또는 신뢰도가 아님"
+    )
 
 
 class ReviewSessionResponse(BaseModel):
@@ -32,7 +34,13 @@ class ReviewSessionResponse(BaseModel):
     session_id: str = Field(description="검토 세션 고유 식별자")
     review_state: ReviewSessionState = Field(description="현재 검토 세션 상태")
     upload: UploadInfo | None = Field(default=None, description="업로드 파일 메타데이터")
-    scope_status: ScopeStatus | None = Field(default=None, description="계약 범위 판별 상태")
+    scope_status: ScopeStatus | None = Field(
+        default=None,
+        description=(
+            "계약 범위 판별 상태. EMPTY_DOCUMENT는 파일 손상이 아니라 "
+            "검토 가능한 조항을 추출하지 못한 상태이며 재업로드가 필요함"
+        ),
+    )
     scope_message: str | None = Field(default=None, description="범위 판별 안내 메시지")
     suggested_contract_type: str | None = Field(default=None, description="자동 추천된 계약 유형 코드")
     candidates: list[ContractTypeCandidate] = Field(
@@ -51,9 +59,16 @@ class ReviewSessionResponse(BaseModel):
     out_of_scope_confirmed_at: datetime | None = Field(
         default=None, description="범위 외 진행 확인 일시"
     )
-    can_start_review: bool = Field(default=False, description="검토 시작 가능 여부")
+    can_start_review: bool = Field(
+        default=False,
+        description="검토 시작 가능 여부. 시작 버튼 활성화의 최종 기준으로 사용",
+    )
     allowed_actions: list[str] = Field(
-        default_factory=list, description="현재 상태에서 허용된 사용자 행동 목록"
+        default_factory=list,
+        description=(
+            "현재 상태에서 허용된 사용자 행동 목록 "
+            "(SELECT_CONTRACT_TYPE, CONFIRM_OUT_OF_SCOPE, START_REVIEW, REUPLOAD)"
+        ),
     )
     expires_at: datetime = Field(description="세션 만료 일시")
 
