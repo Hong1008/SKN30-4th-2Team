@@ -3,7 +3,6 @@
 import asyncio
 import base64
 import json
-import math
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -14,7 +13,10 @@ from app.domains.review_sessions.activity import resume_ttl_after_review
 from app.domains.review_sessions.repository import SqlAlchemyReviewSessionRepository
 from app.domains.review_sessions.service import _tool_payload
 from app.domains.reviews.domain import MCPReviewStatus, ReviewState
-from app.domains.reviews.repository import SqlAlchemyReviewRepository
+from app.domains.reviews.repository import (
+    ConcurrentReviewUpdateError,
+    SqlAlchemyReviewRepository,
+)
 from app.domains.reviews.schemas import (
     MCPReviewResult,
     NormalizedReviewResult,
@@ -61,9 +63,24 @@ def normalize_review_result(
     return normalized.model_dump(mode="json")
 
 
-def _stage_from_message(message: str | None, previous: str) -> str:
+def _progress_message(
+    message: str | None,
+    previous_stage: str,
+) -> tuple[str, str | None]:
+    """구조화 progress에서 stage와 사용자 표시 문구를 분리한다."""
     if not message:
-        return previous
+        return previous_stage, None
+    try:
+        parsed = json.loads(message)
+    except (json.JSONDecodeError, TypeError):
+        parsed = None
+    if isinstance(parsed, dict):
+        stage = parsed.get("stage")
+        display_message = parsed.get("message")
+        return (
+            stage.upper() if isinstance(stage, str) else previous_stage,
+            display_message if isinstance(display_message, str) else message,
+        )
     upper = message.upper()
     for stage in (
         "PREPARE",
@@ -74,14 +91,8 @@ def _stage_from_message(message: str | None, previous: str) -> str:
         "RESULT_ASSEMBLY",
     ):
         if stage in upper:
-            return stage
-    try:
-        parsed = json.loads(message)
-    except (json.JSONDecodeError, TypeError):
-        return previous
-    if isinstance(parsed, dict) and isinstance(parsed.get("stage"), str):
-        return parsed["stage"].upper()
-    return previous
+            return stage, message
+    return previous_stage, message
 
 
 class ReviewProgressRecorder:
@@ -98,31 +109,30 @@ class ReviewProgressRecorder:
         message: str | None,
     ) -> None:
         with self._database.session() as db_session:
-            repository = SqlAlchemyReviewRepository(db_session)
-            review = repository.get(self._review_id)
-            if review is None or review.state is not ReviewState.REVIEWING:
-                return
-            previous = review.progress or {}
-            previous_sequence = int(previous.get("sequence", 0))
-            previous_percent = int(previous.get("percent", 0))
-            if total and total > 0:
-                percent = math.floor(max(0, progress) / total * 100)
-            else:
-                percent = math.floor(max(0, progress))
-            percent = max(previous_percent, min(percent, 99))
-            review.progress = {
-                "sequence": previous_sequence + 1,
-                "stage": _stage_from_message(
+            for _attempt in range(2):
+                repository = SqlAlchemyReviewRepository(db_session)
+                review = repository.get(self._review_id)
+                if review is None or review.state is not ReviewState.REVIEWING:
+                    return
+                previous = review.progress or {}
+                stage, display_message = _progress_message(
                     message,
                     str(previous.get("stage", "PREPARE")),
-                ),
-                "current": progress,
-                "total": total,
-                "percent": percent,
-                "message": message,
-            }
-            repository.save(review)
-            db_session.commit()
+                )
+                if not review.record_progress(
+                    stage=stage,
+                    current=progress,
+                    total=total,
+                    message=display_message,
+                ):
+                    return
+                try:
+                    repository.save(review)
+                    db_session.commit()
+                    return
+                except ConcurrentReviewUpdateError:
+                    db_session.rollback()
+                    db_session.expire_all()
 
 
 async def _call_review_tool(
@@ -172,26 +182,18 @@ async def execute_review(
             return
         review_session = session_repository.get(review.session_id)
         if review_session is None or review_session.storage_key is None:
-            review.state = ReviewState.FAILED
-            review.error = {
-                "code": "SOURCE_FILE_UNAVAILABLE",
-                "retryable": False,
-                "next_action": "START_NEW_REVIEW",
-            }
-            review.completed_at = datetime.now(UTC)
+            review.fail(
+                {
+                    "code": "SOURCE_FILE_UNAVAILABLE",
+                    "retryable": False,
+                    "next_action": "START_NEW_REVIEW",
+                },
+                at=datetime.now(UTC),
+            )
             review_repository.save(review)
             db_session.commit()
             return
-        review.state = ReviewState.REVIEWING
-        review.started_at = datetime.now(UTC)
-        review.progress = {
-            "sequence": 1,
-            "stage": "PREPARE",
-            "current": 0,
-            "total": None,
-            "percent": 0,
-            "message": "검토를 준비하고 있습니다.",
-        }
+        review.start(at=datetime.now(UTC))
         review_repository.save(review)
         db_session.commit()
         storage_key = review_session.storage_key
@@ -227,13 +229,8 @@ async def execute_review(
             )
         result_payload = normalize_review_result(raw_result, review_id=review_id)
         status = _mcp_status(result_payload)
-        final_state = (
-            ReviewState.COMPLETED
-            if status is MCPReviewStatus.OK
-            else ReviewState.FAILED
-        )
         error = None
-        if final_state is ReviewState.FAILED:
+        if status is not MCPReviewStatus.OK:
             retryable = status in {
                 MCPReviewStatus.CORPUS_UNAVAILABLE,
                 MCPReviewStatus.PIPELINE_ERROR,
@@ -247,7 +244,6 @@ async def execute_review(
         return
     except (asyncio.TimeoutError, TimeoutError):
         status = None
-        final_state = ReviewState.FAILED
         result_payload = None
         error = {
             "code": "MCP_TIMEOUT",
@@ -256,7 +252,6 @@ async def execute_review(
         }
     except InvalidMCPReviewResultError:
         status = None
-        final_state = ReviewState.FAILED
         result_payload = None
         error = {
             "code": "MCP_RESPONSE_INVALID",
@@ -265,7 +260,6 @@ async def execute_review(
         }
     except Exception:
         status = None
-        final_state = ReviewState.FAILED
         result_payload = None
         error = {
             "code": "PIPELINE_ERROR",
@@ -277,28 +271,24 @@ async def execute_review(
         repository = SqlAlchemyReviewRepository(db_session)
         session_repository = SqlAlchemyReviewSessionRepository(db_session)
         review = repository.get(review_id)
-        if review is None or review.state is ReviewState.CANCELLED:
+        if review is None or review.state is not ReviewState.REVIEWING:
             return
-        previous_sequence = int((review.progress or {}).get("sequence", 1))
-        review.state = final_state
-        review.mcp_review_status = status
-        review.result = result_payload
-        review.error = error
-        review.completed_at = datetime.now(UTC)
-        review.progress = {
-            "sequence": previous_sequence + 1,
-            "stage": "RESULT_ASSEMBLY",
-            "current": 1,
-            "total": 1,
-            "percent": 100,
-            "message": "검토 결과 정리가 완료되었습니다.",
-        }
-        repository.save(review)
+        completed_at = datetime.now(UTC)
+        if status is MCPReviewStatus.OK and result_payload is not None:
+            review.complete(status, result_payload, at=completed_at)
+        else:
+            review.fail(error or {"code": "PIPELINE_ERROR"}, status, at=completed_at)
+        try:
+            repository.save(review)
+        except ConcurrentReviewUpdateError:
+            db_session.rollback()
+            return
         resume_ttl_after_review(
             db_session,
             review,
             ttl_seconds=settings.session_ttl_seconds,
         )
+        storage_key_to_delete = None
         if (
             review.state is ReviewState.FAILED
             and review.error
@@ -306,7 +296,9 @@ async def execute_review(
         ):
             review_session = session_repository.get(review.session_id)
             if review_session is not None and review_session.storage_key is not None:
-                storage.delete(review_session.storage_key)
+                storage_key_to_delete = review_session.storage_key
                 review_session.storage_key = None
                 session_repository.save(review_session)
         db_session.commit()
+    if storage_key_to_delete is not None:
+        storage.delete(storage_key_to_delete)

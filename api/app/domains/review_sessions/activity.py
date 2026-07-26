@@ -7,7 +7,10 @@ from sqlalchemy.orm import Session
 from app.domains.review_sessions.domain import ReviewSession
 from app.domains.review_sessions.repository import SqlAlchemyReviewSessionRepository
 from app.domains.reviews.domain import Review, ReviewState
-from app.domains.reviews.repository import SqlAlchemyReviewRepository
+from app.domains.reviews.repository import (
+    ConcurrentReviewUpdateError,
+    SqlAlchemyReviewRepository,
+)
 
 
 def touch_session(
@@ -35,7 +38,17 @@ def touch_review(
     """review와 부모 세션의 TTL을 함께 연장한다."""
     touched_at = now or datetime.now(UTC)
     review.expires_at = touched_at + timedelta(seconds=ttl_seconds)
-    SqlAlchemyReviewRepository(db_session).save(review)
+    review_repository = SqlAlchemyReviewRepository(db_session)
+    try:
+        review_repository.save(review)
+    except ConcurrentReviewUpdateError:
+        db_session.rollback()
+        current = review_repository.get(review.id)
+        if current is None:
+            raise
+        current.expires_at = touched_at + timedelta(seconds=ttl_seconds)
+        review_repository.save(current)
+        review = current
     session_repository = SqlAlchemyReviewSessionRepository(db_session)
     session = session_repository.get(review.session_id)
     if session is not None:

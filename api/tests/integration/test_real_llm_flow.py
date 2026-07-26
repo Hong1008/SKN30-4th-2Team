@@ -112,8 +112,8 @@ def _settings() -> Settings:
 
 def _review() -> Review:
     now = datetime.now(UTC)
-    return Review(
-        id="rev_llm",
+    return Review.restore(
+        review_id="rev_llm",
         session_id="ses_llm",
         idempotency_key="llm-evaluation",
         state=ReviewState.COMPLETED,

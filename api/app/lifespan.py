@@ -3,7 +3,7 @@
 import asyncio
 import logging
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager, suppress
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 
 from fastapi import FastAPI
@@ -13,7 +13,6 @@ from app.core.common.logging import log_event
 from app.core.db.database import Database
 from app.core.llm.mcp import open_workshield_mcp
 from app.domains.review_sessions.activity import resume_ttl_after_review
-from app.domains.reviews.domain import ReviewState
 from app.domains.reviews.repository import SqlAlchemyReviewRepository
 from app.core.storage.cleanup import SessionFileLifecycle
 from app.core.storage.local import LocalFileStorage
@@ -58,13 +57,7 @@ def _recover_interrupted_reviews(
         repository = SqlAlchemyReviewRepository(db_session)
         recovered_at = datetime.now(UTC)
         for review in repository.list_active():
-            review.state = ReviewState.FAILED
-            review.error = {
-                "code": "REVIEW_INTERRUPTED",
-                "retryable": True,
-                "next_action": "RETRY_REVIEW",
-            }
-            review.completed_at = recovered_at
+            review.mark_interrupted(at=recovered_at)
             repository.save(review)
             resume_ttl_after_review(
                 db_session,
@@ -85,6 +78,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         database,
         ttl_seconds=getattr(settings, "session_ttl_seconds", 30 * 60),
     )
+    database.ensure_review_active_index()
     storage_root = settings.temp_upload_dir
     if not storage_root.is_absolute():
         storage_root = (API_ROOT / storage_root).resolve()
@@ -119,15 +113,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             try:
                 yield
             finally:
+                review_tasks = list(
+                    getattr(app.state, "review_tasks", {}).values()
+                )
+                for task in review_tasks:
+                    task.cancel()
+                await asyncio.gather(*review_tasks, return_exceptions=True)
                 del app.state.workshield_mcp
     finally:
-        for task in getattr(app.state, "review_tasks", {}).values():
-            task.cancel()
         if hasattr(app.state, "review_tasks"):
             del app.state.review_tasks
         cleanup_task.cancel()
-        with suppress(asyncio.CancelledError):
-            await cleanup_task
+        await asyncio.gather(cleanup_task, return_exceptions=True)
         if hasattr(app.state, "file_storage"):
             del app.state.file_storage
         if hasattr(app.state, "database"):

@@ -61,6 +61,9 @@ class Database:
 
         Base.metadata.create_all(self.engine)
         self._add_storage_key_to_legacy_schema()
+        self._add_review_version_to_legacy_schema()
+        if not self._has_duplicate_active_reviews():
+            self.ensure_review_active_index()
 
     def _add_storage_key_to_legacy_schema(self) -> None:
         """초기 개발 DB의 storage_path를 건드리지 않고 새 컬럼을 추가한다."""
@@ -78,6 +81,44 @@ class Database:
                 text(
                     "ALTER TABLE review_sessions "
                     "ADD COLUMN storage_key TEXT NULL"
+                )
+            )
+
+    def _add_review_version_to_legacy_schema(self) -> None:
+        """이전 개발 DB에 Review 낙관적 잠금 컬럼과 active 제약을 추가한다."""
+        inspector = inspect(self.engine)
+        if "reviews" not in inspector.get_table_names():
+            return
+        column_names = {
+            column["name"] for column in inspector.get_columns("reviews")
+        }
+        with self.engine.begin() as connection:
+            if "version" not in column_names:
+                connection.execute(
+                    text(
+                        "ALTER TABLE reviews "
+                        "ADD COLUMN version INTEGER NOT NULL DEFAULT 0"
+                    )
+                )
+    def _has_duplicate_active_reviews(self) -> bool:
+        """세션당 active Review가 둘 이상인 legacy 데이터인지 확인한다."""
+        with self.engine.connect() as connection:
+            return connection.scalar(
+                text(
+                    "SELECT 1 FROM reviews "
+                    "WHERE state IN ('QUEUED', 'REVIEWING') "
+                    "GROUP BY session_id HAVING COUNT(*) > 1 LIMIT 1"
+                )
+            ) is not None
+
+    def ensure_review_active_index(self) -> None:
+        """복구가 끝난 Review 테이블에 active 유일성 제약을 보장한다."""
+        with self.engine.begin() as connection:
+            connection.execute(
+                text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS "
+                    "uq_reviews_one_active_per_session ON reviews(session_id) "
+                    "WHERE state IN ('QUEUED', 'REVIEWING')"
                 )
             )
 

@@ -1,6 +1,7 @@
 """FastAPI 애플리케이션 팩토리와 MCP lifespan 연결을 검증한다."""
 
 from contextlib import asynccontextmanager
+import asyncio
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -96,3 +97,41 @@ async def test_lifespan_exposes_and_cleans_mcp_runtime(
     with pytest.raises(AttributeError):
         _ = app.state.file_storage
     assert closed is True
+
+
+@pytest.mark.asyncio
+async def test_lifespan_awaits_review_tasks_before_mcp_runtime_closes(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    events: list[str] = []
+
+    @asynccontextmanager
+    async def fake_open(settings):
+        try:
+            yield SimpleNamespace()
+        finally:
+            events.append("runtime-closed")
+
+    async def pending_review() -> None:
+        try:
+            await asyncio.Event().wait()
+        finally:
+            await asyncio.sleep(0)
+            events.append("review-finished")
+
+    settings = SimpleNamespace(
+        database_url=f"sqlite+pysqlite:///{tmp_path / 'ordered.db'}",
+        database_echo=False,
+        temp_upload_dir=tmp_path / "uploads",
+        storage_cleanup_interval_seconds=60,
+    )
+    monkeypatch.setattr(lifespan_module, "get_settings", lambda: settings)
+    monkeypatch.setattr(lifespan_module, "open_workshield_mcp", fake_open)
+
+    async with lifespan(app):
+        task = asyncio.create_task(pending_review())
+        await asyncio.sleep(0)
+        app.state.review_tasks["rev_pending"] = task
+
+    assert events == ["review-finished", "runtime-closed"]

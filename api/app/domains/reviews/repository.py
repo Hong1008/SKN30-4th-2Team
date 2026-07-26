@@ -2,13 +2,17 @@
 
 from typing import Protocol
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.core.db.models import ReviewRow
 from app.core.db.models import ReviewSessionRow
 from app.domains.reviews.domain import Review
-from app.domains.reviews.mapper import review_from_row, review_to_row, update_review_row
+from app.domains.reviews.mapper import review_from_row, review_to_row
+
+
+class ConcurrentReviewUpdateError(RuntimeError):
+    """다른 트랜잭션이 먼저 Review를 변경했음을 나타낸다."""
 
 
 class ReviewRepository(Protocol):
@@ -71,10 +75,36 @@ class SqlAlchemyReviewRepository:
         return review_from_row(row) if row is not None else None
 
     def save(self, entity: Review) -> None:
-        row = self._session.get(ReviewRow, entity.id)
-        if row is None:
-            raise LookupError(f"검토를 찾을 수 없습니다: {entity.id}")
-        update_review_row(row, entity)
+        expected_version = entity.version
+        snapshot = review_to_row(entity)
+        result = self._session.execute(
+            update(ReviewRow)
+            .where(
+                ReviewRow.id == entity.id,
+                ReviewRow.version == expected_version,
+            )
+            .values(
+                session_id=snapshot.session_id,
+                retry_of_review_id=snapshot.retry_of_review_id,
+                idempotency_key=snapshot.idempotency_key,
+                state=snapshot.state,
+                version=expected_version + 1,
+                mcp_review_status=snapshot.mcp_review_status,
+                contract_type=snapshot.contract_type,
+                progress=snapshot.progress,
+                result=snapshot.result,
+                error=snapshot.error,
+                created_at=snapshot.created_at,
+                started_at=snapshot.started_at,
+                completed_at=snapshot.completed_at,
+                expires_at=snapshot.expires_at,
+            )
+        )
+        if result.rowcount != 1:
+            raise ConcurrentReviewUpdateError(
+                f"Review가 다른 작업에서 먼저 변경되었습니다: {entity.id}"
+            )
+        entity.version = expected_version + 1
 
     def find_by_idempotency_key(
         self,

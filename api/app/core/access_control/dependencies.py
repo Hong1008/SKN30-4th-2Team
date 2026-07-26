@@ -121,7 +121,7 @@ def require_owned_review(
 ) -> Review:
     """Cookie 토큰이 소유한 미만료 검토만 반환한다."""
     entity = resolve_owned_review(review_id, access_token, db_session)
-    touch_review(
+    entity = touch_review(
         db_session,
         entity,
         ttl_seconds=settings.session_ttl_seconds,

@@ -26,6 +26,7 @@ def review_to_row(entity: Review) -> ReviewRow:
         retry_of_review_id=entity.retry_of_review_id,
         idempotency_key=entity.idempotency_key,
         state=entity.state.value,
+        version=entity.version,
         mcp_review_status=(
             entity.mcp_review_status.value if entity.mcp_review_status else None
         ),
@@ -46,6 +47,7 @@ def update_review_row(row: ReviewRow, entity: Review) -> None:
     row.retry_of_review_id = entity.retry_of_review_id
     row.idempotency_key = entity.idempotency_key
     row.state = entity.state.value
+    row.version = entity.version
     row.mcp_review_status = (
         entity.mcp_review_status.value if entity.mcp_review_status else None
     )
@@ -61,12 +63,13 @@ def update_review_row(row: ReviewRow, entity: Review) -> None:
 
 def review_from_row(row: ReviewRow) -> Review:
     """ORM Row를 외부 프레임워크에 의존하지 않는 엔티티로 변환한다."""
-    return Review(
-        id=row.id,
+    return Review.restore(
+        review_id=row.id,
         session_id=row.session_id,
         retry_of_review_id=row.retry_of_review_id,
         idempotency_key=row.idempotency_key,
         state=ReviewState(row.state),
+        version=row.version,
         mcp_review_status=(
             MCPReviewStatus(row.mcp_review_status)
             if row.mcp_review_status

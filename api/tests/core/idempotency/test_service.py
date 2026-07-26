@@ -13,7 +13,7 @@ from app.core.idempotency.service import (
 )
 from app.domains.review_sessions.domain import ReviewSession, ReviewSessionState
 from app.domains.review_sessions.repository import SqlAlchemyReviewSessionRepository
-from app.domains.reviews.domain import Review, ReviewState
+from app.domains.reviews.domain import Review
 from app.domains.reviews.repository import SqlAlchemyReviewRepository
 
 
@@ -100,22 +100,20 @@ def test_review_and_response_transaction_loses_race_as_one_unit(database) -> Non
     fingerprint = request_fingerprint({"session_id": session_id})
     with database.session() as stale_request, database.session() as winner:
         SqlAlchemyReviewRepository(stale_request).add(
-            Review(
-                id="rev_stale",
+            Review.queued(
+                review_id="rev_stale",
                 session_id=session_id,
                 idempotency_key=operation_key,
-                state=ReviewState.QUEUED,
                 contract_type="SW_FREELANCE",
                 created_at=now,
                 expires_at=now + timedelta(hours=1),
             )
         )
         SqlAlchemyReviewRepository(winner).add(
-            Review(
-                id="rev_winner",
+            Review.queued(
+                review_id="rev_winner",
                 session_id=session_id,
                 idempotency_key=operation_key,
-                state=ReviewState.QUEUED,
                 contract_type="SW_FREELANCE",
                 created_at=now,
                 expires_at=now + timedelta(hours=1),

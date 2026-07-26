@@ -30,10 +30,10 @@ def _seed_session_with_file(
     review = review_entity(
         f"rev_{session_id}",
         session_id=session_id,
+        state=review_state,
+        result={"sensitive": "result"},
     )
-    review.state = review_state
     review.expires_at = expires_at
-    review.result = {"sensitive": "result"}
     with database.session() as session:
         SqlAlchemyReviewSessionRepository(session).add(entity)
         session.commit()
@@ -73,6 +73,52 @@ def test_expired_session_removes_file_and_sensitive_result(
     assert expired_review is not None
     assert expired_review.state is ReviewState.EXPIRED
     assert expired_review.result is None
+
+
+def test_cleanup_skips_review_already_expired_by_new_review_creation(
+    database: Database,
+    tmp_path: Path,
+) -> None:
+    storage = LocalFileStorage(tmp_path / "uploads")
+    now = datetime.now(UTC)
+    storage_key = storage.save(BytesIO(b"contract"), extension="pdf")
+    entity = review_session_entity("ses_mixed_expired")
+    entity.storage_key = storage_key
+    entity.expires_at = now - timedelta(seconds=1)
+    already_expired = review_entity(
+        "rev_already_expired",
+        session_id=entity.id,
+        idempotency_key="old",
+        state=ReviewState.CANCELLED,
+    )
+    already_expired.expire(at=now - timedelta(minutes=1))
+    terminal = review_entity(
+        "rev_terminal",
+        session_id=entity.id,
+        idempotency_key="new",
+        state=ReviewState.COMPLETED,
+        result={"sensitive": "result"},
+    )
+    with database.session() as session:
+        SqlAlchemyReviewSessionRepository(session).add(entity)
+        session.commit()
+        repository = SqlAlchemyReviewRepository(session)
+        repository.add(already_expired)
+        repository.add(terminal)
+        session.commit()
+
+    result = SessionFileLifecycle(
+        database,
+        storage,
+    ).cleanup_expired_and_orphaned(now=now)
+
+    assert result.expired_sessions == 1
+    with database.session() as session:
+        reviews = SqlAlchemyReviewRepository(session).list_by_session(entity.id)
+    assert [review.state for review in reviews] == [
+        ReviewState.EXPIRED,
+        ReviewState.EXPIRED,
+    ]
 
 
 def test_active_review_prevents_expiration_cleanup(

@@ -2,7 +2,6 @@
 
 import asyncio
 from contextlib import asynccontextmanager
-from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from io import BytesIO
 from pathlib import Path
@@ -22,6 +21,7 @@ from app.core.db.dependencies import get_database
 from app.core.llm.dependencies import get_chat_model
 from app.core.llm.mcp.dependencies import get_workshield_runtime
 from app.domains.reviews.repository import SqlAlchemyReviewRepository
+from app.domains.reviews.domain import Review
 from app.core.storage.dependencies import get_file_storage
 from app.core.storage.local import LocalFileStorage
 
@@ -348,12 +348,21 @@ async def test_full_mvp_flow_and_browser_isolation(tmp_path: Path) -> None:
             repository = SqlAlchemyReviewRepository(db_session)
             first_review = repository.get(review_id)
             assert first_review is not None
-            second_review = replace(
-                first_review,
-                id="rev_same_session_second",
+            second_review = Review.restore(
+                review_id="rev_same_session_second",
+                session_id=first_review.session_id,
                 idempotency_key="second-review-operation",
+                state=first_review.state,
+                contract_type=first_review.contract_type,
                 created_at=datetime.now(UTC),
                 expires_at=datetime.now(UTC) + timedelta(hours=1),
+                retry_of_review_id=first_review.retry_of_review_id,
+                mcp_review_status=first_review.mcp_review_status,
+                progress=first_review.progress,
+                result=first_review.result,
+                error=first_review.error,
+                started_at=first_review.started_at,
+                completed_at=first_review.completed_at,
             )
             repository.add(second_review)
             db_session.commit()
@@ -386,6 +395,23 @@ async def test_full_mvp_flow_and_browser_isolation(tmp_path: Path) -> None:
         assert first_cancel.json()["data"]["review_state"] == "CANCELLED"
         assert second_cancel.status_code == 200
         assert second_cancel.json()["data"]["deleted"] is False
+        cancelled_status = await owner.get(f"/api/v1/reviews/{review_id}")
+        cancelled_progress = cancelled_status.json()["data"]["progress"]
+        cancelled_events = await owner.get(
+            f"/api/v1/reviews/{review_id}/events",
+            headers={"Last-Event-ID": "2"},
+        )
+        cancelled_data_line = next(
+            line
+            for line in cancelled_events.text.splitlines()
+            if line.startswith("data: ")
+        )
+        cancelled_event = json.loads(
+            cancelled_data_line.removeprefix("data: ")
+        )
+        assert cancelled_progress["sequence"] == 3
+        assert cancelled_event["review_state"] == "CANCELLED"
+        assert cancelled_event["sequence"] == cancelled_progress["sequence"]
 
     async with httpx.AsyncClient(
         transport=transport,
@@ -404,6 +430,106 @@ async def test_full_mvp_flow_and_browser_isolation(tmp_path: Path) -> None:
                 headers={"Idempotency-Key": "other-chat"},
             )
         ).status_code == 404
+
+
+async def test_concurrent_create_with_same_key_replays_winner(
+    tmp_path: Path,
+) -> None:
+    app, _calls = create_mvp_app(tmp_path)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        created = await client.post(
+            "/api/v1/review-sessions",
+            files={
+                "file": (
+                    "contract.pdf",
+                    _pdf(),
+                    "application/pdf",
+                )
+            },
+        )
+        session_id = created.json()["data"]["session_id"]
+        await client.patch(
+            f"/api/v1/review-sessions/{session_id}/contract-type",
+            json={
+                "selected_contract_type": "SW_FREELANCE",
+                "selection_source": "MANUAL",
+            },
+        )
+
+        first, second = await asyncio.gather(
+            client.post(
+                "/api/v1/reviews",
+                json={"session_id": session_id},
+                headers={"Idempotency-Key": "concurrent-create"},
+            ),
+            client.post(
+                "/api/v1/reviews",
+                json={"session_id": session_id},
+                headers={"Idempotency-Key": "concurrent-create"},
+            ),
+        )
+
+    assert first.status_code == second.status_code == 202
+    assert first.json()["data"]["review_id"] == second.json()["data"]["review_id"]
+
+
+async def test_concurrent_retry_with_same_key_replays_winner(
+    tmp_path: Path,
+) -> None:
+    app, _calls = create_mvp_app(tmp_path)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        created = await client.post(
+            "/api/v1/review-sessions",
+            files={
+                "file": (
+                    "contract.pdf",
+                    _pdf(),
+                    "application/pdf",
+                )
+            },
+        )
+        session_id = created.json()["data"]["session_id"]
+        database = app.dependency_overrides[get_database]()
+        now = datetime.now(UTC)
+        failed = Review.queued(
+            review_id="rev_concurrent_retry_source",
+            session_id=session_id,
+            idempotency_key="failed-source",
+            contract_type="SW_FREELANCE",
+            created_at=now,
+            expires_at=now + timedelta(hours=1),
+        )
+        failed.fail(
+            {
+                "code": "PIPELINE_ERROR",
+                "retryable": True,
+                "next_action": "RETRY_REVIEW",
+            },
+            at=now,
+        )
+        with database.session() as session:
+            SqlAlchemyReviewRepository(session).add(failed)
+            session.commit()
+
+        first, second = await asyncio.gather(
+            client.post(
+                f"/api/v1/reviews/{failed.id}/retry",
+                headers={"Idempotency-Key": "concurrent-retry"},
+            ),
+            client.post(
+                f"/api/v1/reviews/{failed.id}/retry",
+                headers={"Idempotency-Key": "concurrent-retry"},
+            ),
+        )
+
+    assert first.status_code == second.status_code == 202
+    assert first.json()["data"]["review_id"] == second.json()["data"]["review_id"]
 
 
 async def test_metadata_cache_and_etag(tmp_path: Path) -> None:
