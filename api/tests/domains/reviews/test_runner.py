@@ -14,8 +14,8 @@ from app.domains.reviews.domain import ReviewState
 from app.domains.reviews.repository import SqlAlchemyReviewRepository
 from app.domains.reviews.runner import execute_review, normalize_review_result
 from app.core.storage.local import LocalFileStorage
-from tests.review_sessions.test_repository import review_session_entity
-from tests.reviews.test_repository import review_entity
+from tests.domains.review_sessions.test_repository import review_session_entity
+from tests.domains.reviews.test_repository import review_entity
 
 
 class ProgressSession:

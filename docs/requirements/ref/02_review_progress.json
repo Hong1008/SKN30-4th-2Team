@@ -1,0 +1,106 @@
+{
+  "schema_version": "1.0.0",
+  "document_type": "functional_requirements_domain",
+  "domain": "review_progress",
+  "domain_name": "검토 진행 상황",
+  "source": {
+    "file_name": "요구사항_정의서_4차_운영위험반영본.xlsx",
+    "source_path": "/Users/bini/Downloads/요구사항_정의서_4차_운영위험반영본.xlsx",
+    "worksheet": "요구사항정의서",
+    "exported_on": "2026-07-23",
+    "columns": [
+      "대분류",
+      "중분류",
+      "요구사항ID",
+      "소분류(기능설명)",
+      "추가설명",
+      "MVP범위",
+      "비고",
+      "MCP 포함여부",
+      "MCP 명세 확인",
+      "런타임 검증",
+      "구현 주체"
+    ]
+  },
+  "requirements_count": 6,
+  "requirements": [
+    {
+      "major_category": "진행 상황 표시",
+      "subcategory": "표시",
+      "id": "FR-8-1",
+      "description": "조항 및 처리 단계 단위 진행률을 화면에 표시한다.",
+      "details": "예: '문서 파싱 중', '제7조 판정 중 (7/17)', '누락 가능 조항 확인 중', '결과 정리 중'.",
+      "scope": "MVP",
+      "notes": "조항 판정 외에도 파싱, 누락 확인, 주의 문구, grounding 등 주요 단계를 포함해야 함.\n[MCP 명세 검토] review_contract 설명에 ctx를 통한 실시간 progress 보고가 있으나 stage/current/total/message 이벤트 스키마는 mcp-spec.json에 구조화돼 있지 않음. 실제 이벤트 샘플 확인 필요.",
+      "mcp_included": "부분 포함",
+      "mcp_spec_status": "부분 확인",
+      "runtime_validation": "MCP 통합 테스트",
+      "implementation_owner": "프론트·백엔드·MCP"
+    },
+    {
+      "major_category": "진행 상황 표시",
+      "subcategory": "연동",
+      "id": "FR-8-2",
+      "description": "진행률은 프론트 임의 타이머가 아니라 서버의 실제 진행 상태를 사용한다.",
+      "details": "실제 MCP progress 이벤트의 필드·타입·순서·완료/오류 여부를 런타임 계약 테스트로 확인한다. 백엔드는 확인된 이벤트만 stage, current, total, message, review_id 형태로 정규화해 클라이언트에 전달한다. progress 이벤트가 없거나 끊기면 최종 status 또는 상태 조회 API로 화면을 종료한다.",
+      "scope": "MVP",
+      "notes": "MCP report_progress의 실제 이벤트 형식과 완료·오류 이벤트 유무 확인 필요.\n[MCP 명세 검토] review_contract가 MCP 실행 컨텍스트의 progress 보고를 설명하지만 report_progress라는 별도 도구·출력 이벤트 스키마는 없다. 실제 MCP progress 이벤트의 필드명·타입·순서·완료/오류 이벤트 유무를 통합 테스트 항목으로 등록하고, 백엔드가 확인된 형태만 SSE로 정규화한다.",
+      "mcp_included": "부분 포함",
+      "mcp_spec_status": "명세 확인 필요",
+      "runtime_validation": "필수: 실제 progress 이벤트 필드·순서·완료/오류·미수신/연결 끊김",
+      "implementation_owner": "프론트·백엔드·MCP"
+    },
+    {
+      "major_category": "진행 상황 표시",
+      "subcategory": "연동",
+      "id": "FR-8-3",
+      "description": "FastAPI는 MCP 진행 이벤트를 클라이언트에 전달할 수 있어야 한다.",
+      "details": "상태 조회 API를 2~3초 간격으로 호출하는 폴링을 기본으로 사용한다. SSE는 같은 상태 데이터를 보조 전달하며, 끊겨도 폴링을 계속한다. 폴링은 QUEUED·REVIEWING에서만 실행하고 COMPLETED·FAILED·EXPIRED에서 종료한다.",
+      "scope": "MVP",
+      "notes": "폴링을 기본 구현으로 확정하고 SSE는 보조 수단으로 둔다.\n[MCP 명세 검토] FastAPI의 SSE 전달·폴링은 애플리케이션 전송 계층 책임. mcp-spec.json으로 구현 여부를 확인할 수 없음.",
+      "mcp_included": "미포함",
+      "mcp_spec_status": "MCP 대상 아님",
+      "runtime_validation": "백엔드 단위/통합 테스트",
+      "implementation_owner": "프론트·백엔드"
+    },
+    {
+      "major_category": "진행 상황 표시",
+      "subcategory": "연동",
+      "id": "FR-8-4",
+      "description": "진행 이벤트는 review_id와 연결하고 표시 진행률이 역행하지 않도록 한다.",
+      "details": "이전 검토의 지연 이벤트가 새 검토 화면에 표시되지 않도록 요청 식별자를 검증한다.",
+      "scope": "MVP",
+      "notes": "단계 변경 시 percent가 낮아질 수 있는 원본 이벤트를 어떻게 정규화할지 정의 필요.\n[MCP 명세 검토] MCP는 현행 progress 이벤트를 그대로 사용함. 백엔드가 MCP 호출 바깥에서 review_id를 연결하고 지연 이벤트 차단, 현재 요청 검증, 단조 진행률 정규화를 수행함.",
+      "mcp_included": "미포함",
+      "mcp_spec_status": "MCP 대상 아님",
+      "runtime_validation": "백엔드 단위/통합 테스트",
+      "implementation_owner": "프론트·백엔드"
+    },
+    {
+      "major_category": "진행 상황 표시",
+      "subcategory": "오류",
+      "id": "FR-8-5",
+      "description": "진행 중 오류 발생 시 진행 표시를 종료하고 오류 상태와 재시도 가능 여부를 표시한다.",
+      "details": "마지막 성공 단계는 참고 정보로 유지하되 진행 중 애니메이션을 계속 표시하지 않는다.",
+      "scope": "MVP",
+      "notes": "타임아웃, 연결 끊김, MCP 내부 오류를 구분할 수 있는지 확인 필요.\n[MCP 명세 검토] review_contract 최종 오류 status는 있으나 진행 스트림의 오류·연결 끊김·타임아웃 이벤트 스키마와 retryable 정보는 없음. 전송 계층 테스트 필요.",
+      "mcp_included": "부분 포함",
+      "mcp_spec_status": "부분 확인",
+      "runtime_validation": "MCP 통합 테스트",
+      "implementation_owner": "프론트·백엔드·MCP"
+    },
+    {
+      "major_category": "진행 상황 표시",
+      "subcategory": "취소",
+      "id": "FR-8-6",
+      "description": "사용자는 진행 중인 검토를 취소할 수 있어야 한다.",
+      "details": "취소 요청 후 화면 진행 표시를 종료하고 임시 파일과 중간 결과를 삭제한다. 서버 작업 중단이 불가능한 경우 결과를 폐기하고 사용자에게 안내한다.",
+      "scope": "MVP 이후",
+      "notes": "MCP 호출 자체의 취소 지원 여부 확인 필요. 미지원이면 UI 취소와 서버 작업 중단을 구분해야 함.\n[MCP 명세 검토] MCP 호출 자체는 수정하거나 취소하지 않음. 백엔드는 사용자 취소 상태를 기록하고 결과 반환 시 폐기하며, 가능한 범위에서 작업 태스크 중단과 임시 파일 정리를 수행함.",
+      "mcp_included": "미포함",
+      "mcp_spec_status": "MCP 대상 아님",
+      "runtime_validation": "백엔드 단위/통합 테스트",
+      "implementation_owner": "프론트·백엔드"
+    }
+  ]
+}
