@@ -32,8 +32,19 @@ AND match.standard 존재
     "key_changes": [
       "책임 한도 확인 항목 추가"
     ],
+    "used_source_keys": [
+      "SRC_USER",
+      "SRC_STANDARD",
+      "SRC_GROUNDING"
+    ],
+    "user_clause_ids": [
+      "uc_rev_01J_7"
+    ],
     "standard_clause_ids": [
       "sw_freelance-2020-art12"
+    ],
+    "grounding_source_ids": [
+      "law_01"
     ],
     "required_confirmations": [
       {
@@ -45,6 +56,17 @@ AND match.standard 존재
   }
 }
 ```
+
+출처 결합 원칙:
+
+- LLM은 실제 `clause_id`나 `source_id`를 생성·복사하지 않고,
+  `SRC_USER`, `SRC_STANDARD`, `SRC_GROUNDING`으로 구성된
+  `used_source_keys`만 선택한다.
+- API는 완료된 검토 스냅샷과 실제 grounding 조회 결과에서 해당 키의
+  사용자 조항 ID, 표준조항 ID, 법령 source ID를 결정적으로 결합한다.
+- 따라서 반환된 ID는 LLM이 생성한 인용이 아니라 백엔드가 검증된 입력에
+  연결한 출처다. `used_source_keys`는 모델이 문구 생성에 사용했다고 선택한
+  근거 종류를 나타낸다.
 
 근거 부족:
 

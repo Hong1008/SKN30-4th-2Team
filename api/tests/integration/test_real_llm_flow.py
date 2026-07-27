@@ -230,5 +230,14 @@ async def test_real_llm_suggestion_structured_output() -> None:
 
     assert suggestion.outcome == "GENERATED"
     assert suggestion.text
-    assert suggestion.standard_clause_ids == ["std_liability_1"]
-    assert suggestion.grounding_source_ids == ["law_1"]
+    assert suggestion.used_source_keys
+    assert suggestion.standard_clause_ids == (
+        ["std_liability_1"]
+        if "SRC_STANDARD" in suggestion.used_source_keys
+        else []
+    )
+    assert suggestion.grounding_source_ids == (
+        ["law_1"]
+        if "SRC_GROUNDING" in suggestion.used_source_keys
+        else []
+    )

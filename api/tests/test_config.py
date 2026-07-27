@@ -17,8 +17,8 @@ def test_get_settings_is_cached() -> None:
     assert get_settings() is get_settings()
 
 
-def test_production_rejects_external_provider() -> None:
-    with pytest.raises(ValidationError, match="LLM_PROVIDER=ollama"):
+def test_production_rejects_non_serverless_provider() -> None:
+    with pytest.raises(ValidationError, match="LLM_PROVIDER=runpod_serverless"):
         Settings(app_env="prod", llm_provider="openai")
 
 
@@ -112,7 +112,7 @@ def test_production_rejects_debug_mode() -> None:
     with pytest.raises(ValidationError, match="APP_DEBUG=false"):
         Settings(
             app_env="prod",
-            llm_provider="ollama",
+            llm_provider="runpod_serverless",
             app_debug=True,
             database_echo=False,
         )
@@ -122,7 +122,7 @@ def test_production_rejects_database_query_logging() -> None:
     with pytest.raises(ValidationError, match="DATABASE_ECHO=false"):
         Settings(
             app_env="prod",
-            llm_provider="ollama",
+            llm_provider="runpod_serverless",
             app_debug=False,
             database_echo=True,
         )

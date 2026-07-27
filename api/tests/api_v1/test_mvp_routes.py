@@ -67,12 +67,12 @@ class FakeStructuredRunnable:
                 ],
                 "limitations": ["법률 자문이 아닙니다."],
             }
+        self._calls["suggestion_prompt"] = _prompt
         return {
             "outcome": "GENERATED",
-            "text": "책임 범위는 당사자가 확인한 기준으로 협의합니다.",
-            "key_changes": ["책임 범위 확인"],
-            "standard_clause_ids": ["std_1"],
-            "grounding_source_ids": ["law_1"],
+            "suggestion": "책임 범위는 당사자가 확인한 기준으로 협의합니다.",
+            "major_changes": ["책임 범위 확인"],
+            "used_source_keys": ["SRC_USER", "SRC_STANDARD", "SRC_GROUNDING"],
             "required_confirmations": [],
         }
 
@@ -320,7 +320,19 @@ async def test_full_mvp_flow_and_browser_isolation(tmp_path: Path) -> None:
             },
             headers={"Idempotency-Key": "suggestion-1"},
         )
-        assert suggestion.json()["data"]["outcome"] == "GENERATED"
+        suggestion_data = suggestion.json()["data"]
+        assert suggestion_data["outcome"] == "GENERATED"
+        assert suggestion_data["used_source_keys"] == [
+            "SRC_USER",
+            "SRC_STANDARD",
+            "SRC_GROUNDING",
+        ]
+        assert suggestion_data["user_clause_ids"] == [user_clause_id]
+        assert suggestion_data["standard_clause_ids"] == ["std_1"]
+        assert suggestion_data["grounding_source_ids"] == ["law_1"]
+        assert user_clause_id not in calls["suggestion_prompt"]
+        assert "std_1" not in calls["suggestion_prompt"]
+        assert "law_1" not in calls["suggestion_prompt"]
         events = await owner.get(
             f"/api/v1/reviews/{review_id}/events",
             headers={"Last-Event-ID": "0"},
