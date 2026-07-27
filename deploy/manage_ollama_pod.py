@@ -34,7 +34,7 @@ DEFAULTS: Final = {
 
 
 def load_environment() -> None:
-    """api/.env의 RUNPOD_* 값만 현재 환경에 없는 경우에 적용한다."""
+    """api/.env의 Pod 배포 설정을 현재 환경에 없는 경우에 적용한다."""
     if not ENV_FILE.exists():
         return
     for line_number, raw_line in enumerate(ENV_FILE.read_text(encoding="utf-8").splitlines(), 1):
@@ -45,7 +45,9 @@ def load_environment() -> None:
             line = line.removeprefix("export ").lstrip()
         key, separator, raw_value = line.partition("=")
         key = key.strip()
-        if not separator or not key.startswith("RUNPOD_"):
+        if not separator or (
+            not key.startswith("RUNPOD_") and key != "OLLAMA_API_KEY"
+        ):
             continue
         try:
             values = shlex.split(raw_value.strip(), posix=True)
@@ -66,14 +68,46 @@ def require_command(command: str) -> None:
         raise RuntimeError(f"{command}을 찾을 수 없습니다. 설치 후 PATH에 추가하세요.")
 
 
+def display_command(command: list[str]) -> str:
+    """Pod 접근 키가 담긴 Template 환경변수는 화면에서 마스킹한다."""
+    displayed = command.copy()
+    for index, item in enumerate(displayed):
+        if "POD_API_KEY" in item:
+            displayed[index] = '{"OLLAMA_MODEL":"%s","POD_API_KEY":"***"}' % (
+                setting("RUNPOD_OLLAMA_MODEL")
+            )
+    return shlex.join(displayed)
+
+
+def redact_output(value: object) -> object:
+    """RunPod 응답에 포함될 수 있는 비밀값을 출력 전에 마스킹한다."""
+    if isinstance(value, dict):
+        return {
+            key: "***"
+            if any(marker in key.upper() for marker in ("KEY", "TOKEN", "PASSWORD", "SECRET"))
+            else redact_output(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [redact_output(item) for item in value]
+    return value
+
+
+def display_output(output: str) -> str:
+    try:
+        return json.dumps(redact_output(json.loads(output)), ensure_ascii=False, indent=2)
+    except json.JSONDecodeError:
+        return output
+
+
 def run(command: list[str], *, confirm: bool = False) -> str:
     """명령을 안전하게 실행하고 stdout JSON을 그대로 반환한다."""
-    print(shlex.join(command))
+    print(display_command(command))
     if not confirm:
         return ""
     completed = subprocess.run(command, check=True, capture_output=True, text=True, env=os.environ.copy())
     if completed.stdout.strip():
-        print(completed.stdout.strip())
+        print(display_output(completed.stdout.strip()))
     return completed.stdout
 
 
@@ -104,7 +138,10 @@ def auto_terminate_argument() -> list[str]:
 
 
 def template_create_command() -> list[str]:
-    template_env = json.dumps({"OLLAMA_MODEL": setting("RUNPOD_OLLAMA_MODEL")})
+    template_env = json.dumps({
+        "OLLAMA_MODEL": setting("RUNPOD_OLLAMA_MODEL"),
+        "POD_API_KEY": setting("OLLAMA_API_KEY", required=True),
+    })
     return [
         "runpodctl", "template", "create",
         "--name", setting("RUNPOD_OLLAMA_TEMPLATE_NAME"),

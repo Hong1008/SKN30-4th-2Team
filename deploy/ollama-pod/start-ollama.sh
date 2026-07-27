@@ -6,8 +6,13 @@ set -eu
 ollama serve &
 ollama_pid="$!"
 
+/usr/local/bin/ollama-auth-proxy &
+proxy_pid="$!"
+
 shutdown() {
+  kill -TERM "$proxy_pid" 2>/dev/null || true
   kill -TERM "$ollama_pid" 2>/dev/null || true
+  wait "$proxy_pid" 2>/dev/null || true
   wait "$ollama_pid" 2>/dev/null || true
   exit 0
 }

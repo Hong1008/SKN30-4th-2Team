@@ -74,6 +74,7 @@ class Settings(BaseSettings):
 
     openai_api_key: SecretStr | None = None
     gemini_api_key: SecretStr | None = None
+    ollama_api_key: SecretStr | None = None
     ollama_base_url: AnyHttpUrl = "http://localhost:11434"
     workshield_mcp_transport: MCPTransport = MCPTransport.STDIO
     workshield_mcp_url: AnyHttpUrl = "http://localhost:8000/mcp"

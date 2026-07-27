@@ -21,12 +21,13 @@ def reset_fake() -> None:
     FakeOllamaModel.calls = []
 
 
-def _settings() -> Settings:
+def _settings(*, ollama_api_key: str | None = None) -> Settings:
     return Settings(
         app_env="local",
         llm_provider="ollama",
         llm_model="runtime-selected-model",
         ollama_base_url="http://ollama.internal:11434",
+        ollama_api_key=ollama_api_key,
     )
 
 
@@ -48,5 +49,18 @@ def test_ollama_maps_reasoning_without_model_name_branch(
             "model": "runtime-selected-model",
             "base_url": "http://ollama.internal:11434/",
             "reasoning": enabled,
+            "client_kwargs": {},
         }
     ]
+
+
+def test_ollama_sends_pod_api_key_as_bearer_header(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("app.core.llm.provider.ollama.ChatOllama", FakeOllamaModel)
+
+    build_ollama_model(_settings(ollama_api_key="ollama-secret"), ReasoningMode.OFF)
+
+    assert FakeOllamaModel.calls[-1]["client_kwargs"] == {
+        "headers": {"Authorization": "Bearer ollama-secret"},
+    }

@@ -15,8 +15,19 @@ def build_ollama_model(
     if not settings.llm_model:
         raise LLMConfigurationError("LLM_MODEL이 필요합니다.")
 
+    client_kwargs = {}
+    if settings.ollama_api_key is not None:
+        client_kwargs = {
+            "headers": {
+                "Authorization": (
+                    f"Bearer {settings.ollama_api_key.get_secret_value()}"
+                ),
+            },
+        }
+
     return ChatOllama(
         model=settings.llm_model,
         base_url=str(settings.ollama_base_url),
         reasoning=reasoning is ReasoningMode.ON,
+        client_kwargs=client_kwargs,
     )
