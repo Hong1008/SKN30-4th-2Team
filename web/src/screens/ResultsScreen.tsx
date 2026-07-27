@@ -1,58 +1,107 @@
-import { useState } from 'react'
-import { Search, SlidersHorizontal, MessageSquare, ChevronRight, RotateCcw, ChevronDown, ChevronUp, AlertTriangle, CheckSquare } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Search, SlidersHorizontal, MessageSquare, ChevronRight, RotateCcw, ChevronDown, ChevronUp, AlertTriangle, CheckSquare, Loader2 } from 'lucide-react'
 import Badge from '../components/Badge'
-import type { BadgeStatus, ClauseResult } from '../types'
+import type { ResultCode, ClauseResult, ResultsData } from '../types'
+import { api } from '../api/api'
+import { useMetadata } from '../contexts/MetadataContext'
+
+const CLAUSE_VISUALS: Record<ResultCode, {
+  accent: string
+  gradient: string
+  hover: string
+}> = {
+  NONE: {
+    accent: 'before:bg-emerald-500',
+    gradient: 'from-emerald-50/55',
+    hover: 'hover:border-emerald-200',
+  },
+  EXTRA: {
+    accent: 'before:bg-amber-500',
+    gradient: 'from-amber-50/55',
+    hover: 'hover:border-amber-200',
+  },
+  NO_MATCH: {
+    accent: 'before:bg-rose-500',
+    gradient: 'from-rose-50/55',
+    hover: 'hover:border-rose-200',
+  },
+  MISSING: {
+    accent: 'before:bg-slate-500',
+    gradient: 'from-slate-100/70',
+    hover: 'hover:border-slate-300',
+  },
+}
 
 interface Props {
-  onClauseClick: () => void
+  reviewId: string | null;
+  onClauseClick: (clause: ClauseResult) => void
   onChatbot: () => void
 }
 
-const CLAUSES: ClauseResult[] = [
-  { id: 'c1', article: '제1조 (근로계약 기간)', excerpt: '본 계약의 근로계약 기간은 계약 체결일로부터 1년으로 하며, 당사자 합의에 따라 연장할 수 있다.', status: 'matched', category: '계약 기간', summary: '표준조항과 유사한 기간 설정 구조가 확인됩니다. 연장 조건에 대한 상세 조건을 확인해 주세요.' },
-  { id: 'c2', article: '제5조 (근로시간 및 휴게)', excerpt: '1일 근로시간은 8시간으로 하며, 연장근로는 당사자 합의에 따라 실시할 수 있다.', status: 'modified', category: '근무조건', summary: '표준조항 대비 연장근로 한도 및 가산수당 관련 조건이 명시되어 있지 않아 검토가 필요합니다.' },
-  { id: 'c3', article: '제7조 (임금 및 지급 방법)', excerpt: '월 기본급은 금 원으로 하며, 매월 25일에 근로자가 지정한 계좌로 지급한다.', status: 'modified', category: '임금', summary: '기본급 금액이 미기재 상태입니다. 표준조항의 임금 항목별 명시 방식과 비교가 필요합니다.' },
-  { id: 'c4', article: '제9조 (연차 유급휴가)', excerpt: '근로기준법에 따라 연차 유급휴가를 부여한다.', status: 'review', category: '휴가·휴일', summary: '단순 법령 참조만으로 기재되어 있어 구체적 부여 기준 및 사용 방식 확인이 필요합니다.' },
-  { id: 'c5', article: '제11조 (비밀유지 및 경업금지)', excerpt: '근로자는 재직 중 및 퇴직 후 2년간 동종 업계에 취업하거나 유사 사업을 영위할 수 없다.', status: 'modified', category: '비밀유지·경업', summary: '경업금지 기간 및 보상 관련 내용이 표준조항과 다르게 설정되어 있어 검토가 필요합니다.' },
-  { id: 'c6', article: '제13조 (손해배상 및 위약금)', excerpt: '근로자의 귀책으로 인한 손해 발생 시, 근로자는 이를 배상할 책임을 진다.', status: 'review', category: '손해배상', summary: '위약금 또는 과도한 손해배상 예정 조항과 관련된 표준조항과의 비교 확인이 필요합니다.' },
-]
-
-const MISSING_ITEMS = [
-  { id: 'm1', label: '퇴직금 및 퇴직 절차 관련 조항', ref: '근로기준법 제34조', body: '사용자는 퇴직하는 근로자에게 급여를 지급하기 위하여 퇴직급여제도 중 하나 이상의 제도를 설립·운영하여야 한다.' },
-  { id: 'm2', label: '직장 내 괴롭힘 금지 조항',       ref: '근로기준법 제76조의2', body: '사용자 또는 근로자는 직장에서의 지위 또는 관계 등의 우위를 이용하여 업무상 적정 범위를 넘어 다른 근로자에게 신체적·정신적 고통을 주거나 근무환경을 악화시키는 행위를 하여서는 아니 된다.' },
-  { id: 'm3', label: '개인정보 처리 관련 동의 조항',   ref: '개인정보 보호법 제15조', body: '개인정보처리자는 다음 각 호의 어느 하나에 해당하는 경우에는 개인정보를 수집할 수 있으며 그 수집 목적의 범위에서 이용할 수 있다.' },
-]
-
-const NOTE_ITEMS = [
-  { id: 'n1', article: '제11조 (경업금지)', excerpt: '퇴직 후 2년간 동종 업계 취업 금지', reason: '경업금지 기간이 2년으로 설정되어 있으며, 보상 조항 없이 제한만 명시된 구조를 확인해 주세요.' },
-  { id: 'n2', article: '제13조 (손해배상)', excerpt: '근로자 귀책으로 인한 손해 배상 책임', reason: '배상 상한선이나 귀책 범위에 대한 구체적 기준이 없어 검토가 필요합니다.' },
-]
-
-const CATEGORIES = ['전체', '계약 기간', '근무조건', '임금', '휴가·휴일', '비밀유지·경업', '손해배상']
-const STATUSES: { id: BadgeStatus | 'all'; label: string }[] = [
-  { id: 'all', label: '전체' },
-  { id: 'matched', label: '대응 조항 있음' },
-  { id: 'modified', label: '추가·변형 확인' },
-  { id: 'review', label: '조항 확인 필요' },
-  { id: 'missing', label: '포함 여부 확인' },
-]
-
-const SUMMARY = [
-  { status: 'matched' as BadgeStatus,  count: 8,  label: '대응 표준조항 있음',   bg: 'bg-emerald-50',  border: 'border-emerald-200', text: 'text-emerald-700', num: 'text-emerald-600' },
-  { status: 'modified' as BadgeStatus, count: 5,  label: '추가·변형 내용 확인',  bg: 'bg-amber-50',    border: 'border-amber-200',   text: 'text-amber-700',   num: 'text-amber-600' },
-  { status: 'review' as BadgeStatus,   count: 3,  label: '대응 조항 확인 필요',  bg: 'bg-rose-50',     border: 'border-rose-200',    text: 'text-rose-700',    num: 'text-rose-600' },
-  { status: 'missing' as BadgeStatus,  count: 6,  label: '포함 여부 확인 필요',  bg: 'bg-slate-100',   border: 'border-slate-200',   text: 'text-[#475569]',   num: 'text-[#475569]' },
-]
-
-export default function ResultsScreen({ onClauseClick, onChatbot }: Props) {
-  const [filterStatus, setFilterStatus]     = useState<BadgeStatus | 'all'>('all')
+export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Props) {
+  const { metadata } = useMetadata()
+  const categories = ['전체', ...(metadata?.categories.map(c => c.label) || [])]
+  const statuses: { id: ResultCode | 'all'; label: string }[] = [
+    { id: 'all', label: '전체' },
+    ...(metadata?.result_codes.map(r => ({ id: r.code as ResultCode, label: r.label })) || [])
+  ]
+  const [filterStatus, setFilterStatus]     = useState<ResultCode | 'all'>('all')
   const [filterCategory, setFilterCategory] = useState('전체')
   const [search, setSearch]                 = useState('')
   const [expandedMissing, setExpandedMissing] = useState<string | null>(null)
   const [expandedNote, setExpandedNote]     = useState<string | null>(null)
   const [activeTab, setActiveTab]           = useState<'results' | 'notes'>('results')
 
-  const filtered = CLAUSES.filter(c => {
+  const [isLoading, setIsLoading] = useState(true)
+  const [resultsData, setResultsData] = useState<ResultsData | null>(null)
+  const [clauses, setClauses] = useState<ClauseResult[]>([])
+
+  useEffect(() => {
+    let isSubscribed = true
+    setIsLoading(true)
+
+    // Fallback ID for demo nav when no actual review process was run
+    const activeReviewId = reviewId || 'rev_mock_456'
+
+    api.getResults(activeReviewId).then(res => {
+      if (!isSubscribed) return
+      setResultsData(res.data)
+      
+      // Map API response to UI ClauseResult format
+      const mappedClauses: ClauseResult[] = res.data.clause_results.map((c: any) => {
+        let status: ResultCode = 'NO_MATCH'
+        if (c.deviation.code === 'NONE') status = 'NONE'
+        if (c.deviation.code === 'EXTRA') status = 'EXTRA'
+        if (c.deviation.code === 'NO_MATCH') status = 'NO_MATCH'
+        if (c.deviation.code === 'MISSING') status = 'MISSING'
+
+        return {
+          id: c.user_clause_id,
+          article: c.user_clause.split(' ')[0] || '조항', // e.g. "제1조"
+          excerpt: c.user_clause, // full text as excerpt for now
+          status,
+          category: c.match?.standard?.category?.label || '기타',
+          categoryCode: c.match?.standard?.category?.code,
+          summary: c.explanation,
+          toxic_patterns: c.toxic_patterns || [],
+          standardTitle: c.match?.standard?.title,
+          standardText: c.match?.standard?.text,
+          standardSource: c.match?.standard?.source
+        }
+      })
+      
+      setClauses(mappedClauses)
+      setIsLoading(false)
+    }).catch(() => {
+      if (!isSubscribed) return
+      setIsLoading(false)
+      // Error handling can be added
+    })
+
+    return () => { isSubscribed = false }
+  }, [reviewId])
+
+  const filtered = clauses.filter(c => {
     const matchStatus = filterStatus === 'all' || c.status === filterStatus
     const matchCat    = filterCategory === '전체' || c.category === filterCategory
     const matchSearch = !search || c.article.includes(search) || c.excerpt.includes(search) || c.summary.includes(search)
@@ -62,58 +111,166 @@ export default function ResultsScreen({ onClauseClick, onChatbot }: Props) {
   const resetFilters = () => { setFilterStatus('all'); setFilterCategory('전체'); setSearch('') }
   const hasFilter = filterStatus !== 'all' || filterCategory !== '전체' || search !== ''
 
-  return (
-    <div className="space-y-6 animate-fade-up">
-      {/* Title row */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-[22px] font-semibold text-[#1E293B] tracking-tight mb-1">계약서 검토 결과</h1>
-          <p className="text-sm text-[#475569]">근로계약서 (표준근로계약서) 기준 · 2024년 06월 12일 검토</p>
+  if (isLoading) {
+    return (
+      <div className="mx-auto w-full space-y-6 animate-pulse">
+        {/* 실제 헤더와 같은 형태 */}
+        <div className="flex items-center justify-between gap-4">
+          <div className="space-y-2">
+            <div className="h-8 w-56 rounded-lg bg-slate-200/70" />
+            <div className="h-4 w-72 rounded-md bg-slate-100" />
+          </div>
+          <div className="h-10 w-40 rounded-full bg-slate-100" />
         </div>
+      
+        <div className="h-10 rounded-lg bg-slate-100" />
+      
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div
+              key={i}
+              className="min-h-36 rounded-2xl border border-slate-100 bg-white p-5"
+            >
+              <div className="h-4 w-24 rounded bg-slate-100" />
+              <div className="mt-6 h-9 w-12 rounded-md bg-slate-200/70" />
+            </div>
+          ))}
+        </div>
+      
+        <div className="space-y-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div
+              key={i}
+              className="h-48 rounded-2xl border border-slate-100 bg-white"
+            />
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  if (!resultsData) {
+    return (
+      <div className="text-center py-20">
+        <p className="text-slate-600">검토 결과를 불러올 수 없습니다.</p>
+      </div>
+    )
+  }
+
+  // Generate SUMMARY based on actual data
+  const summaryCounts = resultsData.summary.clause_results
+  const uiSummary = [
+    { status: 'NONE' as ResultCode,  count: summaryCounts.NONE || 0,  label: metadata?.result_codes.find(r => r.code === 'NONE')?.label || '대응 표준조항 있음',   text: 'text-emerald-700', dot: 'bg-emerald-500' },
+    { status: 'EXTRA' as ResultCode, count: summaryCounts.EXTRA || 0,  label: metadata?.result_codes.find(r => r.code === 'EXTRA')?.label || '추가·변형 내용 확인',  text: 'text-amber-700',   dot: 'bg-amber-500' },
+    { status: 'NO_MATCH' as ResultCode,   count: summaryCounts.NO_MATCH || 0,  label: metadata?.result_codes.find(r => r.code === 'NO_MATCH')?.label || '대응 조항 확인 필요',  text: 'text-rose-700',    dot: 'bg-rose-500' },
+    { status: 'MISSING' as ResultCode,  count: resultsData.summary.missing_standard_clauses || 0,  label: metadata?.result_codes.find(r => r.code === 'MISSING')?.label || '포함 여부 확인 필요',  text: 'text-slate-600',   dot: 'bg-slate-400' },
+  ]
+
+  return (
+    <div className="space-y-6">
+      {/* Title row */}
+      <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <h1 className="text-2xl font-bold leading-tight tracking-[-0.025em] text-slate-950 sm:text-3xl">
+              계약서 검토 결과
+            </h1>
+
+            <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium tracking-wide text-slate-400">
+              Workshield Analysis
+            </span>
+          </div>
+
+          <p className="mt-2 text-sm font-normal text-slate-400">
+            근로계약서 ({resultsData.review.contract_type}) 기준
+            <span className="mx-1.5 text-slate-300">·</span>
+            {new Date(resultsData.review.completed_at).toLocaleDateString()}
+          </p>
+        </div>
+
         <button
+          type="button"
           onClick={onChatbot}
-          className="flex items-center gap-2 px-4 py-2.5 bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE] rounded-xl text-sm font-medium hover:bg-[#DBEAFE] transition-colors shrink-0"
+          className="
+            inline-flex h-10 shrink-0 items-center justify-center gap-2 self-start
+            rounded-full border border-slate-200 bg-transparent px-4
+            text-sm font-medium text-slate-600
+            transition-colors duration-150
+            hover:border-blue-200 hover:bg-blue-50/60 hover:text-blue-700
+            focus-visible:outline-none focus-visible:ring-4
+            focus-visible:ring-blue-500/15
+            sm:self-auto
+          "
         >
-          <MessageSquare className="w-4 h-4" />
+          <MessageSquare className="size-4" aria-hidden="true" />
           결과 기반 질의응답
         </button>
       </div>
 
-      {/* Disclaimer banner */}
-      <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-5 py-4 flex items-start gap-3">
-        <AlertTriangle className="w-4 h-4 text-[#475569] shrink-0 mt-0.5" aria-hidden="true" />
-        <p className="text-xs text-[#475569] leading-relaxed">
-          이 결과는 표준계약서와의 비교를 통한 <strong className="text-[#1E293B] font-semibold">검토 후보 제안</strong>이며,
-          법률 자문이나 법적 판단을 제공하지 않습니다. 구체적인 사항은 전문가에게 확인해 주세요.
+      {/* Disclaimer */}
+      <div
+        role="note"
+        className="inline-flex w-fit max-w-full items-start gap-2 px-1"
+      >
+        <AlertTriangle
+          className="mt-0.5 size-3.5 shrink-0 text-amber-500"
+          aria-hidden="true"
+        />
+
+        <p className="text-xs leading-5 text-slate-400">
+          표준계약서 대비 검토 후보이며
+          <span className="ml-1 font-semibold text-slate-600">
+            법률 자문이 아닙니다.
+          </span>
         </p>
       </div>
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {SUMMARY.map(s => (
+        {uiSummary.map(s => (
           <button
             key={s.status}
             onClick={() => setFilterStatus(s.status)}
-            className={`text-left p-4 rounded-xl border transition-all hover:shadow-sm ${s.bg} ${s.border} ${
-              filterStatus === s.status ? 'ring-2 ring-[#2563EB]/40' : ''
+            className={`group relative min-h-36 overflow-hidden rounded-2xl border bg-white/90 p-5 text-left shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_rgba(15,23,42,0.04)] backdrop-blur-xl transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-[0_12px_32px_rgba(37,99,235,0.10)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/15 ${
+              filterStatus === s.status
+                ? 'border-blue-500 bg-blue-50/40 ring-1 ring-blue-500/20 before:absolute before:inset-y-4 before:left-0 before:w-1 before:rounded-r-full before:bg-blue-600'
+                : 'border-slate-200/80'
             }`}
           >
-            <p className={`text-3xl font-bold tracking-tight mb-1 ${s.num}`}>{s.count}</p>
-            <p className={`text-xs font-medium leading-tight ${s.text}`}>{s.label}</p>
+            <div className="flex items-center justify-between gap-3">
+              <p className={`text-xs font-semibold leading-5 ${s.text}`}>
+                {s.label}
+              </p>
+
+              <span
+                className={`size-2 shrink-0 rounded-full ${s.dot} ring-4 ring-current/10`}
+                aria-hidden="true"
+              />
+            </div>
+
+            <div className="mt-5 flex items-end justify-between">
+              <p className="tabular-nums text-[34px] font-bold leading-none tracking-[-0.04em] text-slate-950">
+                {s.count}
+              </p>
+
+              <span className="text-[11px] font-medium text-slate-400 mb-1">
+                조항
+              </span>
+            </div>
           </button>
         ))}
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-[#E2E8F0]">
+      <div className="flex gap-1 border-b border-slate-200">
         {([['results', '조항별 검토 결과'], ['notes', '주의 문구 후보 및 누락 체크리스트']] as const).map(([id, label]) => (
           <button
             key={id}
             onClick={() => setActiveTab(id)}
             className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
               activeTab === id
-                ? 'border-[#2563EB] text-[#1E293B]'
-                : 'border-transparent text-[#475569] hover:text-[#1E293B]'
+                ? 'border-blue-600 text-slate-900'
+                : 'border-transparent text-slate-600 hover:text-slate-900'
             }`}
           >
             {label}
@@ -124,46 +281,46 @@ export default function ResultsScreen({ onClauseClick, onChatbot }: Props) {
       {activeTab === 'results' && (
         <>
           {/* Filter bar */}
-          <div className="bg-white border border-[#E2E8F0] rounded-xl p-4 space-y-3">
+          <div className="sticky top-[84px] z-20 space-y-3 rounded-2xl border border-slate-200/80 bg-white/90 p-4 shadow-sm backdrop-blur-xl">
             {/* Search */}
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#64748B]" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
                 type="text"
                 placeholder="조항명, 키워드로 검색"
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                className="w-full pl-9 pr-4 py-2.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg text-sm text-[#1E293B] placeholder:text-[#64748B] focus:outline-none focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB]"
+                className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-4 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 hover:border-slate-300 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
               />
             </div>
             {/* Filters row */}
             <div className="flex items-center gap-3 flex-wrap">
-              <SlidersHorizontal className="w-3.5 h-3.5 text-[#475569] shrink-0" />
+              <SlidersHorizontal className="w-3.5 h-3.5 text-slate-600 shrink-0" />
               <div className="flex gap-1.5 flex-wrap">
-                {STATUSES.map(s => (
+                {statuses.map(s => (
                   <button
                     key={s.id}
-                    onClick={() => setFilterStatus(s.id as BadgeStatus | 'all')}
+                    onClick={() => setFilterStatus(s.id as ResultCode | 'all')}
                     className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
                       filterStatus === s.id
-                        ? 'bg-[#2563EB] text-white'
-                        : 'bg-[#F8FAFC] border border-[#E2E8F0] text-[#475569] hover:border-[#CBD5E1]'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-slate-50 border border-slate-200 text-slate-600 hover:border-slate-300'
                     }`}
                   >
                     {s.label}
                   </button>
                 ))}
               </div>
-              <div className="h-4 w-px bg-[#E2E8F0]" />
+              <div className="h-4 w-px bg-slate-200" />
               <select
                 value={filterCategory}
                 onChange={e => setFilterCategory(e.target.value)}
-                className="text-xs border border-[#E2E8F0] rounded-lg px-2.5 py-1.5 bg-[#F8FAFC] text-[#475569] focus:outline-none focus:border-[#2563EB]"
+                className="text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 bg-slate-50 text-slate-600 focus:outline-none focus:border-blue-600"
               >
-                {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+                {categories.map(c => <option key={c}>{c}</option>)}
               </select>
               {hasFilter && (
-                <button onClick={resetFilters} className="flex items-center gap-1 text-xs text-[#475569] hover:text-[#1E293B] transition-colors ml-auto">
+                <button onClick={resetFilters} className="flex items-center gap-1 text-xs text-slate-600 hover:text-slate-900 transition-colors ml-auto">
                   <RotateCcw className="w-3 h-3" />
                   필터 초기화
                 </button>
@@ -174,33 +331,109 @@ export default function ResultsScreen({ onClauseClick, onChatbot }: Props) {
           {/* Clause cards */}
           {filtered.length > 0 ? (
             <div className="space-y-3">
-              {filtered.map(c => (
-                <div key={c.id} className="bg-white border border-[#E2E8F0] rounded-xl p-5 hover:border-[#BFDBFE] hover:shadow-sm transition-all">
-                  <div className="flex items-start gap-3 justify-between flex-wrap">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <Badge status={c.status} />
-                      <span className="text-xs text-[#64748B] bg-[#F8FAFC] border border-[#E2E8F0] px-2 py-0.5 rounded">{c.category}</span>
+              {filtered.map(c => {
+                const visual = CLAUSE_VISUALS[c.status]
+            
+                return (
+                  <article
+                    key={c.id}
+                    className={`
+                      group relative overflow-hidden rounded-2xl border border-slate-200/80
+                      bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]
+                      transition-[border-color,box-shadow,background-color] duration-200
+                      before:absolute before:inset-y-0 before:left-0 before:w-1
+                      ${visual.accent} ${visual.hover}
+                      motion-safe:hover:-translate-y-px
+                      hover:shadow-[0_8px_24px_rgba(15,23,42,0.06)]
+                      sm:p-6
+                    `}
+                  >
+                    {/* Subtle status gradient */}
+                    <div
+                      className={`
+                        pointer-events-none absolute inset-0
+                        bg-gradient-to-r ${visual.gradient} via-transparent to-transparent
+                        opacity-40 transition-opacity duration-200 group-hover:opacity-60
+                      `}
+                      aria-hidden="true"
+                    />
+            
+                    <div className="relative">
+                      {/* Status row */}
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge code={c.status} label={metadata?.result_codes.find(r => r.code === c.status)?.label || ''} />
+            
+                          <span className="
+                            rounded-md border border-slate-200 bg-white/75
+                            px-2 py-0.5 text-xs font-medium text-slate-500
+                            backdrop-blur-sm
+                          ">
+                            {c.category}
+                          </span>
+            
+                          {c.toxic_patterns && c.toxic_patterns.length > 0 && (
+                            <span className="
+                              rounded-full border border-rose-200 bg-rose-50
+                              px-2.5 py-0.5 text-xs font-semibold text-rose-700
+                            ">
+                              🚨 주의 신호 포함
+                            </span>
+                          )}
+                        </div>
+                      </div>
+            
+                      {/* Clause title */}
+                      <h3 className="
+                        mt-4 text-[15px] font-semibold leading-6
+                        tracking-[-0.015em] text-slate-950
+                      ">
+                        {c.article}
+                      </h3>
+            
+                      {/* Original clause */}
+                      <blockquote className="
+                        my-4 rounded-xl border border-slate-200/80 bg-white/65
+                        px-4 py-3 text-sm leading-6 tracking-[-0.005em]
+                        text-slate-600 backdrop-blur-sm line-clamp-3
+                      ">
+                        "{c.excerpt}"
+                      </blockquote>
+            
+                      {/* Analysis */}
+                      <p className="
+                        break-keep text-sm leading-6
+                        tracking-[-0.005em] text-slate-600
+                      ">
+                        {c.summary}
+                      </p>
+            
+                      {/* Action */}
+                      <div className="mt-5 flex justify-end border-t border-slate-200/70 pt-4">
+                        <button
+                          onClick={() => onClauseClick(c)}
+                          className="
+                            inline-flex items-center gap-1 rounded-lg px-2 py-1
+                            text-sm font-semibold text-blue-600
+                            transition-colors hover:bg-blue-50 hover:text-blue-700
+                            focus-visible:outline-none focus-visible:ring-4
+                            focus-visible:ring-blue-500/15
+                          "
+                        >
+                          상세 분석 보기
+                          <ChevronRight className="size-4" />
+                        </button>
+                      </div>
                     </div>
-                    <button
-                      onClick={onClauseClick}
-                      className="flex items-center gap-1 text-xs font-medium text-[#2563EB] hover:text-[#1E293B] transition-colors shrink-0"
-                    >
-                      상세 보기 <ChevronRight className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                  <p className="text-sm font-semibold text-[#1E293B] mt-3 mb-1">{c.article}</p>
-                  <p className="text-xs text-[#475569] line-clamp-2 leading-relaxed mb-3 bg-[#F8FAFC] rounded-lg px-3 py-2 border border-[#E2E8F0] font-mono">
-                    "{c.excerpt}"
-                  </p>
-                  <p className="text-xs text-[#475569] leading-relaxed">{c.summary}</p>
-                </div>
-              ))}
+                  </article>
+                )
+              })}
             </div>
           ) : (
-            <div className="bg-white border border-[#E2E8F0] rounded-xl p-12 text-center">
-              <p className="text-sm font-medium text-[#475569] mb-1">현재 비교 결과가 생성되지 않았습니다</p>
-              <p className="text-xs text-[#64748B]">필터를 변경하거나 초기화해 보세요</p>
-              <button onClick={resetFilters} className="mt-4 text-xs font-medium text-[#2563EB] hover:underline">
+            <div className="bg-white border border-slate-200 rounded-xl p-12 text-center">
+              <p className="text-sm font-medium text-slate-600 mb-1">현재 비교 결과가 생성되지 않았습니다</p>
+              <p className="text-xs text-slate-500">필터를 변경하거나 초기화해 보세요</p>
+              <button onClick={resetFilters} className="mt-4 text-xs font-medium text-blue-600 hover:underline">
                 필터 초기화
               </button>
             </div>
@@ -210,81 +443,40 @@ export default function ResultsScreen({ onClauseClick, onChatbot }: Props) {
 
       {activeTab === 'notes' && (
         <div className="space-y-6">
-          {/* Note clauses */}
-          <div>
-            <div className="flex items-center gap-2 mb-4">
-              <AlertTriangle className="w-4 h-4 text-amber-500" aria-hidden="true" />
-              <h2 className="text-sm font-semibold text-[#1E293B]">주의 문구 후보</h2>
-              <span className="text-xs text-[#475569] bg-amber-50 border border-amber-200 text-amber-600 px-2 py-0.5 rounded-full font-medium">{NOTE_ITEMS.length}건</span>
-            </div>
-            <p className="text-xs text-[#475569] mb-4 leading-relaxed">
-              표준계약서 기준에서 주의가 필요한 것으로 분류된 조항입니다. 이는 검토 후보이며, 법적 판단이 아닙니다.
-            </p>
-            <div className="space-y-2">
-              {NOTE_ITEMS.map(item => {
-                const open = expandedNote === item.id
-                return (
-                  <div key={item.id} className="bg-white border border-[#E2E8F0] rounded-xl overflow-hidden">
-                    <button
-                      onClick={() => setExpandedNote(open ? null : item.id)}
-                      className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-[#F8FAFC] transition-colors"
-                    >
-                      <div className="w-2 h-2 rounded-full bg-amber-400 shrink-0" aria-hidden="true" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-[#1E293B]">{item.article}</p>
-                        <p className="text-xs text-[#475569] mt-0.5 truncate">{item.excerpt}</p>
-                      </div>
-                      {open ? <ChevronUp className="w-4 h-4 text-[#64748B] shrink-0" /> : <ChevronDown className="w-4 h-4 text-[#64748B] shrink-0" />}
-                    </button>
-                    {open && (
-                      <div className="px-5 pb-5 pt-0 border-t border-[#F1F5F9]">
-                        <p className="text-xs text-[#475569] leading-relaxed mt-4 mb-3">{item.reason}</p>
-                        <button
-                          onClick={onClauseClick}
-                          className="text-xs font-medium text-[#2563EB] hover:underline flex items-center gap-1"
-                        >
-                          조항 상세 보기 <ChevronRight className="w-3 h-3" />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-
           {/* Missing checklist */}
           <div>
             <div className="flex items-center gap-2 mb-4">
-              <CheckSquare className="w-4 h-4 text-[#64748B]" aria-hidden="true" />
-              <h2 className="text-sm font-semibold text-[#1E293B]">포함 여부 체크리스트</h2>
-              <span className="text-xs text-[#475569] bg-[#EFF6FF] border border-[#CBD5E1] text-[#475569] px-2 py-0.5 rounded-full font-medium">{MISSING_ITEMS.length}건</span>
+              <CheckSquare className="w-4 h-4 text-slate-500" aria-hidden="true" />
+              <h2 className="text-sm font-semibold text-slate-900">포함 여부 체크리스트</h2>
+              <span className="text-xs text-slate-600 bg-blue-50 border border-slate-300 text-slate-600 px-2 py-0.5 rounded-full font-medium">
+                {resultsData.missing_standard_clauses.length}건
+              </span>
             </div>
-            <p className="text-xs text-[#475569] mb-4 leading-relaxed">
+            <p className="text-xs text-slate-600 mb-4 leading-relaxed">
               표준계약서에서 확인해 볼 항목을 체크리스트로 정리했습니다. 문서에 포함되어 있는지 직접 확인해 주세요.
             </p>
             <div className="space-y-2">
-              {MISSING_ITEMS.map(item => {
-                const open = expandedMissing === item.id
+              {resultsData.missing_standard_clauses.map((item: any) => {
+                const open = expandedMissing === item.standard.clause_id
                 return (
-                  <div key={item.id} className="bg-[#F8FAFC] border border-[#CBD5E1] rounded-xl overflow-hidden">
+                  <div key={item.standard.clause_id} className="bg-slate-50 border border-slate-300 rounded-xl overflow-hidden">
                     <button
-                      onClick={() => setExpandedMissing(open ? null : item.id)}
-                      className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-[#EFF6FF] transition-colors"
+                      onClick={() => setExpandedMissing(open ? null : item.standard.clause_id)}
+                      className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-blue-50 transition-colors"
                       aria-expanded={open}
                     >
                       <div className="w-4 h-4 rounded border-2 border-[#94A3B8] shrink-0 flex items-center justify-center" aria-hidden="true" />
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-[#1E293B]">{item.label}</p>
-                        <p className="text-[11px] text-[#475569] mt-0.5">{item.ref}</p>
+                        <p className="text-sm font-medium text-slate-900">{item.standard.title}</p>
+                        <p className="text-[11px] text-slate-600 mt-0.5">{item.standard.source}</p>
                       </div>
-                      {open ? <ChevronUp className="w-4 h-4 text-[#64748B] shrink-0" /> : <ChevronDown className="w-4 h-4 text-[#64748B] shrink-0" />}
+                      {open ? <ChevronUp className="w-4 h-4 text-slate-500 shrink-0" /> : <ChevronDown className="w-4 h-4 text-slate-500 shrink-0" />}
                     </button>
                     {open && (
-                      <div className="px-5 pb-5 border-t border-[#E2E8F0]">
-                        <p className="text-[11px] font-semibold text-[#475569] uppercase tracking-wider mt-4 mb-2">표준조항 원문</p>
-                        <p className="text-xs text-[#475569] leading-relaxed bg-white border border-[#E2E8F0] rounded-lg px-4 py-3 font-mono">
-                          {item.body}
+                      <div className="px-5 pb-5 border-t border-slate-200">
+                        <p className="text-[11px] font-semibold text-slate-600 uppercase tracking-wider mt-4 mb-2">표준조항 원문</p>
+                        <p className="text-xs text-slate-600 leading-relaxed bg-white border border-slate-200 rounded-lg px-4 py-3 font-mono">
+                          {item.standard.text}
                         </p>
                       </div>
                     )}

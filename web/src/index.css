@@ -2,12 +2,12 @@
 @import 'tailwindcss';
 
 @theme {
-  --font-sans: 'Inter', 'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --color-navy: #2563EB;
-  --color-navy-hover: #1D4ED8;
-  --color-blue: #2563EB;
-  --color-blue-light: #EFF6FF;
-  --color-blue-mid: #BFDBFE;
+  --font-sans: 'Noto Sans KR', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --color-navy: #6366F1;
+  --color-navy-hover: #4F46E5;
+  --color-blue: #6366F1;
+  --color-blue-light: #EEF2FF;
+  --color-blue-mid: #C7D2FE;
   --color-gray-n: #475569;
   --color-gray-l: #F8FAFC;
   --color-border: #E2E8F0;
@@ -17,7 +17,7 @@
 :root {
   color: #1E293B;
   background: #F8FAFC;
-  font-family: 'Inter', 'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: 'Noto Sans KR', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -31,8 +31,19 @@
 @keyframes spinSlow { to { transform: rotate(360deg); } }
 @keyframes pulseDot { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .52; transform: scale(.84); } }
 @keyframes shimmer { 0% { background-position: -400px 0; } 100% { background-position: 400px 0; } }
+@keyframes fadeSlideDown { from { opacity: 0; transform: translateY(-16px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes page-enter { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes progress-shine { to { transform: translateX(100%); } }
 
 .animate-fade-up { animation: fadeSlideUp .28s ease both; }
+.animate-page-enter { animation: page-enter 240ms cubic-bezier(0.22, 1, 0.36, 1) both; }
 .animate-spin-slow { animation: spinSlow 1.1s linear infinite; }
 .animate-pulse-dot { animation: pulseDot 1.8s ease-in-out infinite; }
+.animate-fade-in-down { animation: fadeSlideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-page-enter {
+    animation: none;
+  }
+}
 .shimmer-bg { background: linear-gradient(90deg, #F1F5F9 25%, #E2E8F0 50%, #F1F5F9 75%); background-size: 800px 100%; animation: shimmer 1.6s ease-in-out infinite; }
