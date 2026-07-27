@@ -6,54 +6,60 @@ from pydantic import ValidationError
 from app.domains.suggestions.schemas import (
     SuggestionGeneratedOutput,
     SuggestionInsufficientGroundingOutput,
+    SuggestionSourceKey,
     SuggestionStructuredOutput,
 )
 
 
-def test_generated_output_requires_nonempty_source_ids() -> None:
-    """GENERATED는 두 출처 배열을 생략하거나 비워 둘 수 없다."""
+def test_generated_output_requires_nonempty_source_keys() -> None:
+    """GENERATED는 적어도 하나의 닫힌 집합 source key를 선택해야 한다."""
     with pytest.raises(ValidationError):
         SuggestionStructuredOutput.model_validate({
             "outcome": "GENERATED",
-            "text": "협의 문구",
+            "suggestion": "협의 문구",
         })
 
     with pytest.raises(ValidationError):
         SuggestionStructuredOutput.model_validate({
             "outcome": "GENERATED",
-            "text": "협의 문구",
-            "standard_clause_ids": [],
-            "grounding_source_ids": [],
+            "suggestion": "협의 문구",
+            "used_source_keys": [],
+        })
+
+    with pytest.raises(ValidationError):
+        SuggestionStructuredOutput.model_validate({
+            "outcome": "GENERATED",
+            "suggestion": "협의 문구",
+            "used_source_keys": ["SRC_UNKNOWN"],
         })
 
 
-def test_generated_json_schema_marks_source_ids_required() -> None:
-    """모든 provider에 전달되는 JSON Schema에도 출처 필수 조건을 포함한다."""
+def test_generated_json_schema_marks_source_keys_required() -> None:
+    """모든 provider에 전달되는 JSON Schema에도 source key 조건을 포함한다."""
     schema = SuggestionStructuredOutput.model_json_schema()
     generated = schema["$defs"]["SuggestionGeneratedOutput"]
 
     assert set(generated["required"]) >= {
         "outcome",
-        "text",
-        "standard_clause_ids",
-        "grounding_source_ids",
+        "suggestion",
+        "used_source_keys",
     }
-    assert generated["properties"]["standard_clause_ids"]["minItems"] == 1
-    assert generated["properties"]["grounding_source_ids"]["minItems"] == 1
+    assert generated["properties"]["used_source_keys"]["minItems"] == 1
 
 
-def test_generated_output_keeps_provenance_fields() -> None:
-    """GENERATED의 출처 배열은 별도 필드로 보존한다."""
+def test_generated_output_keeps_source_keys() -> None:
+    """GENERATED의 논리 근거 선택은 식별자 없이 보존한다."""
     output = SuggestionStructuredOutput.model_validate({
         "outcome": "GENERATED",
-        "text": "협의 문구",
-        "standard_clause_ids": ["std_1"],
-        "grounding_source_ids": ["law_1"],
+        "suggestion": "협의 문구",
+        "used_source_keys": ["SRC_USER", "SRC_STANDARD"],
     })
 
     assert isinstance(output.root, SuggestionGeneratedOutput)
-    assert output.root.standard_clause_ids == ["std_1"]
-    assert output.root.grounding_source_ids == ["law_1"]
+    assert output.root.used_source_keys == [
+        SuggestionSourceKey.USER,
+        SuggestionSourceKey.STANDARD,
+    ]
 
 
 def test_insufficient_grounding_output_allows_no_provenance() -> None:

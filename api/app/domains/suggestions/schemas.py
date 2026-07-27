@@ -16,6 +16,14 @@ class SuggestionOutcome(StrEnum):
     LLM_OUTPUT_INVALID = "LLM_OUTPUT_INVALID"
 
 
+class SuggestionSourceKey(StrEnum):
+    """LLM이 선택하는 검증된 입력 근거의 논리 키."""
+
+    USER = "SRC_USER"
+    STANDARD = "SRC_STANDARD"
+    GROUNDING = "SRC_GROUNDING"
+
+
 class SuggestionRequest(BaseModel):
     user_clause_id: str = Field(
         min_length=1,
@@ -38,20 +46,21 @@ class RequiredConfirmation(BaseModel):
 
 
 class SuggestionGeneratedOutput(BaseModel):
-    """생성 성공 시 출처 식별자를 빠짐없이 요구하는 LLM 출력."""
+    """LLM이 생성하는 협의 문구와 논리 근거 선택 결과."""
 
     outcome: Literal[SuggestionOutcome.GENERATED] = Field(
         description="생성 성공 결과 유형"
     )
-    text: str = Field(min_length=1, description="생성된 협의 문구 초안")
-    key_changes: list[str] = Field(
+    suggestion: str = Field(min_length=1, description="생성된 협의 문구 초안")
+    major_changes: list[str] = Field(
         default_factory=list, description="주요 변경 사항 목록"
     )
-    standard_clause_ids: list[str] = Field(
-        min_length=1, description="참조한 표준조항 ID 목록"
-    )
-    grounding_source_ids: list[str] = Field(
-        min_length=1, description="참조한 법령 근거 ID 목록"
+    used_source_keys: list[SuggestionSourceKey] = Field(
+        min_length=1,
+        description=(
+            "협의 문구에 사용한 검증된 입력 근거 키. "
+            "SRC_USER, SRC_STANDARD, SRC_GROUNDING만 선택할 수 있다."
+        ),
     )
     required_confirmations: list[RequiredConfirmation] = Field(
         default_factory=list, description="사용자 직접 확인/입력 필요 항목 목록"
@@ -64,15 +73,12 @@ class SuggestionInsufficientGroundingOutput(BaseModel):
     outcome: Literal[SuggestionOutcome.INSUFFICIENT_GROUNDING] = Field(
         description="생성 불가 결과 유형"
     )
-    text: None = Field(default=None, description="생성 불가 시 본문 없음")
-    key_changes: list[str] = Field(
+    suggestion: None = Field(default=None, description="생성 불가 시 문구 없음")
+    major_changes: list[str] = Field(
         default_factory=list, description="주요 변경 사항 목록"
     )
-    standard_clause_ids: list[str] = Field(
-        default_factory=list, description="참조한 표준조항 ID 목록"
-    )
-    grounding_source_ids: list[str] = Field(
-        default_factory=list, description="참조한 법령 근거 ID 목록"
+    used_source_keys: list[SuggestionSourceKey] = Field(
+        default_factory=list, description="생성 불가 시 사용 근거 키 없음"
     )
     required_confirmations: list[RequiredConfirmation] = Field(
         default_factory=list, description="사용자 직접 확인/입력 필요 항목 목록"
@@ -98,11 +104,20 @@ class SuggestionResponse(BaseModel):
     key_changes: list[str] = Field(
         default_factory=list, description="주요 변경 요점 목록"
     )
+    used_source_keys: list[SuggestionSourceKey] = Field(
+        default_factory=list, description="LLM이 선택한 검증된 입력 근거 키"
+    )
+    user_clause_ids: list[str] = Field(
+        default_factory=list,
+        description="SRC_USER에 대응해 백엔드가 결합한 사용자 조항 ID 목록",
+    )
     standard_clause_ids: list[str] = Field(
-        default_factory=list, description="참조 표준조항 ID 목록"
+        default_factory=list,
+        description="SRC_STANDARD에 대응해 백엔드가 결합한 표준조항 ID 목록",
     )
     grounding_source_ids: list[str] = Field(
-        default_factory=list, description="참조 법령 근거 ID 목록"
+        default_factory=list,
+        description="SRC_GROUNDING에 대응해 백엔드가 결합한 법령 근거 ID 목록",
     )
     required_confirmations: list[RequiredConfirmation] = Field(
         default_factory=list, description="사용자 확인 필요 항목 목록"

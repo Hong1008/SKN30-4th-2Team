@@ -2,7 +2,7 @@
 
 * 상태: Proposed (LLM 기능 운영 승인 전)
 * 작성일: 2026-07-24
-* 최근 검토일: 2026-07-26
+* 최근 검토일: 2026-07-27
 * 결정 대상: WorkShield LLM 연동 및 운영 구조
 * 관련 문서:
 
@@ -11,6 +11,7 @@
   * 서비스 요구사항
   * [Ollama Qwen3.5 4B 검증](./0725-ollama-qwen35-4b-validation.md)
   * [Gemini Gemma 4 31B 검증](./0725-gemini-gemma4-31b-validation.md)
+  * [LLM 모델 비교 검증](../splint/LLM%20검증.md)
   * [LLM 운영·검증 GitHub Issue](https://github.com/SKNETWORKS-FAMILY-AICAMP/SKN30-4th-2Team/issues/8)
 
 ## 1. 배경
@@ -35,7 +36,12 @@ LLM은 MCP 결과를 기반으로 다음 기능을 제공한다.
 * 사용자 질문에 대한 근거 기반 답변
 * 계약 조항 수정·협의 문구 초안 생성
 
-현재 로컬 LLM 운영을 위해 Ollama를 사용할 예정이지만, 모델 실행 환경, 구조화 출력 안정성, 출처 검증, 장애 처리 및 보안 통제가 충분히 검증되지 않았다.
+~~현재 로컬 LLM 운영을 위해 Ollama를 사용할 예정이지만, 모델 실행 환경, 구조화 출력 안정성, 출처 검증, 장애 처리 및 보안 통제가 충분히 검증되지 않았다.~~
+
+운영 모델·양자화·서빙 엔진은 아직 확정하지 않았다. 후보 모델의 품질을
+비교할 때는 provider 차이를 제거하기 위해 동일한 로컬 서빙 엔진과 JSON
+Schema guided decoding을 사용한다. 운영 도입 전에는 모델 실행 환경,
+구조화 출력 안정성, 출처 선택, 장애 처리 및 보안 통제를 검증한다.
 
 ## 2. 프로젝트 제약
 
@@ -121,13 +127,15 @@ LLM 자유 응답을 그대로 사용자에게 노출하면 다음 문제가 발
 
 다음 구조를 WorkShield의 로컬 LLM 기본 아키텍처로 채택한다.
 
+~~LLM 호출 단계: Ollama 모델 호출~~
+
 ```text
 사용자 요청
 → 백엔드 요청 범위 및 세션 검증
 → 백엔드가 MCP 도구 호출
 → MCP 결과와 허용 근거 구성
 → LLM용 제한 컨텍스트 생성
-→ Ollama 모델 호출
+→ 선택된 로컬 구조화 출력 서버 호출
 → 구조화 출력 검증
 → 출처 및 정책 검증
 → 검증된 응답만 사용자에게 반환
@@ -137,20 +145,38 @@ MCP는 판정과 근거 생성을 담당하고, LLM은 설명과 문구 초안�
 
 ### 4.2 운영 모델과 실행 환경
 
-운영 후보는 다음과 같이 고정한다.
+~~운영 후보는 다음과 같이 고정한다.~~
 
-* 실행 엔진: Ollama
-* 운영 후보 모델: Qwen3.5 9B 계열
-* 양자화: Q4 계열
-* 운영 GPU: VRAM 24GB급 RunPod GPU
+* ~~실행 엔진: Ollama~~
+* ~~운영 후보 모델: Qwen3.5 9B 계열~~
+* ~~양자화: Q4 계열~~
+* ~~운영 GPU: VRAM 24GB급 RunPod GPU~~
+* ~~초기 동시 처리 수: 1~~
+* ~~기본 생성 모드: 비추론 모드~~
+* ~~최대 출력: 약 1,000 토큰 이내~~
+* ~~외부 LLM 자동 폴백: 사용하지 않음~~
+
+모델 선정 전 비교 후보와 공통 실행 조건은 다음과 같다.
+
+* 공통 비교 엔진: 세 후보가 같은 버전으로 동작하는 vLLM. 호환성 문제가
+  있으면 세 모델 모두 SGLang으로 전환하며, 모델별로 엔진을 섞지 않는다.
+* 품질 기준 모델: Gemma 4 31B IT
+* 주 비교 모델: Qwen 3.6 27B Dense
+* 효율 비교 모델: Qwen 3.6 35B-A3B
+* 1단계 정밀도: 같은 GPU·같은 dtype의 BF16 비교
+* 2단계 정밀도: 1단계 통과 후보만 같은 양자화 방식으로 운영 GPU에서 비교
 * 초기 동시 처리 수: 1
 * 기본 생성 모드: 비추론 모드
-* 최대 출력: 약 1,000 토큰 이내
+* 최대 출력: Suggestions 기준 512 토큰, 상한 1,000 토큰
 * 외부 LLM 자동 폴백: 사용하지 않음
 
-정확한 Ollama 태그, 양자화 파일 및 컨텍스트 크기는 운영 검증 이슈에서 실제 실행 결과를 확인한 후 고정한다.
+정확한 모델 revision, 서빙 엔진 버전·image digest, 양자화 파일, GPU,
+컨텍스트 크기는 평가 manifest와 운영 검증 기록에서 실제 실행 결과를
+확인한 후 고정한다. Ollama는 최종 배포에서 필요할 때만 별도 운영 적합성
+검증 대상으로 삼으며, 후보 품질 비교의 공통 엔진으로 사용하지 않는다.
 
-개발 중 더 작은 모델을 사용할 수 있지만 다음 테스트는 반드시 운영 후보 모델로 수행한다.
+개발 중 더 작은 모델을 사용할 수 있지만 다음 테스트는 반드시 비교 후보
+모델의 동일 조건으로 수행한다.
 
 * 출력 스키마 검증
 * 한국어 품질 평가
@@ -168,16 +194,23 @@ Chat과 Suggestions는 서로 독립된 선택 기능으로 관리한다. API �
 출처 검증이 존재한다는 사실만으로 운영 승인을 의미하지 않는다. 한 기능의
 검증 통과도 다른 기능의 승인을 의미하지 않는다.
 
-2026-07-25의 실제 모델 검증 결과를 다음과 같이 반영한다.
+2026-07-25의 실제 모델 검증 결과를 다음과 같이 보존한다.
 
-* `hf.co/unsloth/Qwen3.5-4B-GGUF:Q4_K_M`은 개발·실험 전용이다.
+* ~~`hf.co/unsloth/Qwen3.5-4B-GGUF:Q4_K_M`은 개발·실험 전용이다.
   Chat은 구조·출처 검증을 통과했지만 표현 품질 평가가 남았고,
-  Suggestions는 출처 ID 누락이 반복되어 운영하지 않는다.
-* Gemini API의 `gemma-4-31b-it`는 비민감 합성 fixture 평가에만 사용할 수
+  Suggestions는 출처 ID 누락이 반복되어 운영하지 않는다.~~
+  이 결과는 LLM이 실제 출처 ID를 복사하던 이전 Suggestions 계약의
+  결과다. 현재 계약에서는 ID 복사 실패를 모델 탈락 사유로 사용하지 않고,
+  `used_source_keys` 선택·문구 품질·안전성으로 다시 평가한다.
+* ~~Gemini API의 `gemma-4-31b-it`는 비민감 합성 fixture 평가에만 사용할 수
   있다. 실제 계약서와 사용자 데이터의 외부 전송, 운영 사용과 자동
-  fallback은 허용하지 않는다.
-* Qwen3.5 9B Q4 계열과 24GB급 RunPod GPU는 계속 운영 후보일 뿐이다.
-  정확한 모델 태그와 대상 환경 검증 전에는 채택한 모델로 간주하지 않는다.
+  fallback은 허용하지 않는다.~~
+  과거 Gemini 결과는 provider·원격 인프라 조건이 달라 후보 간 우열 근거로
+  사용하지 않는다. Gemma 4 31B IT는 비민감 합성 fixture에서 로컬 공통
+  엔진으로 재평가하는 품질 기준 모델이다.
+* ~~Qwen3.5 9B Q4 계열과 24GB급 RunPod GPU는 계속 운영 후보일 뿐이다.
+  정확한 모델 태그와 대상 환경 검증 전에는 채택한 모델로 간주하지 않는다.~~
+  최종 모델과 양자화는 비교·운영 검증 후 결정한다.
 
 따라서 현재 승인된 운영 LLM은 없다. 운영 모델 승인 전에는 배포 설정과
 metadata가 Chat과 Suggestions를 활성 기능으로 광고해서는 안 되며, 해당
@@ -270,20 +303,33 @@ LLM에 다음 권한을 부여하지 않는다.
 
 ### 4.6 출처 식별 방식
 
-백엔드는 현재 Review 결과와 이번 요청에서 조회한 Grounding으로 출처
-allowlist를 구성한다. LLM은 컨텍스트에 제공된 실제 식별자를 문자열 그대로
-반환하고 새로운 식별자를 만들지 않는다.
+~~이전 방식: LLM이 컨텍스트의 실제 `user_clause_id`,
+`standard.clause_id`, Grounding `source_id`를 문자열 그대로 반환하고,
+Suggestions의 `standard_clause_ids`와 `grounding_source_ids`를 직접
+생성한다.~~
 
-* 사용자 조항: API가 Review 정규화 시 생성한 canonical
-  `user_clause_id`
-* 표준조항: MCP 결과의 `standard.clause_id`
-* 법령 참고자료: 이번 요청의 Grounding `source_id`
+백엔드는 현재 Review 결과와 이번 요청에서 조회한 Grounding을 유일한
+출처 원천으로 유지한다. Chat은 `sources[].type`과 `sources[].id`를
+반환하며, ID가 현재 세션·Review·Grounding allowlist에 존재하는지
+검증한다.
 
-Chat은 `sources[].type`과 `sources[].id`를 반환하고, Suggestions는
-`standard_clause_ids`와 `grounding_source_ids`를 반환한다. 백엔드는
-식별자가 현재 세션·Review와 이번 Grounding 응답에 실제로 존재하는지
-검증한다. 누락되거나 allowlist 밖의 출처가 하나라도 있으면
-`LLM_OUTPUT_INVALID`로 전체 생성을 차단한다.
+Suggestions는 실제 식별자를 LLM 컨텍스트에 제공하거나 복사하도록 요구하지
+않는다. LLM은 다음의 닫힌 논리 키만 `used_source_keys`로 선택한다.
+
+* `SRC_USER`: 대상 사용자 조항
+* `SRC_STANDARD`: 대응 표준조항
+* `SRC_GROUNDING`: 조회된 법령 참고 원문
+
+백엔드는 선택된 키를 실제 검증된 입력에 결정적으로 결합한다.
+
+* `SRC_USER` → 요청의 canonical `user_clause_id`
+* `SRC_STANDARD` → MCP 결과의 `standard.clause_id`
+* `SRC_GROUNDING` → 이번 Grounding 응답의 `source_id` 목록
+
+따라서 Suggestions 응답의 `user_clause_ids`, `standard_clause_ids`,
+`grounding_source_ids`는 LLM이 생성한 인용이 아니라 백엔드가 결합한
+출처다. 스키마 밖 키, 검증 실패 결과, 다른 세션의 ID는 사용자에게
+노출하지 않는다.
 
 ### 4.7 구조화 출력
 
@@ -307,24 +353,34 @@ Chat은 `sources[].type`과 `sources[].id`를 반환하고, Suggestions는
 
 #### 수정·협의 문구 초안
 
+~~이전 LLM Suggestions 스키마는 `text`, `key_changes`,
+`standard_clause_ids`, `grounding_source_ids`를 포함했다.~~
+
+LLM이 생성하는 Suggestions 스키마는 다음과 같다.
+
 ```json
 {
   "outcome": "GENERATED",
-  "text": "제안 문구",
-  "key_changes": ["주요 변경사항"],
-  "standard_clause_ids": ["표준조항 ID"],
-  "grounding_source_ids": ["법령 출처 ID"],
+  "suggestion": "제안 문구",
+  "major_changes": ["주요 변경사항"],
+  "used_source_keys": ["SRC_USER", "SRC_STANDARD"],
   "required_confirmations": []
 }
 ```
 
+API 응답에는 위 LLM 출력과 별도로 백엔드가 결합한
+`user_clause_ids`, `standard_clause_ids`, `grounding_source_ids`를 포함한다.
+
 출력 처리 순서는 다음과 같다.
+
+~~이전 출력 처리 단계: LLM이 생성한 실제 ID의 출처 allowlist 검증~~
 
 ```text
 LLM 원본 응답
 → JSON 파싱
 → Pydantic 스키마 검증
-→ 출처 allowlist 검증
+→ Chat 출처 allowlist 또는 Suggestions source key 검증
+→ Suggestions 실제 출처의 백엔드 결정적 결합
 → MCP 값 변경 여부 검증
 → 금지 표현 및 값 생성 검증
 → 사용자 응답 반환
@@ -378,9 +434,16 @@ LLM은 계약서와 근거에 없는 다음 값을 새로 생성할 수 없다.
 
 ### 4.10 오류와 재시도
 
-MVP API는 잘못된 JSON, 빈 응답, 스키마 또는 출처 검증 실패를 자동으로
+~~MVP API는 잘못된 JSON, 빈 응답, 스키마 또는 출처 검증 실패를 자동으로
 보정하거나 재생성하지 않는다. 검증 실패는 `LLM_OUTPUT_INVALID`로 즉시
-안전 차단하며 원본 모델 출력을 사용자에게 노출하지 않는다.
+안전 차단하며 원본 모델 출력을 사용자에게 노출하지 않는다.~~
+
+평가와 운영에서는 JSON 파싱·스키마 불일치·잘못된 outcome·문구 없는
+`[확인 필요]` 단독 응답에 한해 고정된 repair prompt로 최대 한 번만
+재시도할 수 있다. 최초 성공률과 재시도 후 최종 성공률, 재시도 사유를
+각각 기록한다. 허위 수치·기간·비율, 법률적 단정, 허용되지 않은 source key,
+출처 결합 검증 실패는 재시도로 숨기지 않고 안전 실패로 차단한다. 모든
+실패 원본은 사용자에게 노출하지 않는다.
 
 | 오류 | 처리 |
 | --- | --- |
@@ -452,8 +515,10 @@ MVP 배포는 API 한 대, 파일형 SQLite와 로컬 FileStorage를 전제로 �
 운영 환경변수는 최소한 다음 값을 명시적으로 고정한다.
 
 * `APP_ENV=prod`
-* `LLM_PROVIDER=ollama`
-* LLM 기능을 활성화할 때의 정확한 `LLM_MODEL`과 `OLLAMA_BASE_URL`
+* ~~`LLM_PROVIDER=ollama`~~
+* 모델 선정 평가에서는 공통 로컬 OpenAI-compatible endpoint의 provider,
+  정확한 `LLM_MODEL`, base URL, JSON Schema decoding 설정
+* 운영 승인 후 선택된 엔진의 provider, 정확한 `LLM_MODEL`과 endpoint
 * `WORKSHIELD_MCP_TRANSPORT=streamable_http`
 * 실제 MCP 서비스의 `WORKSHIELD_MCP_URL`
 * 배포 프론트 origin의 `CORS_ORIGINS`
@@ -518,11 +583,13 @@ streamable HTTP 검증을 대체하지 않는다. 배포 전 다음 E2E를 모�
 
 * 답변 품질 향상 가능성
 
-채택하지 않은 이유:
+~~채택하지 않은 이유: 제한된 예산과 운영 기간, GPU 비용과 메모리 요구량
+증가, 부트캠프 MVP 범위를 초과하는 운영 복잡성.~~
 
-* 제한된 예산과 운영 기간
-* GPU 비용과 메모리 요구량 증가
-* 부트캠프 MVP 범위를 초과하는 운영 복잡성
+대형 모델은 품질 기준과 운영 효율의 실제 차이를 확인하기 위한 비교
+후보다. Gemma 4 31B IT, Qwen 3.6 27B Dense, Qwen 3.6 35B-A3B를 같은
+엔진·프롬프트·스키마에서 측정하고, 안전성 hard gate와 운영 GPU 적합성을
+동시에 만족하는 경우에만 채택한다.
 
 ### 5.4 LLM이 직접 MCP 도구를 선택
 
@@ -560,13 +627,14 @@ streamable HTTP 검증을 대체하지 않는다. 배포 전 다음 E2E를 모�
 
 다음 위험은 본 결정만으로 제거되지 않는다.
 
-* 운영 Ollama 모델 미선정
+* ~~운영 Ollama 모델 미선정~~
+* 운영 모델·양자화·서빙 엔진 미선정
 * 운영 모델의 실제 한국어 품질
 * 긴 입력에서의 처리 지연
 * GPU OOM
 * 구조화 출력 실패
 * 프롬프트 인젝션 우회
-* Ollama 또는 컨테이너 로그의 민감정보 기록
+* 선택된 추론 서버 또는 컨테이너 로그의 민감정보 기록
 * 사용자 취소 후 GPU 연산 지속
 * 모델 업데이트에 따른 출력 품질 변화
 * 운영 streamable HTTP MCP의 네트워크·파일 전송
@@ -616,7 +684,14 @@ MCP 기반 업로드·범위 판별·Review·Grounding은 LLM과 독립된 MVP �
 범위다. Chat과 Suggestions는 각각 별도 승인이 필요한 선택 기능이며 현재
 승인된 운영 LLM은 없다.
 
-Ollama 기반 Qwen3.5 9B Q4 계열과 24GB급 GPU를 운영 후보로 사용하되,
+~~Ollama 기반 Qwen3.5 9B Q4 계열과 24GB급 GPU를 운영 후보로 사용하되,
 정확한 모델과 배포 구성을 고정하고 기능별 운영·검증 체크리스트를 통과하기
 전까지 본 결정의 상태는 `Proposed`로 유지한다. 4B Ollama와 외부 Gemini
-검증 결과는 후보 비교 근거이며 운영 승인을 뜻하지 않는다.
+검증 결과는 후보 비교 근거이며 운영 승인을 뜻하지 않는다.~~
+
+Gemma 4 31B IT, Qwen 3.6 27B Dense, Qwen 3.6 35B-A3B를 공통 로컬
+서빙 경로에서 비교하고, 통과 후보를 같은 양자화 방식으로 운영 GPU에서
+재검증한다. 정확한 모델·양자화·배포 구성을 고정하고 기능별 운영·검증
+체크리스트를 통과하기 전까지 본 결정의 상태는 `Proposed`로 유지한다.
+4B Ollama와 외부 Gemini 검증 결과는 이전 ID 복사 계약의 참고 기록이며
+운영 승인을 뜻하지 않는다.
