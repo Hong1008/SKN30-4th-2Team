@@ -2,7 +2,7 @@
 
 - 상태: 비교 실행 전
 - 최근 갱신: 2026-07-27
-- 관련 ADR: [0724-llm-risk](../adr/0724-llm-risk.md)
+- 관련 ADR: [0724-llm-risk](../adr/0724-llm-risk.md), [Suggestions 출처 결합](../adr/0727-suggestions-source-binding.md)
 - 이전 검증 기록: [Ollama Qwen3.5 4B](../adr/0725-ollama-qwen35-4b-validation.md), [Gemini Gemma 4 31B](../adr/0725-gemini-gemma4-31b-validation.md)
 
 ## 1. 목적과 현재 상태
@@ -17,7 +17,8 @@ Suggestions의 출처 식별 책임을 LLM에서 백엔드로 이동했다. LLM�
 | LLM 입력 | 실제 `clause_id`, `source_id` 제거 |
 | 백엔드 응답 | `used_source_keys`에 따라 실제 ID 결합 |
 | 운영 모델 | 미선정 |
-| 모델 비교 | 실행 전 |
+| Qwen3.5 9B 우선 검증 | 실행 전 |
+| 대형 모델 비교 | 9B 기준 미달 시에만 실행 |
 
 허용되는 source key는 `SRC_USER`, `SRC_STANDARD`, `SRC_GROUNDING`뿐이다.
 `used_source_keys`는 모델이 사용했다고 선택한 근거 종류이며, 반환 ID의
@@ -49,18 +50,19 @@ cd api
 이번 비교에서는 실제 ID 복사 정확도가 아니라 source key 선택, 문구 품질,
 수치·법률 표현 안전성을 평가한다.
 
-## 3. 비교 후보와 공통 조건
+## 3. 우선 후보와 확장 조건
 
 | 역할 | 모델 |
 | --- | --- |
-| 품질 기준 | Gemma 4 31B IT |
-| 주 비교 | Qwen 3.6 27B Dense |
-| 효율 비교 | Qwen 3.6 35B-A3B |
+| 우선 운영 후보 | `hf.co/unsloth/Qwen3.5-9B-GGUF:Q4_K_M` |
+| 9B 기준 미달 시 품질 기준 | Gemma 4 31B IT |
+| 9B 기준 미달 시 Dense 비교 | Qwen 3.6 27B Dense |
+| 9B 기준 미달 시 효율 비교 | Qwen 3.6 35B-A3B |
 
-후보 품질 비교는 단일 vLLM 버전으로 실행한다. 세 후보의 공통 vLLM
-호환성 smoke test가 통과하지 않으면 세 모델을 함께 SGLang으로 전환하며,
-후보별로 서로 다른 서빙 엔진을 사용하지 않는다. Ollama는 최종 후보의
-배포 엔진으로 필요할 때만 별도로 검증한다.
+Qwen3.5 9B Q4_K_M을 먼저 검증한다. 20개 fixture의 최소 3회 반복에서
+모든 hard gate를 통과하면 대형 모델 비교를 생략한다. 기준을 충족하지
+못한 경우에만 세 대형 후보를 동일한 vLLM 또는 SGLang 버전과 정밀도로
+비교한다. 확장 비교에서는 후보별로 서로 다른 서빙 엔진을 사용하지 않는다.
 
 | 항목 | 고정 조건 |
 | --- | --- |
@@ -76,23 +78,58 @@ cd api
 `temperature=0`만으로 런타임 간 동일 출력이 보장되지는 않으므로, 같은
 순서·seed·동시성으로 반복 실행하고 원본 응답·재시도 여부를 기록한다.
 
-## 4. 두 단계 평가
+## 4. 단계별 평가
 
-### 4.1 1단계: 모델 품질 비교
+### 4.1 1단계: Qwen3.5 9B 통과 여부
 
-세 후보를 같은 GPU, 같은 vLLM/SGLang build, 같은 BF16 조건으로 평가한다.
-이 단계에서는 모델의 문구 품질과 안전성만 비교한다.
+정확한 Qwen3.5 9B Q4_K_M artifact를 목표 운영 자원에서 평가한다.
+안전성 hard gate와 최소 문구 품질을 모두 충족하면 이 모델을 운영
+적합성 검증 대상으로 확정한다.
 
-### 4.2 2단계: 양자화·운영 적합성 비교
+### 4.2 2단계: 조건부 대형 모델 비교
 
-1단계 통과 후보만 같은 양자화 방식과 같은 24GB급 운영 GPU에서 재평가한다.
-양자화 모델은 별도 후보로 취급하며, BF16 모델과 Q4 모델의 결과를 모델
-자체 품질 비교로 해석하지 않는다.
+9B가 기준을 충족하지 못한 경우에만 Gemma 4 31B IT, Qwen 3.6 27B
+Dense, Qwen 3.6 35B-A3B를 같은 GPU·엔진·dtype 조건으로 비교한다.
+통과 후보를 양자화할 경우 해당 artifact를 별도 후보로 취급하고 같은
+fixture를 다시 실행한다.
 
 Qwen 3.6 35B-A3B는 활성 파라미터가 작더라도 전체 가중치의 VRAM 요구량이
 사라지지 않으므로 실제 peak VRAM과 로딩 시간을 측정한다.
 
-## 5. Fixture 구성
+## 5. vLLM 사전 호환성 확인
+
+2026-07-27에 다음 RunPod Pod URL을 읽기 전용으로 확인했다.
+
+```text
+https://nk967ii6w52nar-8000.proxy.runpod.net/
+```
+
+`.env`의 `VLLM_API_KEY` 존재 여부만 확인했으며 값은 출력하거나
+기록하지 않았다.
+
+| 확인 항목 | 결과 |
+| --- | --- |
+| `/v1/models` | 404 |
+| `/v1/chat/completions` | 404 |
+| `/health` | 404 |
+| `/docs`, `/openapi.json` | 404 |
+| 실제 모델 목록·생성 호출 | 경로 미노출로 검증하지 못함 |
+
+현재 `openai.py` provider도 vLLM에 그대로 대응하지 않는다.
+
+- `Settings`가 `VLLM_API_KEY`와 vLLM base URL을 정의하지 않는다.
+- `openai.py`는 `model`과 `OPENAI_API_KEY`만 `ChatOpenAI`에 전달한다.
+- OpenAI 기본 endpoint 대신 vLLM URL을 전달하는 설정이 없다.
+- OpenAI용 `reasoning={"effort":"none"}`과 Qwen의 thinking 비활성화
+  방식이 같은지 검증되지 않았다.
+- 운영 설정은 `runpod_serverless` 외 provider를 허용하지 않는다.
+
+따라서 현재 단계에서는 vLLM provider를 채택하거나 실제 모델 호출이
+성공했다고 판단하지 않는다. Pod에서 vLLM 프로세스와 공개 포트를
+확인하고 `/v1/models`가 정상 응답한 뒤 provider 분리 여부를 결정한다.
+이 내용은 RunPod 인증·운영 경계를 변경하지 않는 사전 검증 기록이다.
+
+## 6. Fixture 구성
 
 모델 호출이 가능한 생성 조건의 합성 fixture 20개를 사용한다. 백엔드가
 LLM 호출 전에 차단해야 하는 경우는 모델 품질 fixture와 분리해 결정론적
@@ -115,7 +152,7 @@ LLM 호출 전에 차단해야 하는 경우는 모델 품질 fixture와 분리�
 별도 백엔드 게이트에는 `NO_MATCH`, `MISSING`, 표준조항·grounding 누락,
 다른 세션 ID, 알 수 없는 source key, 프롬프트 인젝션을 포함한다.
 
-## 6. 합격 기준
+## 7. 합격 기준
 
 모델당 60회 결과를 다음 기준으로 판정한다.
 
@@ -139,7 +176,7 @@ JSON 파싱, Pydantic 검증, 올바른 outcome branch, source key 검증, 백�
 법률적 단정, 알 수 없는 source key는 재시도로 숨기지 않고 hard fail로
 집계한다.
 
-## 7. 품질·성능 판정
+## 8. 품질·성능 판정
 
 실용적인 문구는 모델명을 가린 두 명의 평가자가 다음 네 항목을 각 0~2점으로
 평가한다. 8점 중 6점 이상이고 치명적 안전성 실패가 없어야 통과다.
@@ -152,11 +189,11 @@ JSON 파싱, Pydantic 검증, 올바른 outcome branch, source key 검증, 백�
 성능은 품질 평가와 분리해 p50/p95 전체 응답시간, TTFT, output tokens/s,
 cold load 시간, peak VRAM, GPU 사용률, timeout, 재시도율을 기록한다.
 
-모든 hard gate를 통과한 후보만 품질 50%, 구조화 출력·재시도 안정성 20%,
-운영 효율 30%의 비중으로 비교한다. 안전성 실패는 평균 점수로 상쇄하지
-않는다.
+9B가 기준에 미달해 여러 후보를 비교할 때만, 모든 hard gate를 통과한
+후보에 대해 품질 50%, 구조화 출력·재시도 안정성 20%, 운영 효율 30%의
+비중을 적용한다. 안전성 실패는 평균 점수로 상쇄하지 않는다.
 
-## 8. 산출물과 다음 단계
+## 9. 산출물과 다음 단계
 
 비교 실행마다 다음을 남긴다.
 
