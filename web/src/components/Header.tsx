@@ -1,4 +1,5 @@
 import { ShieldCheck } from 'lucide-react'
+import { useState, useEffect } from 'react'
 import type { Screen } from '../types'
 
 interface Props {
@@ -9,6 +10,43 @@ interface Props {
 export default function Header({ currentScreen, onNavigate }: Props) {
   const isReview = ['upload', 'contract-type', 'out-of-scope', 'processing'].includes(currentScreen)
   const isResult = ['results', 'clause-detail', 'chatbot'].includes(currentScreen)
+
+  const [timeLeft, setTimeLeft] = useState(1800) // 30 minutes in seconds
+
+  useEffect(() => {
+    // throttle the reset to avoid excessive state updates
+    let timeoutId: number | null = null;
+    const resetTimer = () => {
+      if (!timeoutId) {
+        setTimeLeft(1800)
+        timeoutId = window.setTimeout(() => { timeoutId = null }, 1000)
+      }
+    }
+    
+    window.addEventListener('mousemove', resetTimer)
+    window.addEventListener('keydown', resetTimer)
+    window.addEventListener('click', resetTimer)
+    window.addEventListener('scroll', resetTimer)
+
+    const interval = setInterval(() => {
+      setTimeLeft(prev => (prev > 0 ? prev - 1 : 0))
+    }, 1000)
+
+    return () => {
+      window.removeEventListener('mousemove', resetTimer)
+      window.removeEventListener('keydown', resetTimer)
+      window.removeEventListener('click', resetTimer)
+      window.removeEventListener('scroll', resetTimer)
+      clearInterval(interval)
+      if (timeoutId) clearTimeout(timeoutId)
+    }
+  }, [])
+
+  const formatTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60)
+    const s = seconds % 60
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
+  }
 
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/90 backdrop-blur-xl">
@@ -78,9 +116,9 @@ export default function Header({ currentScreen, onNavigate }: Props) {
         {/* Right: session */}
         <div className="ml-auto flex items-center gap-4">
           <div className="hidden items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 sm:flex">
-            <span className="size-1.5 rounded-full bg-emerald-500" />
-            <span className="text-[11px] font-medium text-slate-600">
-              세션 유지 중 · 60분
+            <span className={`size-1.5 rounded-full ${timeLeft > 300 ? 'bg-emerald-500' : 'bg-red-500 animate-pulse'}`} />
+            <span className="text-[11px] font-medium text-slate-600 font-mono tracking-tight">
+              세션 유지 중 <span className="ml-0.5">{formatTime(timeLeft)}</span>
             </span>
           </div>
         </div>

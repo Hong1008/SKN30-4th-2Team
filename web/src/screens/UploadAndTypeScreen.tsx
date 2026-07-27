@@ -339,13 +339,7 @@ export default function UploadAndTypeScreen({ sessionId, setSessionId, setReview
       </section>
 
       {/* ── 3. Bottom Controls & Help ── */}
-      <div className="sticky bottom-4 z-20 flex flex-col-reverse gap-3 rounded-2xl border border-slate-200/80 bg-white/90 p-3 shadow-xl shadow-slate-900/10 backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between">
-        <div className="bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 border-dashed">
-          <p className="text-xs font-medium text-slate-500">
-            [도움이 필요하신가요?] 임시 영역 (팀 논의 후 삭제 또는 유지)
-          </p>
-        </div>
-
+      <div className="sticky bottom-4 z-20 flex flex-col-reverse gap-3 rounded-2xl border border-slate-200/80 bg-white/90 p-3 shadow-xl shadow-slate-900/10 backdrop-blur-xl sm:flex-row sm:items-center sm:justify-end">
         <button
           onClick={handleNext}
           disabled={uploadState !== 'success' || !selectedType}
