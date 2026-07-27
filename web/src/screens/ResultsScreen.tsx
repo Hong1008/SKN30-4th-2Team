@@ -56,7 +56,8 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
           excerpt: c.user_clause, // full text as excerpt for now
           status,
           category: c.match?.standard?.category?.label || '기타',
-          summary: c.explanation
+          summary: c.explanation,
+          toxic_patterns: c.toxic_patterns || []
         }
       })
       
@@ -224,6 +225,11 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
                     <div className="flex items-center gap-2 flex-wrap">
                       <Badge status={c.status} />
                       <span className="text-xs text-[#64748B] bg-[#F8FAFC] border border-[#E2E8F0] px-2 py-0.5 rounded">{c.category}</span>
+                      {c.toxic_patterns && c.toxic_patterns.length > 0 && (
+                        <span className="text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded">
+                          주의 신호 포함
+                        </span>
+                      )}
                     </div>
                     <button
                       onClick={onClauseClick}

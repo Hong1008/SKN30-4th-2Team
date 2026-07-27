@@ -15,6 +15,15 @@ export interface ClauseResult {
   status: BadgeStatus
   category: string
   summary: string
+  toxic_patterns?: string[]
+}
+
+export interface MissingClauseResult {
+  id: string
+  category: string
+  title: string
+  text: string
+  explanation: string
 }
 
 // --- API Types based on api-draft.md ---

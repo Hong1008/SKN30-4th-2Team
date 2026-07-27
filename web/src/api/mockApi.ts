@@ -1,5 +1,12 @@
 import { ApiResponse, ReviewSessionData, ReviewData, ResultsData } from '../types';
 
+// TODO(Real API Integration):
+// When replacing this mock API with real axios/fetch calls, ensure to configure the client:
+// const apiClient = axios.create({
+//   baseURL: '/api/v1',
+//   withCredentials: true, // IMPORTANT: Required for HttpOnly Cookie session token
+// });
+
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export const mockApi = {
@@ -49,8 +56,11 @@ export const mockApi = {
     };
   },
 
-  async startReview(sessionId: string): Promise<ApiResponse<ReviewData>> {
+  async startReview(sessionId: string, idempotencyKey?: string): Promise<ApiResponse<ReviewData>> {
     await delay(1000);
+    // TODO(Real API Integration): include idempotencyKey in the headers like:
+    // { headers: { 'Idempotency-Key': idempotencyKey } }
+    console.log(`[API Mock] startReview called with Idempotency-Key: ${idempotencyKey}`);
     return {
       data: {
         review_id: 'rev_mock_456',
@@ -176,6 +186,46 @@ export const mockApi = {
         ]
       },
       meta: { request_id: 'req_5', timestamp: new Date().toISOString() }
+    };
+  },
+
+  async retryReview(reviewId: string, idempotencyKey?: string): Promise<ApiResponse<ReviewData>> {
+    await delay(1000);
+    // TODO(Real API Integration): include idempotencyKey in the headers
+    console.log(`[API Mock] retryReview called with Idempotency-Key: ${idempotencyKey}`);
+    return {
+      data: {
+        review_id: reviewId,
+        review_state: 'QUEUED',
+        mcp_review_status: null,
+        progress: {
+          sequence: 0,
+          stage: 'PREPARE',
+          current: 0,
+          total: 100,
+          percent: 0,
+          message: '검토를 다시 준비하고 있습니다.'
+        }
+      },
+      meta: { request_id: 'req_retry', timestamp: new Date().toISOString() }
+    };
+  },
+
+  async chat(reviewId: string, message: string, idempotencyKey?: string): Promise<ApiResponse<any>> {
+    await delay(500);
+    console.log(`[API Mock] chat called with message: "${message}", Idempotency-Key: ${idempotencyKey}`);
+    return {
+      data: { reply: "챗봇의 임시 응답입니다." },
+      meta: { request_id: 'req_chat', timestamp: new Date().toISOString() }
+    };
+  },
+
+  async suggestions(reviewId: string, clauseId: string, idempotencyKey?: string): Promise<ApiResponse<any>> {
+    await delay(500);
+    console.log(`[API Mock] suggestions called for clause: ${clauseId}, Idempotency-Key: ${idempotencyKey}`);
+    return {
+      data: { suggestions: ["문구 추천 임시 결과 1", "문구 추천 임시 결과 2"] },
+      meta: { request_id: 'req_suggestions', timestamp: new Date().toISOString() }
     };
   }
 };

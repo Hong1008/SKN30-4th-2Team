@@ -1,4 +1,4 @@
-﻿import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { ArrowLeft, Send, BookOpen, Scale, Copy, Check, AlertCircle, ChevronDown } from 'lucide-react'
 
 interface Props { onBack: () => void }
@@ -75,6 +75,14 @@ export default function ChatbotScreen({ onBack }: Props) {
     setInput('')
 
     const isOutOfScope = text.includes('세금') || text.includes('보험') || text.includes('판결')
+    
+    // 멱등성 키 생성 (Idempotency-Key)
+    const idempotencyKey = crypto.randomUUID()
+    
+    // 실제 API(또는 mockApi) 호출 시 멱등성 키 전달
+    // const response = await mockApi.chat('dummy_review_id', text, idempotencyKey)
+    console.log(`[Chat] Sending message with Idempotency-Key: ${idempotencyKey}`);
+    
     setTimeout(() => {
       const reply: Message = isOutOfScope
         ? {

@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { Check, AlertCircle, RefreshCw, ChevronRight } from 'lucide-react'
 import { mockApi } from '../api/mockApi'
 import { ReviewProgress } from '../types'
@@ -18,57 +18,163 @@ const STEPS = [
 
 type Mode = 'running' | 'error' | 'done'
 
+const USE_REAL_API = false // TODO: 실제 API 연동 시 true로 변경
+
 export default function ProcessingScreen({ reviewId, onDone }: Props) {
   const [activeStep, setActiveStep] = useState(0)
   const [progress, setProgress] = useState<ReviewProgress | null>(null)
   const [mode, setMode] = useState<Mode>('running')
   const [errorMsg, setErrorMsg] = useState('')
+  const [isRetryable, setIsRetryable] = useState(false)
 
   useEffect(() => {
     if (mode !== 'running' || !reviewId) return
 
     let isSubscribed = true
-    let currentPercent = progress?.percent || 0
+    let eventSource: EventSource | null = null
+    let lastEventId: string | null = null
+    let currentPercent = progress?.percent || 0 // Mock용
 
-    const poll = async () => {
-      try {
-        const res = await mockApi.pollReviewStatus(reviewId, currentPercent)
-        if (!isSubscribed) return
+    const handleUpdate = (review_state: string, newProgress: ReviewProgress) => {
+      setProgress(newProgress)
+      currentPercent = newProgress.percent
 
-        const { review_state, progress: newProgress } = res.data
-        setProgress(newProgress)
-        currentPercent = newProgress.percent
+      const stepIndex = STEPS.findIndex(s => s.stage === newProgress.stage)
+      if (stepIndex !== -1) setActiveStep(stepIndex)
 
-        // Update active step based on stage
-        const stepIndex = STEPS.findIndex(s => s.stage === newProgress.stage)
-        if (stepIndex !== -1) setActiveStep(stepIndex)
-
-        if (review_state === 'COMPLETED') {
-          setActiveStep(STEPS.length - 1)
-          setMode('done')
-        } else if (review_state === 'FAILED') {
-          setMode('error')
-          setErrorMsg('서버에서 검토 중 오류가 발생했습니다.')
-        } else {
-          // Continue polling
-          setTimeout(poll, 1500)
-        }
-      } catch (err) {
-        if (!isSubscribed) return
+      if (review_state === 'COMPLETED') {
+        setActiveStep(STEPS.length - 1)
+        setMode('done')
+      } else if (review_state === 'FAILED') {
         setMode('error')
-        setErrorMsg('통신 중 오류가 발생했습니다.')
+        setErrorMsg('서버에서 검토 중 오류가 발생했습니다.')
+        setIsRetryable(newProgress.error?.retryable === true || (newProgress as any).retryable === true)
       }
     }
 
-    // Start initial polling
-    poll()
+    const connectSSE = () => {
+      if (!isSubscribed) return
 
-    return () => { isSubscribed = false }
+      if (USE_REAL_API) {
+        // [Real API] SSE 연결 및 Fallback 처리
+        const url = new URL(`http://localhost:8000/api/v1/reviews/${reviewId}/events`) // TODO: config의 API_BASE_URL 사용
+        if (lastEventId) {
+          url.searchParams.append('last_event_id', lastEventId)
+        }
+
+        eventSource = new EventSource(url.toString(), { withCredentials: true })
+
+        eventSource.onmessage = (event) => {
+          if (!isSubscribed) return
+          const data = JSON.parse(event.data)
+          // SSE 응답 최상위에 있는 sequence나 event.lastEventId 갱신
+          lastEventId = event.lastEventId || data.sequence?.toString() || lastEventId
+          handleUpdate(data.review_state, data) // data 자체가 progress 정보를 담고 있다고 가정
+        }
+
+        eventSource.onerror = async () => {
+          if (!isSubscribed) return
+          eventSource?.close()
+          console.warn('[SSE] Connection lost. Attempting state sync & reconnect...')
+
+          try {
+            // 1. 상태 동기화 (Polling Fallback)
+            const syncRes = await fetch(`http://localhost:8000/api/v1/reviews/${reviewId}`, { credentials: 'include' })
+            if (!syncRes.ok) throw new Error('Sync failed')
+            const syncData = await syncRes.json()
+            
+            // 2. 동기화된 상태 반영
+            handleUpdate(syncData.review_state, syncData.progress || syncData)
+            
+            // 3. 아직 진행 중이라면 다시 SSE 연결 (재귀)
+            if (syncData.review_state !== 'COMPLETED' && syncData.review_state !== 'FAILED') {
+              setTimeout(connectSSE, 2000)
+            }
+          } catch (e: any) {
+            const status = e?.response?.status || e?.status
+            if (status === 404 || status === 410) {
+              alert('유효하지 않거나 만료된 세션입니다. 처음부터 다시 시작합니다.')
+              localStorage.clear()
+              window.location.reload()
+            } else {
+              setMode('error')
+              setErrorMsg('서버 연결이 끊어졌으며 복구에 실패했습니다.')
+              setIsRetryable(true)
+            }
+          }
+        }
+      } else {
+        // [Mock API] 기존의 Polling 시뮬레이션
+        const mockPoll = async () => {
+          try {
+            const res = await mockApi.pollReviewStatus(reviewId, currentPercent)
+            if (!isSubscribed) return
+            handleUpdate(res.data.review_state, res.data.progress)
+            if (res.data.review_state !== 'COMPLETED' && res.data.review_state !== 'FAILED') {
+              setTimeout(mockPoll, 1500)
+            }
+          } catch (err: any) {
+            if (!isSubscribed) return
+            const status = err?.response?.status || err?.status
+            if (status === 404 || status === 410) {
+              alert('유효하지 않거나 만료된 세션입니다. 처음부터 다시 시작합니다.')
+              localStorage.clear()
+              window.location.reload()
+              return
+            }
+            setMode('error')
+            setErrorMsg('통신 중 오류가 발생했습니다.')
+            setIsRetryable(true) // Mock에서는 기본적으로 재시도 허용
+          }
+        }
+        mockPoll()
+      }
+    }
+
+    connectSSE()
+
+    return () => {
+      isSubscribed = false
+      eventSource?.close()
+    }
   }, [mode, reviewId])
 
   const triggerError = () => {
     setMode('error')
     setErrorMsg('오류 상태 미리보기용 테스트 오류입니다.')
+    setIsRetryable(true)
+  }
+
+  const handleRetry = async () => {
+    if (!reviewId) return
+    
+    // 멱등성 키 생성 (Idempotency-Key)
+    const idempotencyKey = crypto.randomUUID()
+    console.log(`[Processing] Retrying review with Idempotency-Key: ${idempotencyKey}`)
+    
+    try {
+      await mockApi.retryReview(reviewId, idempotencyKey)
+      setActiveStep(0)
+      setProgress(null)
+      setMode('running')
+      setIsRetryable(false)
+    } catch (err: any) {
+      const status = err?.response?.status || err?.status
+      if (status === 409) {
+        // [4] 409 IDEMPOTENCY_KEY_REUSED
+        console.warn('이미 재시도 요청이 진행 중입니다.')
+        setActiveStep(0)
+        setProgress(null)
+        setMode('running')
+        setIsRetryable(false)
+      } else if (status === 404 || status === 410) {
+        alert('유효하지 않거나 만료된 세션입니다. 처음부터 다시 시작합니다.')
+        localStorage.clear()
+        window.location.reload()
+      } else {
+        setErrorMsg('재시도 요청에 실패했습니다.')
+      }
+    }
   }
 
   return (
@@ -177,9 +283,9 @@ export default function ProcessingScreen({ reviewId, onDone }: Props) {
 
       {/* Actions */}
       <div className="flex items-center gap-3 pt-2">
-        {mode === 'error' && (
+        {mode === 'error' && isRetryable && (
           <button
-            onClick={() => { setActiveStep(0); setProgress(null); setMode('running') }}
+            onClick={handleRetry}
             className="flex items-center gap-2 px-5 py-3 bg-[#6366F1] text-white rounded-xl text-sm font-medium hover:bg-[#4F46E5] transition-colors"
           >
             <RefreshCw className="w-4 h-4" />

@@ -1,9 +1,9 @@
-﻿import { useState, useRef } from 'react'
+import { useState, useRef } from 'react'
 import {
   UploadCloud, FileText, CheckCircle2, X, ChevronRight, BriefcaseBusiness, Handshake
 } from 'lucide-react'
 import { mockApi } from '../api/mockApi'
-import { TEMP_FILE_MAX_SIZE, TEMP_SESSION_TOKEN_KEY } from '../config'
+import { TEMP_FILE_MAX_SIZE, SESSION_ID_KEY, REVIEW_ID_KEY } from '../config'
 
 interface Props { 
   sessionId: string | null;
@@ -31,7 +31,8 @@ export default function UploadAndTypeScreen({ sessionId, setSessionId, setReview
   const [fileSizeStr, setFileSizeStr]  = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
   
-  const [selectedType, setSelectedType] = useState('SI_SUBCONTRACT')
+  const [selectedType, setSelectedType] = useState('')
+  const [suggestedType, setSuggestedType] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -66,20 +67,41 @@ export default function UploadAndTypeScreen({ sessionId, setSessionId, setReview
     try {
       const response = await mockApi.uploadContract(file)
       clearInterval(id)
+      
+      // [4] EMPTY_DOCUMENT 처리: 파일은 올라갔으나 조항이 없는 경우
+      if (response.data.can_start_review === false && response.data.allowed_actions?.includes('REUPLOAD')) {
+        setUploadState('idle')
+        setErrorMsg('문서 내에 추출 가능한 계약 조항이 없습니다. (EMPTY_DOCUMENT)')
+        return
+      }
+
       setProgress(100)
       setUploadState('success')
       
       const newSessionId = response.data.session_id
       setSessionId(newSessionId)
-      localStorage.setItem(TEMP_SESSION_TOKEN_KEY, newSessionId)
+      localStorage.setItem(SESSION_ID_KEY, newSessionId)
 
       if (response.data.suggested_contract_type) {
         setSelectedType(response.data.suggested_contract_type)
+        setSuggestedType(response.data.suggested_contract_type)
       }
-    } catch (err) {
+    } catch (err: any) {
       clearInterval(id)
       setUploadState('idle')
-      setErrorMsg('업로드에 실패했습니다. 다시 시도해주세요.')
+      
+      // [4] 업로드 정밀 에러 및 세션 에러 분기
+      const status = err?.response?.status || err?.status
+      if (status === 413) setErrorMsg('파일 용량이 서버 허용 제한(10MB)을 초과했습니다.')
+      else if (status === 415) setErrorMsg('지원하지 않는 파일 형식이거나 실제 파일 타입이 불일치합니다.')
+      else if (status === 422) setErrorMsg('파일이 암호화되어 있거나 손상되어 읽을 수 없습니다.')
+      else if (status === 404 || status === 410) {
+        alert('유효하지 않거나 만료된 세션입니다. 처음부터 다시 시작합니다.')
+        localStorage.clear()
+        window.location.reload()
+      } else {
+        setErrorMsg('업로드에 실패했습니다. 다시 시도해주세요.')
+      }
     }
   }
 
@@ -87,16 +109,35 @@ export default function UploadAndTypeScreen({ sessionId, setSessionId, setReview
     if (!sessionId) return
     try {
       // 1. Confirm contract type
-      await mockApi.selectContractType(sessionId, selectedType)
+      const scopeRes = await mockApi.selectContractType(sessionId, selectedType)
       
-      // 2. Start review
-      const reviewRes = await mockApi.startReview(sessionId)
+      // [3] 범위 외 확인(OUT_OF_SCOPE_CONFIRMATION_REQUIRED) 처리
+      if (scopeRes.data.scope_status === 'OUT_OF_SCOPE_CONFIRMATION_REQUIRED') {
+        onOutOfScope()
+        return
+      }
+
+      // 2. Start review (with Idempotency-Key)
+      const idempotencyKey = crypto.randomUUID()
+      const reviewRes = await mockApi.startReview(sessionId, idempotencyKey)
       setReviewId(reviewRes.data.review_id)
+      localStorage.setItem(REVIEW_ID_KEY, reviewRes.data.review_id)
       
       // 3. Move to processing screen
       onNext()
-    } catch (err) {
-      setErrorMsg('검토 시작 중 오류가 발생했습니다.')
+    } catch (err: any) {
+      const status = err?.response?.status || err?.status
+      if (status === 409) {
+        // [4] 409 IDEMPOTENCY_KEY_REUSED 처리
+        console.warn('이미 처리 중인 검토 요청입니다.')
+        onNext() // 기존 처리 내역이 있다고 가정하고 넘어감
+      } else if (status === 404 || status === 410) {
+        alert('유효하지 않거나 만료된 세션입니다. 처음부터 다시 시작합니다.')
+        localStorage.clear()
+        window.location.reload()
+      } else {
+        setErrorMsg('검토 시작 요청에 실패했습니다.')
+      }
     }
   }
 
@@ -106,7 +147,8 @@ export default function UploadAndTypeScreen({ sessionId, setSessionId, setReview
     setErrorMsg('')
     setSessionId(null)
     setReviewId(null)
-    localStorage.removeItem(TEMP_SESSION_TOKEN_KEY)
+    localStorage.removeItem(SESSION_ID_KEY)
+    localStorage.removeItem(REVIEW_ID_KEY)
   }
 
   return (
@@ -137,18 +179,21 @@ export default function UploadAndTypeScreen({ sessionId, setSessionId, setReview
             onDragLeave={() => setIsDragging(false)}
             onDrop={e => { 
               e.preventDefault(); 
+              if (uploadState === 'uploading') return;
               setIsDragging(false); 
               const file = e.dataTransfer.files?.[0]
               if (file) processFile(file)
             }}
-            onClick={() => fileRef.current?.click()}
-            className={`relative min-h-[340px] border-2 border-dashed rounded-2xl flex flex-col items-center justify-center text-center cursor-pointer transition-all duration-200 ${
+            onClick={() => {
+              if (uploadState !== 'uploading') fileRef.current?.click()
+            }}
+            className={`relative min-h-[340px] border-2 border-dashed rounded-2xl flex flex-col items-center justify-center text-center transition-all duration-200 ${
               isDragging
                 ? 'border-[#6366F1] bg-[#EEF2FF]'
                 : 'border-[#CBD5E1] bg-white hover:border-[#6366F1] hover:bg-[#EEF2FF]/40'
             }`}
           >
-            <input ref={fileRef} type="file" className="hidden" accept=".hwp,.hwpx,.hwpml,.pdf,.xls,.xlsx,.docx" onChange={handleFileChange} />
+            <input ref={fileRef} type="file" className="hidden" accept=".hwp,.hwpx,.hwpml,.pdf,.xls,.xlsx,.docx" onChange={handleFileChange} disabled={uploadState === 'uploading'} />
             
             <div className="flex-1 flex flex-col items-center justify-center w-full px-6 py-12">
               <div className={`w-24 h-24 rounded-3xl flex items-center justify-center mb-6 transition-colors shadow-sm ${
@@ -252,6 +297,11 @@ export default function UploadAndTypeScreen({ sessionId, setSessionId, setReview
                     : 'border-[#E2E8F0] bg-white hover:border-[#93C5FD] hover:bg-slate-50'
                 }`}
               >
+                {suggestedType === type.id && (
+                  <span className="absolute -top-3 right-2 bg-rose-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">
+                    AI 추천
+                  </span>
+                )}
                 <div className="flex items-center justify-center gap-1.5 w-full">
                   <h3 className={`text-[14px] font-semibold ${active ? 'text-[#6366F1]' : 'text-[#1E293B]'}`}>{type.name}</h3>
                   {active && (
@@ -284,9 +334,9 @@ export default function UploadAndTypeScreen({ sessionId, setSessionId, setReview
 
         <button
           onClick={handleNext}
-          disabled={uploadState !== 'success'}
+          disabled={uploadState !== 'success' || !selectedType}
           className={`inline-flex items-center justify-center gap-2 rounded-xl px-8 py-3.5 text-sm font-semibold transition-all ${
-            uploadState === 'success'
+            uploadState === 'success' && selectedType
               ? 'bg-[#6366F1] text-white hover:bg-[#4F46E5] shadow-md shadow-blue-500/20'
               : 'bg-[#E2E8F0] text-[#94A3B8] cursor-not-allowed'
           }`}

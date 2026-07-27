@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import type { Screen } from './types'
-import { TEMP_SESSION_TOKEN_KEY } from './config'
+import { SESSION_ID_KEY, REVIEW_ID_KEY } from './config'
 import Header from './components/Header'
 import Sidebar from './components/Sidebar'
 import UploadAndTypeScreen from './screens/UploadAndTypeScreen'
@@ -24,12 +24,30 @@ export default function App() {
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [reviewId, setReviewId] = useState<string | null>(null)
 
-  // Recovery logic for session token
+  // Recovery logic for session and review IDs
   useEffect(() => {
-    const savedSession = localStorage.getItem(TEMP_SESSION_TOKEN_KEY)
-    if (savedSession) {
-      setSessionId(savedSession)
-      // Additional recovery logic (fetching reviewId) can be added here
+    const savedSession = localStorage.getItem(SESSION_ID_KEY)
+    const savedReview = localStorage.getItem(REVIEW_ID_KEY)
+    
+    if (savedSession) setSessionId(savedSession)
+    if (savedReview) setReviewId(savedReview)
+
+    if (savedReview) {
+      // 복구 라우팅
+      import('./api/mockApi').then(({ mockApi }) => {
+        mockApi.getResults(savedReview).then(res => {
+          if (res.data.review.review_state === 'COMPLETED') {
+            setScreen('results')
+          } else {
+            setScreen('processing')
+          }
+        }).catch(() => {
+          // 404 or other errors mean session lost
+          setScreen('upload-and-type')
+        })
+      })
+    } else if (savedSession) {
+      setScreen('upload-and-type')
     }
   }, [])
 
