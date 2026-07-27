@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import {
   UploadCloud, FileText, CheckCircle2, X, ChevronRight, AlertCircle
 } from 'lucide-react'
@@ -6,6 +6,8 @@ import { api } from '../api/api'
 import { TEMP_FILE_MAX_SIZE, SESSION_ID_KEY, REVIEW_ID_KEY } from '../config'
 import { useMetadata } from '../contexts/MetadataContext'
 import { useToast } from '../contexts/ToastContext'
+import type { SelectionSource } from '../types'
+import { getErrorMessage, getNextAction } from '../utils/apiErrors'
 
 interface Props { 
   sessionId: string | null;
@@ -13,11 +15,12 @@ interface Props {
   setReviewId: (id: string | null) => void;
   onNext: (reviewId: string) => void;
   onOutOfScope: () => void;
+  setSessionExpiresAt: (expiresAt: string | null) => void;
 }
 
 type UploadState = 'idle' | 'uploading' | 'success'
 
-export default function UploadAndTypeScreen({ sessionId, setSessionId, setReviewId, onNext, onOutOfScope }: Props) {
+export default function UploadAndTypeScreen({ sessionId, setSessionId, setReviewId, onNext, onOutOfScope, setSessionExpiresAt }: Props) {
   const { metadata } = useMetadata()
   const { showToast } = useToast()
   const formats = metadata?.file_policy.extensions.map(e => e.toUpperCase()) || []
@@ -26,17 +29,51 @@ export default function UploadAndTypeScreen({ sessionId, setSessionId, setReview
 
   const [uploadState, setUploadState] = useState<UploadState>('idle')
   const [isDragging, setIsDragging]   = useState(false)
-  const [progress, setProgress]        = useState(0)
   const [fileName, setFileName]        = useState('')
   const [fileSizeStr, setFileSizeStr]  = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
+  const startRequestKey = useRef<string | null>(null)
   
   const [selectedType, setSelectedType] = useState('')
+  const [suggestedType, setSuggestedType] = useState<string | null>(null)
+  const [candidateTypes, setCandidateTypes] = useState<string[]>([])
   const [errorMsg, setErrorMsg] = useState('')
   const [emptyDocError, setEmptyDocError] = useState(false)
 
+  useEffect(() => {
+    if (!sessionId || uploadState !== 'idle') return
+    const controller = new AbortController()
+
+    api.getSession(sessionId, controller.signal)
+      .then(({ data }) => {
+        if (!data.upload) return
+        setFileName(data.upload.file_name)
+        setFileSizeStr(`${(data.upload.size_bytes / 1024).toFixed(1)} KB`)
+        setSelectedType(data.selected_contract_type || '')
+        setSuggestedType(data.suggested_contract_type)
+        setCandidateTypes(data.candidates.map(candidate => candidate.contract_type))
+        setSessionExpiresAt(data.expires_at)
+        setUploadState('success')
+        if (data.review_state === 'OUT_OF_SCOPE_CONFIRMATION_REQUIRED' && data.selected_contract_type) {
+          onOutOfScope()
+        }
+      })
+      .catch((error) => {
+        if (error?.name === 'AbortError') return
+        if (error?.status === 404 || error?.status === 410) {
+          setSessionId(null)
+          localStorage.removeItem(SESSION_ID_KEY)
+        } else {
+          setErrorMsg(error?.message || '이전 검토 세션을 불러오지 못했습니다.')
+        }
+      })
+
+    return () => controller.abort()
+  }, [sessionId, uploadState, onOutOfScope, setSessionExpiresAt, setSessionId])
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
+    e.target.value = ''
     if (!file) return
     processFile(file)
   }
@@ -58,16 +95,9 @@ export default function UploadAndTypeScreen({ sessionId, setSessionId, setReview
     setFileName(file.name)
     setFileSizeStr((file.size / 1024).toFixed(1) + ' KB')
     setUploadState('uploading')
-    setProgress(0)
-
-    // Simulate progress while API is called
-    const id = setInterval(() => {
-      setProgress(p => Math.min(p + Math.random() * 20, 90))
-    }, 200)
 
     try {
       const response = await api.uploadContract(file)
-      clearInterval(id)
       
       // [4] EMPTY_DOCUMENT 처리: 파일은 올라갔으나 조항이 없는 경우
       if (response.data.can_start_review === false && response.data.allowed_actions?.includes('REUPLOAD')) {
@@ -76,8 +106,11 @@ export default function UploadAndTypeScreen({ sessionId, setSessionId, setReview
         return
       }
 
-      setProgress(100)
       setUploadState('success')
+      setSelectedType('')
+      setSuggestedType(response.data.suggested_contract_type)
+      setCandidateTypes(response.data.candidates.map(candidate => candidate.contract_type))
+      setSessionExpiresAt(response.data.expires_at)
       
       const newSessionId = response.data.session_id
       setSessionId(newSessionId)
@@ -85,8 +118,8 @@ export default function UploadAndTypeScreen({ sessionId, setSessionId, setReview
 
       showToast('파일이 무사히 업로드되었습니다.', 'success')
     } catch (err: any) {
-      clearInterval(id)
       setUploadState('idle')
+      const nextAction = getNextAction(err)
       
       // [4] 업로드 정밀 에러 및 세션 에러 분기
       const status = err?.response?.status || err?.status
@@ -96,6 +129,10 @@ export default function UploadAndTypeScreen({ sessionId, setSessionId, setReview
       else if (status === 404 || status === 410) {
         showToast('유효하지 않거나 만료된 세션입니다. 처음부터 다시 시작합니다.', 'error')
         reset()
+      } else if (nextAction === 'REUPLOAD') {
+        setErrorMsg(getErrorMessage(err, '파일을 확인한 후 다시 업로드해 주세요.'))
+      } else if (nextAction === 'CONTACT_SUPPORT') {
+        setErrorMsg(getErrorMessage(err, '서비스 설정을 확인할 수 없습니다. 관리자에게 문의해 주세요.'))
       } else {
         setErrorMsg('업로드에 실패했습니다. 다시 시도해주세요.')
       }
@@ -106,7 +143,13 @@ export default function UploadAndTypeScreen({ sessionId, setSessionId, setReview
     if (!sessionId) return
     try {
       // 1. Confirm contract type
-      const scopeRes = await api.selectContractType(sessionId, selectedType)
+      const selectionSource: SelectionSource = selectedType === suggestedType
+        ? 'SUGGESTED'
+        : candidateTypes.includes(selectedType)
+          ? 'CANDIDATE'
+          : 'MANUAL'
+      const scopeRes = await api.selectContractType(sessionId, selectedType, selectionSource)
+      setSessionExpiresAt(scopeRes.data.expires_at)
       
       // [3] 범위 외 확인(OUT_OF_SCOPE_CONFIRMATION_REQUIRED) 처리
       if (scopeRes.data.review_state === 'OUT_OF_SCOPE_CONFIRMATION_REQUIRED') {
@@ -120,8 +163,10 @@ export default function UploadAndTypeScreen({ sessionId, setSessionId, setReview
       }
 
       // 2. Start review (with Idempotency-Key)
-      const idempotencyKey = crypto.randomUUID()
+      const idempotencyKey = startRequestKey.current ?? crypto.randomUUID()
+      startRequestKey.current = idempotencyKey
       const reviewRes = await api.startReview(sessionId, idempotencyKey)
+      startRequestKey.current = null
       setReviewId(reviewRes.data.review_id)
       localStorage.setItem(REVIEW_ID_KEY, reviewRes.data.review_id)
       
@@ -129,8 +174,10 @@ export default function UploadAndTypeScreen({ sessionId, setSessionId, setReview
       onNext(reviewRes.data.review_id)
     } catch (err: any) {
       const status = err?.status
+      const nextAction = getNextAction(err)
       const existingReviewId = err?.details?.review_id
       if (status === 409 && existingReviewId) {
+        startRequestKey.current = null
         setReviewId(existingReviewId)
         localStorage.setItem(REVIEW_ID_KEY, existingReviewId)
         onNext(existingReviewId)
@@ -138,6 +185,12 @@ export default function UploadAndTypeScreen({ sessionId, setSessionId, setReview
         setErrorMsg(err?.message || '동일 요청이 이미 처리 중입니다. 잠시 후 다시 확인해 주세요.')
       } else if (status === 404 || status === 410) {
         showToast('유효하지 않거나 만료된 세션입니다. 처음부터 다시 시작합니다.', 'error')
+        reset()
+      } else if (nextAction === 'SELECT_CONTRACT_TYPE') {
+        setErrorMsg(getErrorMessage(err, '계약 유형을 다시 선택해 주세요.'))
+      } else if (nextAction === 'CONFIRM_OUT_OF_SCOPE') {
+        onOutOfScope()
+      } else if (nextAction === 'START_NEW_REVIEW') {
         reset()
       } else {
         setErrorMsg('검토 시작 요청에 실패했습니다.')
@@ -147,13 +200,15 @@ export default function UploadAndTypeScreen({ sessionId, setSessionId, setReview
 
   const reset = () => { 
     setUploadState('idle')
-    setProgress(0)
     setErrorMsg('')
     setEmptyDocError(false)
     setSessionId(null)
     setReviewId(null)
+    setSessionExpiresAt(null)
+    startRequestKey.current = null
     localStorage.removeItem(SESSION_ID_KEY)
     localStorage.removeItem(REVIEW_ID_KEY)
+    if (fileRef.current) fileRef.current.value = ''
   }
 
   return (
@@ -272,11 +327,10 @@ export default function UploadAndTypeScreen({ sessionId, setSessionId, setReview
                 <div className="flex items-center gap-3 mb-1.5">
                   <div className="flex-1 h-2 overflow-hidden rounded-full bg-slate-100">
                     <div
-                      className="h-full rounded-full bg-gradient-to-r from-blue-600 to-cyan-500 transition-[width] duration-300 ease-out"
-                      style={{ width: `${Math.min(progress, 100)}%` }}
+                      className="h-full w-full animate-pulse rounded-full bg-gradient-to-r from-blue-600 to-cyan-500"
                     />
                   </div>
-                  <span className="text-xs font-medium text-slate-600 shrink-0">전송 중</span>
+                  <span className="text-xs font-medium text-slate-600 shrink-0">업로드·분석 중</span>
                 </div>
               </div>
             </div>
@@ -309,7 +363,10 @@ export default function UploadAndTypeScreen({ sessionId, setSessionId, setReview
             return (
               <button 
                 key={type.code} 
-                onClick={() => setSelectedType(type.code)} 
+                onClick={() => {
+                  setSelectedType(type.code)
+                  startRequestKey.current = null
+                }}
                 aria-pressed={active}
                 className={`relative min-h-28 rounded-2xl border p-5 text-left transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/15 ${
                   active 
@@ -330,13 +387,12 @@ export default function UploadAndTypeScreen({ sessionId, setSessionId, setReview
 
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="rounded-xl border border-slate-200 bg-white px-5 py-4">
           <p className="text-xs text-slate-600 leading-relaxed flex-1">
-            해당하는 계약 유형이 없다면, 제공 범위를 먼저 확인해 주세요.
+            현재 지원 범위: {contractTypes.map(type => type.label).join(', ')}
+            <br />
+            문서가 선택 유형과 충분히 대응하지 않으면 검토 시작 전에 별도 확인 화면이 표시됩니다.
           </p>
-          <button onClick={onOutOfScope} className="text-sm font-semibold text-blue-600 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/15 rounded">
-            제공 범위 확인
-          </button>
         </div>
         <div className="flex justify-end">
           <p className="text-xs text-slate-500 italic">

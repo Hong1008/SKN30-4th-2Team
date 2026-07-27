@@ -2,13 +2,17 @@ import { API_BASE_URL } from '../config'
 import { client } from './client'
 import type {
   ApiResponse,
+  ChatHistoryMessage,
   ChatResponse,
   GroundingData,
   MetadataData,
   ResultsData,
+  ReviewCreateData,
+  ReviewCancelData,
   ReviewData,
   ReviewSessionData,
   SuggestionResponse,
+  SelectionSource,
 } from '../types'
 
 const idempotencyHeaders = (idempotencyKey: string): HeadersInit => ({
@@ -27,10 +31,17 @@ export const api = {
   getSession: (sessionId: string, signal?: AbortSignal): Promise<ApiResponse<ReviewSessionData>> =>
     client(`/review-sessions/${encodeURIComponent(sessionId)}`, { signal }),
 
-  selectContractType(sessionId: string, selectedContractType: string): Promise<ApiResponse<ReviewSessionData>> {
+  selectContractType(
+    sessionId: string,
+    selectedContractType: string,
+    selectionSource: SelectionSource,
+  ): Promise<ApiResponse<ReviewSessionData>> {
     return client(`/review-sessions/${encodeURIComponent(sessionId)}/contract-type`, {
       method: 'PATCH',
-      body: JSON.stringify({ selected_contract_type: selectedContractType }),
+      body: JSON.stringify({
+        selected_contract_type: selectedContractType,
+        selection_source: selectionSource,
+      }),
     })
   },
 
@@ -41,7 +52,7 @@ export const api = {
     })
   },
 
-  startReview(sessionId: string, idempotencyKey: string): Promise<ApiResponse<ReviewData>> {
+  startReview(sessionId: string, idempotencyKey: string): Promise<ApiResponse<ReviewCreateData>> {
     return client('/reviews', {
       method: 'POST',
       headers: idempotencyHeaders(idempotencyKey),
@@ -55,14 +66,14 @@ export const api = {
   getResults: (reviewId: string, signal?: AbortSignal): Promise<ApiResponse<ResultsData>> =>
     client(`/reviews/${encodeURIComponent(reviewId)}/results`, { signal }),
 
-  deleteReview(reviewId: string, idempotencyKey: string): Promise<void> {
+  deleteReview(reviewId: string, idempotencyKey: string): Promise<ApiResponse<ReviewCancelData>> {
     return client(`/reviews/${encodeURIComponent(reviewId)}`, {
       method: 'DELETE',
       headers: idempotencyHeaders(idempotencyKey),
     })
   },
 
-  retryReview(reviewId: string, idempotencyKey: string): Promise<ApiResponse<ReviewData>> {
+  retryReview(reviewId: string, idempotencyKey: string): Promise<ApiResponse<ReviewCreateData>> {
     return client(`/reviews/${encodeURIComponent(reviewId)}/retry`, {
       method: 'POST',
       headers: idempotencyHeaders(idempotencyKey),
@@ -74,11 +85,21 @@ export const api = {
     return client(`/reviews/${encodeURIComponent(reviewId)}/grounding?${query}`, { signal })
   },
 
-  chat(reviewId: string, message: string, idempotencyKey: string): Promise<ApiResponse<ChatResponse>> {
+  chat(
+    reviewId: string,
+    message: string,
+    idempotencyKey: string,
+    focusClauseId?: string,
+    history: ChatHistoryMessage[] = [],
+  ): Promise<ApiResponse<ChatResponse>> {
     return client(`/reviews/${encodeURIComponent(reviewId)}/chat/messages`, {
       method: 'POST',
       headers: idempotencyHeaders(idempotencyKey),
-      body: JSON.stringify({ message }),
+      body: JSON.stringify({
+        message,
+        focus_clause_id: focusClauseId,
+        history: history.slice(-10),
+      }),
     })
   },
 

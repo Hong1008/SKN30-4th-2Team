@@ -5,6 +5,8 @@ import type { ResultCode, ClauseResult, ResultsData } from '../types'
 import { api } from '../api/api'
 import { useMetadata } from '../contexts/MetadataContext'
 import { getMetadataLabel } from '../utils/metadata'
+import { mapClauseResult } from '../utils/reviewResults'
+import { REVIEW_ID_KEY, SESSION_ID_KEY } from '../config'
 
 const CLAUSE_VISUALS: Record<ResultCode, {
   accent: string
@@ -45,7 +47,9 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
   const categories = ['전체', ...(metadata?.categories.map(c => c.label) || [])]
   const statuses: { id: ResultCode | 'all'; label: string }[] = [
     { id: 'all', label: '전체' },
-    ...resultCodeDetails.map(r => ({ id: r.code as ResultCode, label: r.label }))
+    ...resultCodeDetails
+      .filter(r => r.code !== 'MISSING')
+      .map(r => ({ id: r.code as ResultCode, label: r.label }))
   ]
   const [filterStatus, setFilterStatus]     = useState<ResultCode | 'all'>('all')
   const [filterCategory, setFilterCategory] = useState('전체')
@@ -54,12 +58,14 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
   const [activeTab, setActiveTab]           = useState<'results' | 'notes'>('results')
 
   const [isLoading, setIsLoading] = useState(true)
+  const [errorMessage, setErrorMessage] = useState('')
   const [resultsData, setResultsData] = useState<ResultsData | null>(null)
   const [clauses, setClauses] = useState<ClauseResult[]>([])
 
   useEffect(() => {
     let isSubscribed = true
     setIsLoading(true)
+    setErrorMessage('')
 
     if (!reviewId) {
       setIsLoading(false)
@@ -68,37 +74,28 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
 
     api.getResults(reviewId).then(res => {
       if (!isSubscribed) return
+      if (res.data.review.mcp_review_status !== 'OK') {
+        throw new Error('검토가 정상 완료 상태가 아니어서 결과를 표시할 수 없습니다.')
+      }
       setResultsData(res.data)
       
       // Map API response to UI ClauseResult format
-      const mappedClauses: ClauseResult[] = res.data.clause_results.map((c: any) => {
-        let status: ResultCode = 'NO_MATCH'
-        if (c.deviation.code === 'NONE') status = 'NONE'
-        if (c.deviation.code === 'EXTRA') status = 'EXTRA'
-        if (c.deviation.code === 'NO_MATCH') status = 'NO_MATCH'
-        if (c.deviation.code === 'MISSING') status = 'MISSING'
-
-        return {
-          id: c.user_clause_id,
-          article: c.user_clause.split(' ')[0] || '조항', // e.g. "제1조"
-          excerpt: c.user_clause, // full text as excerpt for now
-          status,
-          category: c.match?.standard?.category?.label || '기타',
-          categoryCode: c.match?.standard?.category?.code,
-          summary: c.explanation,
-          toxic_patterns: c.toxic_patterns || [],
-          standardTitle: c.match?.standard?.title,
-          standardText: c.match?.standard?.text,
-          standardSource: c.match?.standard?.source
-        }
-      })
+      const mappedClauses = res.data.clause_results.map(mapClauseResult)
       
       setClauses(mappedClauses)
       setIsLoading(false)
-    }).catch(() => {
+    }).catch((error) => {
       if (!isSubscribed) return
       setIsLoading(false)
-      // Error handling can be added
+      if (error?.status === 404 || error?.status === 410) {
+        localStorage.removeItem(SESSION_ID_KEY)
+        localStorage.removeItem(REVIEW_ID_KEY)
+        setErrorMessage('검토 결과를 찾을 수 없거나 보관 기간이 만료되었습니다.')
+      } else if (error?.status === 409) {
+        setErrorMessage('검토가 아직 완료되지 않았습니다. 진행 화면에서 상태를 확인해 주세요.')
+      } else {
+        setErrorMessage(error?.message || '검토 결과를 불러오지 못했습니다.')
+      }
     })
 
     return () => { isSubscribed = false }
@@ -155,7 +152,14 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
   if (!resultsData) {
     return (
       <div className="text-center py-20">
-        <p className="text-slate-600">검토 결과를 불러올 수 없습니다.</p>
+        <p className="text-slate-600">{errorMessage || '검토 결과를 불러올 수 없습니다.'}</p>
+        <button
+          type="button"
+          onClick={() => window.location.assign('/review')}
+          className="mt-4 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
+        >
+          새 검토 시작
+        </button>
       </div>
     )
   }
@@ -173,6 +177,9 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
     { status: 'NO_MATCH' as ResultCode,   count: summaryCounts.NO_MATCH || 0,  label: getMetadataLabel(resultCodeDetails, 'NO_MATCH', '대응 조항 확인 필요'),  text: 'text-rose-700',    dot: 'bg-rose-500' },
     { status: 'MISSING' as ResultCode,  count: resultsData.summary.missing_standard_clauses || 0,  label: getMetadataLabel(resultCodeDetails, 'MISSING', '포함 여부 확인 필요'),  text: 'text-slate-600',   dot: 'bg-slate-400' },
   ]
+  const toxicCandidates = clauses.flatMap(clause =>
+    (clause.toxic_patterns ?? []).map(pattern => ({ clause, pattern })),
+  )
 
   return (
     <div className="space-y-6">
@@ -192,11 +199,13 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
           <p className="mt-2 text-sm font-normal text-slate-400">
             {contractTypeLabel} 기준
             <span className="mx-1.5 text-slate-300">·</span>
-            {new Date(resultsData.review.completed_at).toLocaleDateString()}
+            {resultsData.review.completed_at
+              ? new Date(resultsData.review.completed_at).toLocaleDateString()
+              : '완료 시각 확인 중'}
           </p>
         </div>
 
-        <button
+        {metadata?.features.chat && <button
           type="button"
           onClick={onChatbot}
           className="
@@ -212,7 +221,7 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
         >
           <MessageSquare className="size-4" aria-hidden="true" />
           결과 기반 질의응답
-        </button>
+        </button>}
       </div>
 
       {/* Disclaimer */}
@@ -238,7 +247,15 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
         {uiSummary.map(s => (
           <button
             key={s.status}
-            onClick={() => setFilterStatus(s.status)}
+            onClick={() => {
+              if (s.status === 'MISSING') {
+                setActiveTab('notes')
+                setFilterStatus('all')
+              } else {
+                setActiveTab('results')
+                setFilterStatus(s.status)
+              }
+            }}
             className={`group relative min-h-36 overflow-hidden rounded-2xl border bg-white/90 p-5 text-left shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_rgba(15,23,42,0.04)] backdrop-blur-xl transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-[0_12px_32px_rgba(37,99,235,0.10)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/15 ${
               filterStatus === s.status
                 ? 'border-blue-500 bg-blue-50/40 ring-1 ring-blue-500/20 before:absolute before:inset-y-4 before:left-0 before:w-1 before:rounded-r-full before:bg-blue-600'
@@ -451,6 +468,37 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
 
       {activeTab === 'notes' && (
         <div className="space-y-6">
+          <div>
+            <div className="mb-4 flex items-center gap-2">
+              <AlertTriangle className="size-4 text-rose-500" aria-hidden="true" />
+              <h2 className="text-sm font-semibold text-slate-900">주의 문구 후보</h2>
+              <span className="rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-700">
+                {toxicCandidates.length}건
+              </span>
+            </div>
+            {toxicCandidates.length > 0 ? (
+              <div className="space-y-2">
+                {toxicCandidates.map(({ clause, pattern }) => (
+                  <button
+                    type="button"
+                    key={`${clause.id}-${pattern.code}`}
+                    onClick={() => onClauseClick(clause)}
+                    className="flex w-full items-center justify-between rounded-xl border border-rose-200 bg-rose-50/50 px-4 py-3 text-left hover:bg-rose-50"
+                  >
+                    <span>
+                      <span className="block text-sm font-semibold text-rose-800">{pattern.label}</span>
+                      <span className="mt-0.5 block text-xs text-slate-600">{clause.article} · {clause.category}</span>
+                    </span>
+                    <ChevronRight className="size-4 text-rose-500" />
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="rounded-xl border border-slate-200 bg-white p-4 text-xs text-slate-500">
+                탐지된 주의 문구 후보가 없습니다. 이 결과만으로 계약이 안전하다고 판단할 수는 없습니다.
+              </p>
+            )}
+          </div>
           {/* Missing checklist */}
           <div>
             <div className="flex items-center gap-2 mb-4">
@@ -464,7 +512,7 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
               표준계약서에서 확인해 볼 항목을 체크리스트로 정리했습니다. 문서에 포함되어 있는지 직접 확인해 주세요.
             </p>
             <div className="space-y-2">
-              {resultsData.missing_standard_clauses.map((item: any) => {
+              {resultsData.missing_standard_clauses.map((item) => {
                 const open = expandedMissing === item.standard.clause_id
                 return (
                   <div key={item.standard.clause_id} className="bg-slate-50 border border-slate-300 rounded-xl overflow-hidden">

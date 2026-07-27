@@ -7,6 +7,18 @@ export type Screen =
   | 'chatbot'
 
 export type ResultCode = 'NONE' | 'EXTRA' | 'NO_MATCH' | 'MISSING'
+export type ReviewState = 'QUEUED' | 'REVIEWING' | 'COMPLETED' | 'FAILED' | 'CANCELLED' | 'EXPIRED'
+export type ReviewSessionState =
+  | 'ANALYZING_CONTRACT_TYPE'
+  | 'TYPE_SELECTION_REQUIRED'
+  | 'OUT_OF_SCOPE_CONFIRMATION_REQUIRED'
+  | 'READY_TO_REVIEW'
+  | 'REUPLOAD_REQUIRED'
+  | 'FAILED'
+  | 'EXPIRED'
+export type ScopeStatus = 'IN_SCOPE' | 'CONTRACT_TYPE_UNCERTAIN' | 'OUT_OF_SCOPE' | 'EMPTY_DOCUMENT'
+export type AllowedAction = 'SELECT_CONTRACT_TYPE' | 'CONFIRM_OUT_OF_SCOPE' | 'START_REVIEW' | 'REUPLOAD'
+export type SelectionSource = 'SUGGESTED' | 'CANDIDATE' | 'MANUAL'
 
 export interface ClauseResult {
   id: string
@@ -20,6 +32,9 @@ export interface ClauseResult {
   standardTitle?: string
   standardText?: string
   standardSource?: string
+  standardClauseId?: string
+  standardVersion?: string
+  matchStatus: 'CANDIDATE_SELECTED' | 'NO_CANDIDATE'
 }
 
 export interface MissingClauseResult {
@@ -42,7 +57,7 @@ export interface ApiResponse<T> {
 
 export interface ApiError {
   code: string;
-  message: string;
+  message?: string;
   field?: string | null;
   retryable?: boolean;
   next_action?: string;
@@ -51,22 +66,29 @@ export interface ApiError {
 
 export interface ReviewSessionData {
   session_id: string;
-  review_state: string;
+  review_state: ReviewSessionState;
   upload?: {
     file_name: string;
     size_bytes: number;
     extension: string;
   };
-  scope_status: string;
-  scope_message: string;
+  scope_status: ScopeStatus | null;
+  scope_message: string | null;
   suggested_contract_type: string | null;
   selected_contract_type: string | null;
-  selection_source: string | null;
-  candidates: any[];
+  selection_source: SelectionSource | null;
+  candidates: ContractTypeCandidate[];
   matched_clause_count: number;
-  allowed_actions: string[];
+  exclusion_markers: string[];
+  out_of_scope_confirmed_at: string | null;
+  allowed_actions: AllowedAction[];
   expires_at: string;
-  can_start_review?: boolean;
+  can_start_review: boolean;
+}
+
+export interface ContractTypeCandidate {
+  contract_type: string;
+  evidence_score: number;
 }
 
 export interface ReviewProgress {
@@ -81,7 +103,7 @@ export interface ReviewProgress {
 export interface ReviewSseEvent {
   review_id: string;
   sequence: number;
-  review_state: string;
+  review_state: ReviewState;
   stage: string | null;
   current: number | null;
   total: number | null;
@@ -91,27 +113,40 @@ export interface ReviewSseEvent {
   error?: ApiError | null;
 }
 
+export interface ReviewCreateData {
+  review_id: string;
+  review_state: ReviewState;
+  session_id: string;
+  retry_of?: string | null;
+}
+
 export interface ReviewData {
   review_id: string;
-  review_state: string;
+  session_id: string;
+  review_state: ReviewState;
   mcp_review_status: string | null;
-  snapshot?: unknown;
-  progress?: ReviewProgress | null;
-  error?: ApiError | null;
-  started_at?: string;
-  completed_at?: string;
-  expires_at?: string;
-  links?: Record<string, string>;
+  result: unknown | null;
+  progress: ReviewProgress | null;
+  error: ApiError | null;
+  started_at: string | null;
+  completed_at: string | null;
+  expires_at: string;
+}
+
+export interface ReviewCancelData {
+  review_id: string;
+  review_state: ReviewState;
+  deleted: boolean;
 }
 
 export interface ResultsData {
   review: {
     review_id: string;
-    review_state: string;
+    review_state: 'COMPLETED';
     mcp_review_status: string;
     contract_type: string;
-    started_at: string;
-    completed_at: string;
+    started_at: string | null;
+    completed_at: string | null;
     expires_at: string;
     disclaimer: string;
   };
@@ -125,8 +160,41 @@ export interface ResultsData {
     missing_standard_clauses: number;
     toxic_pattern_candidates: number;
   };
-  clause_results: ClauseResult[];
-  missing_standard_clauses: MissingClauseResult[];
+  clause_results: ReviewClauseResultData[];
+  missing_standard_clauses: MissingStandardClauseData[];
+}
+
+export interface CodeLabel {
+  code: string;
+  label: string;
+}
+
+export interface StandardClauseData {
+  clause_id: string;
+  contract_type: string;
+  category: CodeLabel;
+  title: string;
+  text: string;
+  source: string;
+  version: string;
+}
+
+export interface ReviewClauseResultData {
+  user_clause_id: string;
+  user_clause: string;
+  deviation: CodeLabel;
+  match: {
+    status: 'CANDIDATE_SELECTED' | 'NO_CANDIDATE';
+    standard?: StandardClauseData | null;
+  };
+  explanation: string;
+  toxic_patterns: CodeLabel[];
+}
+
+export interface MissingStandardClauseData {
+  result_type: CodeLabel;
+  standard: StandardClauseData;
+  explanation: string;
 }
 
 export interface ContractTypeMeta {
@@ -141,6 +209,25 @@ export interface MetaCodeLabel {
   label: string;
 }
 
+export interface CategoryMeta extends MetaCodeLabel {
+  description?: string | null;
+  anchors?: string[];
+}
+
+export interface ToxicPatternMeta extends MetaCodeLabel {
+  category?: string | null;
+  example_count: number;
+}
+
+export interface FeatureFlags {
+  chat: boolean;
+  basic_suggestion: boolean;
+  confidence_score: boolean;
+  suggestion_edit: boolean;
+  single_clause_rereview: boolean;
+  server_side_cancel: boolean;
+}
+
 export interface FilePolicyMeta {
   extensions: string[];
   max_size_bytes: number;
@@ -152,41 +239,66 @@ export interface MetadataData {
   schema_version: string;
   updated_at: string;
   contract_types: ContractTypeMeta[];
-  categories: MetaCodeLabel[];
+  categories: CategoryMeta[];
+  toxic_patterns: ToxicPatternMeta[];
+  scope_statuses: ScopeStatus[];
+  review_states: string[];
   result_codes: string[];
   result_code_details: MetaCodeLabel[];
   progress_stages: string[];
   progress_stage_details: MetaCodeLabel[];
+  grounding_statuses: string[];
+  chat_outcomes: string[];
+  draft_outcomes: string[];
+  error_codes: string[];
+  selection_sources: string[];
+  next_actions: string[];
   file_policy: FilePolicyMeta;
+  features: FeatureFlags;
 }
 
 export interface GroundingData {
-  items: Array<{
-    source?: string;
-    title?: string;
-    text?: string;
-    url?: string;
-  }>;
+  grounding_status: string;
+  category: CodeLabel;
+  contract_type: string;
+  message?: string | null;
+  items: GroundingItem[];
+}
+
+export interface GroundingItem {
+  source_id: string;
+  law_name?: string | null;
+  article?: string | null;
+  text: string;
+  source?: string | null;
+  source_url?: string | null;
 }
 
 export interface ChatSource {
-  source_type?: 'clause' | 'law' | string;
-  label?: string;
-  title?: string;
-  source_id?: string;
+  type: 'USER_CLAUSE' | 'STANDARD_CLAUSE' | 'LAW';
+  id?: string | null;
+  law_name?: string | null;
+  article?: string | null;
+}
+
+export interface ChatHistoryMessage {
+  role: 'user' | 'assistant';
+  content: string;
 }
 
 export interface ChatResponse {
+  outcome: string;
   answer: string | null;
   sources: ChatSource[];
   refused: boolean;
   limitations: string[];
+  tool_status: string;
   disclaimer: string;
 }
 
 export interface RequiredConfirmation {
-  field?: string;
-  message?: string;
+  field: string;
+  placeholder: string;
 }
 
 export interface SuggestionResponse {
@@ -194,6 +306,10 @@ export interface SuggestionResponse {
   text: string | null;
   purpose: string | null;
   key_changes: string[];
+  used_source_keys: string[];
+  user_clause_ids: string[];
+  standard_clause_ids: string[];
+  grounding_source_ids: string[];
   required_confirmations: RequiredConfirmation[];
   missing_inputs: string[];
   disclaimer: string;

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { AlertCircle, Check, ChevronRight, RefreshCw } from 'lucide-react'
 import { api } from '../api/api'
 import type { ReviewData, ReviewProgress, ReviewSseEvent } from '../types'
@@ -6,15 +6,18 @@ import { useToast } from '../contexts/ToastContext'
 import { useMetadata } from '../contexts/MetadataContext'
 import { getMetadataLabel } from '../utils/metadata'
 import { isTerminalReviewState, toReviewProgress } from '../utils/reviewProgress'
+import { getNextAction } from '../utils/apiErrors'
 
 interface Props {
   reviewId: string | null
   onDone: () => void
+  onRetry: (reviewId: string) => void
+  onStartNewReview: () => void
 }
 
 type Mode = 'running' | 'error' | 'done'
 
-export default function ProcessingScreen({ reviewId, onDone }: Props) {
+export default function ProcessingScreen({ reviewId, onDone, onRetry, onStartNewReview }: Props) {
   const { metadata } = useMetadata()
   const { showToast } = useToast()
   const stages = useMemo(
@@ -29,6 +32,8 @@ export default function ProcessingScreen({ reviewId, onDone }: Props) {
   const [mode, setMode] = useState<Mode>('running')
   const [errorMessage, setErrorMessage] = useState('')
   const [retryable, setRetryable] = useState(false)
+  const [reviewState, setReviewState] = useState<'QUEUED' | 'REVIEWING'>('QUEUED')
+  const retryRequestKey = useRef<string | null>(null)
 
   useEffect(() => {
     if (mode !== 'running' || !reviewId) return
@@ -41,21 +46,49 @@ export default function ProcessingScreen({ reviewId, onDone }: Props) {
     let lastSequence = -1
 
     const update = (reviewState: string, nextProgress?: ReviewProgress | null, reviewError?: ReviewData['error']) => {
+      if (reviewState === 'QUEUED' || reviewState === 'REVIEWING') {
+        setReviewState(reviewState)
+      }
       if (nextProgress) {
-        if (nextProgress.sequence < lastSequence) return
-        lastSequence = Math.max(lastSequence, nextProgress.sequence)
-        setProgress(nextProgress)
-        const index = stages.findIndex((stage) => stage.code === nextProgress.stage)
-        if (index >= 0) setActiveStep(index)
+        if (nextProgress.sequence >= lastSequence) {
+          lastSequence = nextProgress.sequence
+          setProgress(nextProgress)
+          const index = stages.findIndex((stage) => stage.code === nextProgress.stage)
+          if (index >= 0) setActiveStep(index)
+        }
       }
       if (reviewState === 'COMPLETED') {
+        if (watchdogTimer) {
+          clearTimeout(watchdogTimer)
+          watchdogTimer = null
+        }
+        stopPolling()
         setActiveStep(Math.max(stages.length - 1, 0))
         setMode('done')
       }
       if (['FAILED', 'CANCELLED', 'EXPIRED'].includes(reviewState)) {
+        if (watchdogTimer) {
+          clearTimeout(watchdogTimer)
+          watchdogTimer = null
+        }
+        stopPolling()
         setMode('error')
-        setErrorMessage(reviewError?.message || '검토가 중단되었거나 만료되었습니다.')
-        setRetryable(reviewError?.retryable === true)
+        const fallbackByCode: Record<string, string> = {
+          CORPUS_UNAVAILABLE: '표준 비교 기준 자료를 현재 사용할 수 없습니다.',
+          INVALID_CONFIG: '검토 서비스 설정을 확인할 수 없습니다. 관리자에게 문의해 주세요.',
+          PIPELINE_ERROR: '검토 처리 시간이 초과되었거나 처리 중 오류가 발생했습니다.',
+          MCP_TIMEOUT: '검토 서비스 응답이 지연되어 작업이 중단되었습니다.',
+          SESSION_EXPIRED: '검토 세션이 만료되었습니다. 새 검토를 시작해 주세요.',
+        }
+        setErrorMessage(
+          reviewError?.message
+          || fallbackByCode[reviewError?.code || '']
+          || '검토가 중단되었거나 만료되었습니다.',
+        )
+        setRetryable(
+          reviewError?.retryable === true
+          || getNextAction(reviewError) === 'RETRY_REVIEW'
+        )
       }
     }
 
@@ -76,7 +109,7 @@ export default function ProcessingScreen({ reviewId, onDone }: Props) {
           if (!subscribed) return
           update(response.data.review_state, response.data.progress, response.data.error)
           if (!isTerminalReviewState(response.data.review_state)) {
-            pollingTimer = setTimeout(poll, 1500)
+            pollingTimer = setTimeout(poll, 2000)
           } else {
             stopPolling()
           }
@@ -91,7 +124,10 @@ export default function ProcessingScreen({ reviewId, onDone }: Props) {
           }
           setMode('error')
           setErrorMessage(error?.message || '검토 상태를 불러오지 못했습니다.')
-          setRetryable(error?.retryable === true)
+          setRetryable(
+            error?.retryable === true
+            || getNextAction(error) === 'RETRY_REVIEW'
+          )
         }
       }
       void poll()
@@ -139,9 +175,14 @@ export default function ProcessingScreen({ reviewId, onDone }: Props) {
       source.addEventListener('progress', onEvent)
       source.addEventListener('completed', onEvent)
       source.addEventListener('failed', onEvent)
+      source.onopen = () => {
+        stopPolling()
+        scheduleWatchdog()
+      }
       scheduleWatchdog()
       source.onerror = () => {
-        source?.close()
+        // EventSource가 Last-Event-ID를 유지한 채 자동 재연결하도록 연결은 닫지 않는다.
+        // 재연결 전까지는 polling으로 현재 상태를 동기화한다.
         startPolling()
       }
     } catch {
@@ -159,13 +200,19 @@ export default function ProcessingScreen({ reviewId, onDone }: Props) {
   const retry = async () => {
     if (!reviewId) return
     try {
-      await api.retryReview(reviewId, crypto.randomUUID())
+      const idempotencyKey = retryRequestKey.current ?? crypto.randomUUID()
+      retryRequestKey.current = idempotencyKey
+      const response = await api.retryReview(reviewId, idempotencyKey)
+      retryRequestKey.current = null
       setActiveStep(0)
       setProgress(null)
-      setMode('running')
+      onRetry(response.data.review_id)
     } catch (error: any) {
       setErrorMessage(error?.message || '재시도 요청에 실패했습니다.')
-      setRetryable(error?.retryable === true)
+      setRetryable(
+        error?.retryable === true
+        || getNextAction(error) === 'RETRY_REVIEW'
+      )
     }
   }
 
@@ -174,8 +221,14 @@ export default function ProcessingScreen({ reviewId, onDone }: Props) {
   return (
     <div className="mx-auto w-full max-w-[760px] space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-950">계약서를 검토하고 있습니다</h1>
-        <p className="mt-2 text-sm text-slate-500">진행 상태는 실시간으로 갱신됩니다.</p>
+        <h1 className="text-2xl font-bold text-slate-950">
+          {reviewState === 'QUEUED' ? '검토 요청이 접수되었습니다' : '계약서를 검토하고 있습니다'}
+        </h1>
+        <p className="mt-2 text-sm text-slate-500">
+          {reviewState === 'QUEUED'
+            ? '검토를 시작할 준비를 하고 있습니다.'
+            : '진행 상태는 실시간으로 갱신됩니다.'}
+        </p>
       </div>
       {mode !== 'error' && <div className="rounded-2xl border border-slate-200 bg-white p-5">
         <div className="mb-3 flex justify-between text-sm"><span>검토 진행 상태</span><span className="text-blue-600">{progress?.percent ?? 0}%</span></div>
@@ -190,6 +243,11 @@ export default function ProcessingScreen({ reviewId, onDone }: Props) {
       </section>
       {mode === 'error' && <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700"><AlertCircle className="mr-2 inline size-4" />{errorMessage}</div>}
       {mode === 'error' && retryable && <button onClick={retry} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white"><RefreshCw className="size-4" />다시 시도</button>}
+      {mode === 'error' && !retryable && (
+        <button onClick={onStartNewReview} className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white">
+          새 검토 시작
+        </button>
+      )}
       {mode === 'done' && <button onClick={onDone} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white">검토 결과 확인 <ChevronRight className="size-4" /></button>}
     </div>
   )

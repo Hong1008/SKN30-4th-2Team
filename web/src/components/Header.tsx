@@ -1,42 +1,40 @@
-import { ShieldCheck } from 'lucide-react'
+import { Plus, ShieldCheck } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import type { Screen } from '../types'
 
 interface Props {
   currentScreen: Screen
   onNavigate: (s: Screen) => void
+  expiresAt: string | null
+  canStartNewReview: boolean
+  onStartNewReview: () => void
+  isStartingNewReview: boolean
 }
 
-export default function Header({ currentScreen, onNavigate }: Props) {
-  const isReview = ['upload', 'contract-type', 'out-of-scope', 'processing'].includes(currentScreen)
+export default function Header({
+  currentScreen,
+  onNavigate,
+  expiresAt,
+  canStartNewReview,
+  onStartNewReview,
+  isStartingNewReview,
+}: Props) {
+  const isReview = ['upload-and-type', 'out-of-scope', 'processing'].includes(currentScreen)
   const isResult = ['results', 'clause-detail', 'chatbot'].includes(currentScreen)
 
-  const [timeLeft, setTimeLeft] = useState(1800) // 30 minutes in seconds
+  const secondsUntilExpiry = () => expiresAt
+    ? Math.max(0, Math.ceil((new Date(expiresAt).getTime() - Date.now()) / 1000))
+    : null
+  const [timeLeft, setTimeLeft] = useState<number | null>(secondsUntilExpiry)
 
   useEffect(() => {
-    // throttle the reset to avoid excessive state updates
-    let timeoutId: number | null = null;
-    const resetTimer = () => {
-      if (!timeoutId) {
-        setTimeLeft(1800)
-        timeoutId = window.setTimeout(() => { timeoutId = null }, 1000)
-      }
-    }
-    
-    window.addEventListener('keydown', resetTimer)
-    window.addEventListener('click', resetTimer)
-
+    setTimeLeft(secondsUntilExpiry())
     const interval = setInterval(() => {
-      setTimeLeft(prev => (prev > 0 ? prev - 1 : 0))
+      setTimeLeft(secondsUntilExpiry())
     }, 1000)
 
-    return () => {
-      window.removeEventListener('keydown', resetTimer)
-      window.removeEventListener('click', resetTimer)
-      clearInterval(interval)
-      if (timeoutId) clearTimeout(timeoutId)
-    }
-  }, [])
+    return () => clearInterval(interval)
+  }, [expiresAt])
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60)
@@ -111,12 +109,24 @@ export default function Header({ currentScreen, onNavigate }: Props) {
 
         {/* Right: session */}
         <div className="ml-auto flex items-center gap-4">
-          <div className="hidden items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 sm:flex">
+          {canStartNewReview && (
+            <button
+              type="button"
+              onClick={onStartNewReview}
+              disabled={isStartingNewReview}
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            >
+              <Plus className="size-4" />
+              {isStartingNewReview ? '정리 중' : '새 검토'}
+            </button>
+          )}
+          {timeLeft !== null && <div className="hidden items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 sm:flex">
             <span className={`size-1.5 rounded-full ${timeLeft > 300 ? 'bg-emerald-500' : 'bg-red-500 animate-pulse'}`} />
             <span className="text-[11px] font-medium text-slate-600 font-mono tracking-tight">
-              세션 유지 중 <span className="ml-0.5">{formatTime(timeLeft)}</span>
+              {timeLeft > 0 ? '세션 유지 중' : '세션 만료'}
+              <span className="ml-0.5">{formatTime(timeLeft)}</span>
             </span>
-          </div>
+          </div>}
         </div>
       </div>
     </header>
