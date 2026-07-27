@@ -1,4 +1,4 @@
-import { ApiResponse, ReviewSessionData, ReviewData, ResultsData } from '../types';
+import { ApiResponse, ReviewSessionData, ReviewData, ResultsData, MetadataData } from '../types';
 
 // TODO(Real API Integration):
 // When replacing this mock API with real axios/fetch calls, ensure to configure the client:
@@ -10,6 +10,68 @@ import { ApiResponse, ReviewSessionData, ReviewData, ResultsData } from '../type
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export const mockApi = {
+  async getMetadata(): Promise<ApiResponse<MetadataData>> {
+    await delay(300);
+    return {
+      data: {
+        schema_version: "1.1",
+        updated_at: new Date().toISOString(),
+        contract_types: [
+          {
+            code: "SW_FREELANCE",
+            label: "SW 프리랜서 용역",
+            description: "SW 프리랜서 도급·용역 계약 비교 기준입니다.",
+            enabled_for_mvp: true
+          },
+          {
+            code: "SI_SUBCONTRACT",
+            label: "SI 하도급",
+            description: "SI 구축 하도급 계약 비교 기준입니다.",
+            enabled_for_mvp: true
+          },
+          {
+            code: "SM_SUBCONTRACT",
+            label: "SM 하도급",
+            description: "SM 운영·유지보수 하도급 계약 비교 기준입니다.",
+            enabled_for_mvp: true
+          }
+        ],
+        categories: [
+          { code: "CONTRACT_PURPOSE", label: "계약목적" },
+          { code: "DELIVERY", label: "납품/검수" },
+          { code: "PAYMENT", label: "대금지급" },
+          { code: "DELAY_PENALTY", label: "지체상금" },
+          { code: "MAINTENANCE", label: "하자보수" },
+          { code: "IP", label: "지식재산권" },
+          { code: "TERMINATION", label: "계약해지" },
+          { code: "COMPENSATION", label: "손해배상" },
+          { code: "CONFIDENTIALITY", label: "비밀유지" }
+        ],
+        result_codes: [
+          { code: "NONE", label: "대응 표준조항 있음" },
+          { code: "EXTRA", label: "추가·변형 내용 확인" },
+          { code: "NO_MATCH", label: "대응 조항 확인 필요" },
+          { code: "MISSING", label: "포함 여부 확인 필요" }
+        ],
+        progress_stages: [
+          { code: "PREPARE", label: "검토 준비 중" },
+          { code: "BATCH_SEARCH", label: "조항 탐색 및 분류" },
+          { code: "RERANK", label: "관련 조항 재정렬" },
+          { code: "CLAUSE_REVIEW", label: "검토 진행 중" },
+          { code: "MISSING_DETECTION", label: "누락 조항 검출" },
+          { code: "RESULT_ASSEMBLY", label: "결과 정리 중" }
+        ],
+        file_policy: {
+          extensions: ["hwp", "hwpx", "pdf", "docx"],
+          max_size_bytes: 10485760,
+          single_file_only: true,
+          encrypted_file_allowed: false
+        }
+      },
+      meta: { request_id: 'meta_req_1', timestamp: new Date().toISOString() }
+    }
+  },
+
   async uploadContract(file: File): Promise<ApiResponse<ReviewSessionData>> {
     await delay(1500);
     return {
@@ -186,6 +248,37 @@ export const mockApi = {
         ]
       },
       meta: { request_id: 'req_5', timestamp: new Date().toISOString() }
+    };
+  },
+
+  async getGrounding(reviewId: string, category: string): Promise<ApiResponse<any>> {
+    await delay(600);
+    return {
+      data: {
+        grounding_status: 'OK',
+        category: { code: category, label: '법령 카테고리' },
+        contract_type: 'SW_FREELANCE',
+        items: [
+          {
+            source_id: 'law_1',
+            law_name: '하도급공정화에관한법률',
+            article: '제3조',
+            text: '원사업자는 수급사업자에게 제조등의 위탁을 하는 경우에는 제2항의 사항을 적은 서면을 수급사업자가 물품등의 납품을 위한 작업을 시작하기 전까지 수급사업자에게 발급하여야 한다.',
+            source: '국가법령정보센터',
+            source_url: null
+          },
+          {
+            source_id: 'law_2',
+            law_name: '소프트웨어진흥법',
+            article: '제50조',
+            text: '국가기관등의 장은 소프트웨어사업의 계약을 체결하는 경우 공정한 계약의 체결을 위하여 노력하여야 한다.',
+            source: '국가법령정보센터',
+            source_url: null
+          }
+        ],
+        message: null
+      },
+      meta: { request_id: 'req_grounding', timestamp: new Date().toISOString() }
     };
   },
 

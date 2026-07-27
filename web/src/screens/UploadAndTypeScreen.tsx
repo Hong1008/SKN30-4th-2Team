@@ -2,8 +2,10 @@ import { useState, useRef } from 'react'
 import {
   UploadCloud, FileText, CheckCircle2, X, ChevronRight, BriefcaseBusiness, Handshake, AlertCircle
 } from 'lucide-react'
-import { mockApi } from '../api/mockApi'
+import { api } from '../api/api'
 import { TEMP_FILE_MAX_SIZE, SESSION_ID_KEY, REVIEW_ID_KEY } from '../config'
+import { useMetadata } from '../contexts/MetadataContext'
+import { useToast } from '../contexts/ToastContext'
 
 interface Props { 
   sessionId: string | null;
@@ -15,15 +17,13 @@ interface Props {
 
 type UploadState = 'idle' | 'uploading' | 'success'
 
-const FORMATS = ['HWP', 'HWPX', 'PDF', 'DOCX']
-
-const CONTRACT_TYPES = [
-  { id: 'SI_SUBCONTRACT', name: 'SI 하도급', sub: 'SI 구축 하도급 계약 비교 기준입니다.' },
-  { id: 'SW_FREELANCE', name: 'SW 프리랜서 용역', sub: 'SW 프리랜서 도급·용역 계약 비교 기준입니다.' },
-  { id: 'SM_SUBCONTRACT', name: 'SM 하도급', sub: 'SM 운영·유지보수 하도급 계약 비교 기준입니다.' },
-]
-
 export default function UploadAndTypeScreen({ sessionId, setSessionId, setReviewId, onNext, onOutOfScope }: Props) {
+  const { metadata } = useMetadata()
+  const { showToast } = useToast()
+  const formats = metadata?.file_policy.extensions.map(e => e.toUpperCase()) || []
+  const maxSizeBytes = metadata?.file_policy.max_size_bytes || TEMP_FILE_MAX_SIZE
+  const contractTypes = metadata?.contract_types.filter(t => t.enabled_for_mvp) || []
+
   const [uploadState, setUploadState] = useState<UploadState>('idle')
   const [isDragging, setIsDragging]   = useState(false)
   const [progress, setProgress]        = useState(0)
@@ -32,8 +32,8 @@ export default function UploadAndTypeScreen({ sessionId, setSessionId, setReview
   const fileRef = useRef<HTMLInputElement>(null)
   
   const [selectedType, setSelectedType] = useState('')
-  const [suggestedType, setSuggestedType] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
+  const [emptyDocError, setEmptyDocError] = useState(false)
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -43,13 +43,14 @@ export default function UploadAndTypeScreen({ sessionId, setSessionId, setReview
 
   const processFile = async (file: File) => {
     setErrorMsg('')
-    if (file.size > TEMP_FILE_MAX_SIZE) {
-      setErrorMsg(`파일 크기가 10MB를 초과합니다. (현재: ${(file.size / 1024 / 1024).toFixed(1)}MB)`)
+    setEmptyDocError(false)
+    if (file.size > maxSizeBytes) {
+      setErrorMsg(`파일 크기가 제한(${(maxSizeBytes / 1024 / 1024).toFixed(1)}MB)을 초과합니다. (현재: ${(file.size / 1024 / 1024).toFixed(1)}MB)`)
       return
     }
 
     const extension = file.name.split('.').pop()?.toUpperCase() || ''
-    if (!FORMATS.includes(extension)) {
+    if (!formats.includes(extension)) {
       setErrorMsg(`지원하지 않는 파일 형식입니다. (.${extension.toLowerCase()})`)
       return
     }
@@ -65,13 +66,13 @@ export default function UploadAndTypeScreen({ sessionId, setSessionId, setReview
     }, 200)
 
     try {
-      const response = await mockApi.uploadContract(file)
+      const response = await api.uploadContract(file)
       clearInterval(id)
       
       // [4] EMPTY_DOCUMENT 처리: 파일은 올라갔으나 조항이 없는 경우
       if (response.data.can_start_review === false && response.data.allowed_actions?.includes('REUPLOAD')) {
         setUploadState('idle')
-        setErrorMsg('문서 내에 추출 가능한 계약 조항이 없습니다. (EMPTY_DOCUMENT)')
+        setEmptyDocError(true)
         return
       }
 
@@ -82,10 +83,7 @@ export default function UploadAndTypeScreen({ sessionId, setSessionId, setReview
       setSessionId(newSessionId)
       localStorage.setItem(SESSION_ID_KEY, newSessionId)
 
-      if (response.data.suggested_contract_type) {
-        setSelectedType(response.data.suggested_contract_type)
-        setSuggestedType(response.data.suggested_contract_type)
-      }
+      showToast('파일이 무사히 업로드되었습니다.', 'success')
     } catch (err: any) {
       clearInterval(id)
       setUploadState('idle')
@@ -96,9 +94,8 @@ export default function UploadAndTypeScreen({ sessionId, setSessionId, setReview
       else if (status === 415) setErrorMsg('지원하지 않는 파일 형식이거나 실제 파일 타입이 불일치합니다.')
       else if (status === 422) setErrorMsg('파일이 암호화되어 있거나 손상되어 읽을 수 없습니다.')
       else if (status === 404 || status === 410) {
-        alert('유효하지 않거나 만료된 세션입니다. 처음부터 다시 시작합니다.')
-        localStorage.clear()
-        window.location.reload()
+        showToast('유효하지 않거나 만료된 세션입니다. 처음부터 다시 시작합니다.', 'error')
+        reset()
       } else {
         setErrorMsg('업로드에 실패했습니다. 다시 시도해주세요.')
       }
@@ -109,7 +106,7 @@ export default function UploadAndTypeScreen({ sessionId, setSessionId, setReview
     if (!sessionId) return
     try {
       // 1. Confirm contract type
-      const scopeRes = await mockApi.selectContractType(sessionId, selectedType)
+      const scopeRes = await api.selectContractType(sessionId, selectedType)
       
       // [3] 범위 외 확인(OUT_OF_SCOPE_CONFIRMATION_REQUIRED) 처리
       if (scopeRes.data.scope_status === 'OUT_OF_SCOPE_CONFIRMATION_REQUIRED') {
@@ -119,7 +116,7 @@ export default function UploadAndTypeScreen({ sessionId, setSessionId, setReview
 
       // 2. Start review (with Idempotency-Key)
       const idempotencyKey = crypto.randomUUID()
-      const reviewRes = await mockApi.startReview(sessionId, idempotencyKey)
+      const reviewRes = await api.startReview(sessionId, idempotencyKey)
       setReviewId(reviewRes.data.review_id)
       localStorage.setItem(REVIEW_ID_KEY, reviewRes.data.review_id)
       
@@ -132,9 +129,8 @@ export default function UploadAndTypeScreen({ sessionId, setSessionId, setReview
         console.warn('이미 처리 중인 검토 요청입니다.')
         onNext() // 기존 처리 내역이 있다고 가정하고 넘어감
       } else if (status === 404 || status === 410) {
-        alert('유효하지 않거나 만료된 세션입니다. 처음부터 다시 시작합니다.')
-        localStorage.clear()
-        window.location.reload()
+        showToast('유효하지 않거나 만료된 세션입니다. 처음부터 다시 시작합니다.', 'error')
+        reset()
       } else {
         setErrorMsg('검토 시작 요청에 실패했습니다.')
       }
@@ -145,6 +141,7 @@ export default function UploadAndTypeScreen({ sessionId, setSessionId, setReview
     setUploadState('idle')
     setProgress(0)
     setErrorMsg('')
+    setEmptyDocError(false)
     setSessionId(null)
     setReviewId(null)
     localStorage.removeItem(SESSION_ID_KEY)
@@ -152,18 +149,23 @@ export default function UploadAndTypeScreen({ sessionId, setSessionId, setReview
   }
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-8 pb-24 animate-fade-up">
-      {/* ── 1. Upload Section ── */}
-      <section className="rounded-3xl border border-slate-200/80 bg-white p-6 shadow-sm sm:p-8 space-y-6">
-        <div>
-          <p className="mb-3 inline-flex rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 ring-1 ring-blue-600/10">
-            STEP 1 · 파일 업로드
-          </p>
-          <h1 className="text-2xl font-bold tracking-[-0.025em] text-slate-950 sm:text-3xl mb-2">
+    <div className="mx-auto w-full max-w-[760px] space-y-8 pb-24">
+      {/* ── 1. Upload & Type Section ── */}
+      <section className="
+        rounded-2xl border border-slate-200/80 bg-white
+        shadow-[0_1px_2px_rgba(15,23,42,0.025),0_10px_30px_rgba(15,23,42,0.035)]
+        p-6 sm:p-8 space-y-8
+      ">
+        <div className="mb-7">
+          <h1 className="
+            text-2xl font-bold leading-tight
+            tracking-[-0.025em] text-slate-950 sm:text-3xl
+          ">
             검토할 계약서를 업로드해 주세요
           </h1>
-          <p className="text-sm text-slate-600 leading-relaxed">
-            업로드한 문서는 검토 목적으로만 일시적으로 처리되며, 완료 후 서버에서 자동 삭제됩니다.
+
+          <p className="mt-2 max-w-2xl break-keep text-sm leading-6 text-slate-500">
+            업로드한 문서는 계약서 검토 목적으로만 처리됩니다.
           </p>
         </div>
 
@@ -171,6 +173,26 @@ export default function UploadAndTypeScreen({ sessionId, setSessionId, setReview
           <div className="flex items-center gap-3 rounded-2xl border border-rose-200 bg-rose-50/70 px-4 py-3.5 text-sm font-medium text-rose-700 animate-fade-up">
             <AlertCircle className="w-5 h-5 shrink-0" />
             <p>{errorMsg}</p>
+          </div>
+        )}
+
+        {emptyDocError && (
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border border-amber-200 bg-amber-50/70 p-5 animate-fade-up">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <h4 className="text-sm font-bold text-amber-900 mb-1">검토 가능한 조항이 없습니다</h4>
+                <p className="text-xs text-amber-700/90 break-keep">
+                  파일 검증은 통과했으나, 문서 내에서 비교 가능한 표준 계약 조항을 추출하지 못했습니다. 글자가 포함된 정상적인 계약서인지 확인 후 다시 업로드해 주세요.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => fileRef.current?.click()}
+              className="shrink-0 inline-flex items-center justify-center rounded-xl bg-amber-600 px-4 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-amber-700 transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-500/20"
+            >
+              새 문서 업로드
+            </button>
           </div>
         )}
 
@@ -189,40 +211,40 @@ export default function UploadAndTypeScreen({ sessionId, setSessionId, setReview
             onClick={() => {
               fileRef.current?.click()
             }}
-            className={`group relative flex min-h-[280px] cursor-pointer flex-col items-center justify-center overflow-hidden rounded-3xl border-2 border-dashed px-6 py-12 text-center transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/15 ${
+            className={`group relative flex min-h-[240px] cursor-pointer flex-col items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed px-6 py-8 text-center transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/15 ${
               isDragging
                 ? 'scale-[1.01] border-blue-500 bg-blue-50 shadow-lg shadow-blue-500/10'
                 : 'border-slate-300 bg-slate-50/60 hover:border-blue-400 hover:bg-blue-50/50'
             }`}
           >
-            <input ref={fileRef} type="file" className="hidden" accept=".hwp,.hwpx,.hwpml,.pdf,.xls,.xlsx,.docx" onChange={handleFileChange} />
+            <input ref={fileRef} type="file" className="hidden" accept={formats.map(f => `.${f.toLowerCase()}`).join(',')} onChange={handleFileChange} />
             
-            <div className="flex-1 flex flex-col items-center justify-center w-full px-6 py-12">
-              <div className={`mb-5 flex size-16 items-center justify-center rounded-2xl transition-all duration-200 group-hover:-translate-y-1 ${
+            <div className="flex w-full flex-col items-center justify-center px-4 py-6">
+              <div className={`mb-4 flex size-14 items-center justify-center rounded-2xl transition-all duration-200 group-hover:-translate-y-1 ${
                 isDragging
                   ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/25'
                   : 'bg-white text-blue-600 shadow-sm ring-1 ring-slate-200'
               }`}>
                 <UploadCloud className={`size-8 transition-colors ${isDragging ? 'text-white' : 'text-blue-600'}`} />
               </div>
-              <p className="text-[17px] font-semibold text-slate-950 mb-2 tracking-tight">
+              <p className="mb-2 text-[15px] font-semibold leading-6 tracking-[-0.01em] text-slate-900">
                 파일을 이곳에 드래그하거나 직접 선택하세요
               </p>
               
-              <p className="text-xs font-medium text-slate-400 tracking-[0.2em] mb-8">
-                {FORMATS.join(' · ')}
+              <p className="mb-6 text-[11px] font-medium tracking-[0.08em] text-slate-400">
+                {formats.join(' · ')}
               </p>
 
               <button
                 onClick={e => { e.stopPropagation(); fileRef.current?.click() }}
-                className="rounded-xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-blue-700 hover:shadow-md active:translate-y-0 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/20"
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-semibold text-white shadow-[0_1px_2px_rgba(37,99,235,0.2),0_6px_16px_rgba(37,99,235,0.16)] transition-[background-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:bg-blue-700 hover:shadow-md active:translate-y-0 active:bg-blue-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/20"
               >
                 파일 선택
               </button>
             </div>
             
             <div className="absolute bottom-5 left-0 right-0 text-center">
-              <p className="text-xs text-slate-500 font-medium">최대 10MB까지 업로드 가능합니다</p>
+              <p className="text-xs text-slate-500 font-medium">최대 {(maxSizeBytes / 1024 / 1024).toFixed(1)}MB까지 업로드 가능합니다</p>
             </div>
           </div>
         )}
@@ -270,30 +292,16 @@ export default function UploadAndTypeScreen({ sessionId, setSessionId, setReview
             </div>
           </div>
         )}
-      </section>
-
-      {/* ── 2. Contract Type Section ── */}
-      <section className="rounded-3xl border border-slate-200/80 bg-white p-6 shadow-sm sm:p-8 space-y-6">
-        <div>
-          <p className="mb-3 inline-flex rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 ring-1 ring-blue-600/10">
-            STEP 2 · 비교 기준
-          </p>
-          <h2 className="text-2xl font-bold tracking-[-0.025em] text-slate-950 sm:text-3xl mb-2">계약 유형 선택</h2>
-          <p className="text-sm text-slate-600 leading-relaxed mb-1">
-            실제 계약 관계에 가장 가까운 유형을 선택해 주세요.
-          </p>
-          <p className="text-xs text-slate-500 italic">
-            * 그 외의 계약서 지원 서비스는 추후 확장 예정입니다.
-          </p>
-        </div>
+        {/* ── 2. Contract Type Section ── */}
+        <div className="pt-4 border-t border-slate-100 space-y-4">
 
         <div className="grid md:grid-cols-3 gap-3">
-          {CONTRACT_TYPES.map((type) => {
-            const active = selectedType === type.id
+          {contractTypes.map((type) => {
+            const active = selectedType === type.code
             return (
               <button 
-                key={type.id} 
-                onClick={() => setSelectedType(type.id)} 
+                key={type.code} 
+                onClick={() => setSelectedType(type.code)} 
                 aria-pressed={active}
                 className={`relative min-h-28 rounded-2xl border p-5 text-left transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/15 ${
                   active 
@@ -301,21 +309,17 @@ export default function UploadAndTypeScreen({ sessionId, setSessionId, setReview
                     : 'border-slate-200 bg-white hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md'
                 }`}
               >
-                {suggestedType === type.id && (
-                  <span className="absolute -top-2.5 right-3 rounded-full bg-blue-600 px-2.5 py-1 text-[10px] font-bold text-white shadow-sm">
-                    AI 추천
-                  </span>
-                )}
                 <div className="flex items-center justify-between w-full mb-1">
-                  <h3 className={`text-[15px] font-semibold ${active ? 'text-blue-700' : 'text-slate-900'}`}>{type.name}</h3>
+                  <h3 className={`text-[15px] font-semibold ${active ? 'text-blue-700' : 'text-slate-900'}`}>{type.label}</h3>
                   {active && (
                     <CheckCircle2 className="w-5 h-5 text-blue-600" />
                   )}
                 </div>
-                <p className="text-[12px] text-slate-500 leading-relaxed break-keep">{type.sub}</p>
+                <p className="text-[12px] text-slate-500 leading-relaxed break-keep">{type.description}</p>
               </button>
             )
           })}
+
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-white px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-3">
@@ -325,6 +329,12 @@ export default function UploadAndTypeScreen({ sessionId, setSessionId, setReview
           <button onClick={onOutOfScope} className="text-sm font-semibold text-blue-600 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/15 rounded">
             제공 범위 확인
           </button>
+        </div>
+        <div className="flex justify-end">
+          <p className="text-xs text-slate-500 italic">
+            * 그 외의 계약서 지원 서비스는 추후 확장 예정입니다.
+          </p>
+        </div>
         </div>
       </section>
 
@@ -339,9 +349,9 @@ export default function UploadAndTypeScreen({ sessionId, setSessionId, setReview
         <button
           onClick={handleNext}
           disabled={uploadState !== 'success' || !selectedType}
-          className={`inline-flex min-h-12 items-center justify-center gap-2 rounded-xl px-7 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/15 ${
+          className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-5 text-sm font-semibold transition-[background-color,box-shadow,transform] duration-150 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/20 ${
             uploadState === 'success' && selectedType
-              ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20 hover:-translate-y-0.5 hover:bg-blue-700 hover:shadow-xl active:translate-y-0'
+              ? 'bg-blue-600 text-white shadow-[0_1px_2px_rgba(37,99,235,0.2),0_6px_16px_rgba(37,99,235,0.16)] hover:-translate-y-px hover:bg-blue-700 hover:shadow-md active:translate-y-0 active:bg-blue-800'
               : 'bg-slate-200 text-slate-400 cursor-not-allowed'
           }`}
         >

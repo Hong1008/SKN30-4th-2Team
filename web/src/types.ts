@@ -6,16 +6,20 @@ export type Screen =
   | 'clause-detail'
   | 'chatbot'
 
-export type BadgeStatus = 'matched' | 'modified' | 'review' | 'missing'
+export type ResultCode = 'NONE' | 'EXTRA' | 'NO_MATCH' | 'MISSING'
 
 export interface ClauseResult {
   id: string
   article: string
   excerpt: string
-  status: BadgeStatus
+  status: ResultCode
   category: string
   summary: string
-  toxic_patterns?: string[]
+  toxic_patterns?: {code: string; label: string}[]
+  categoryCode?: string
+  standardTitle?: string
+  standardText?: string
+  standardSource?: string
 }
 
 export interface MissingClauseResult {
@@ -110,4 +114,33 @@ export interface ResultsData {
   };
   clause_results: any[];
   missing_standard_clauses: any[];
+}
+
+export interface ContractTypeMeta {
+  code: string;
+  label: string;
+  description: string;
+  enabled_for_mvp: boolean;
+}
+
+export interface MetaCodeLabel {
+  code: string;
+  label: string;
+}
+
+export interface FilePolicyMeta {
+  extensions: string[];
+  max_size_bytes: number;
+  single_file_only: boolean;
+  encrypted_file_allowed: boolean;
+}
+
+export interface MetadataData {
+  schema_version: string;
+  updated_at: string;
+  contract_types: ContractTypeMeta[];
+  categories: MetaCodeLabel[];
+  result_codes: MetaCodeLabel[];
+  progress_stages: MetaCodeLabel[];
+  file_policy: FilePolicyMeta;
 }

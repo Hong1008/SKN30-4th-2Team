@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
 import { ArrowLeft, Send, BookOpen, Scale, Copy, Check, AlertCircle, ChevronDown } from 'lucide-react'
+import { api } from '../api/api'
 
-interface Props { onBack: () => void }
+interface Props { onBack: () => void; reviewId: string }
 
 interface Message {
   id: string
@@ -57,7 +58,7 @@ const PROPOSAL = {
    - 8시간 근무 시 1시간 이상`,
 }
 
-export default function ChatbotScreen({ onBack }: Props) {
+export default function ChatbotScreen({ onBack, reviewId }: Props) {
   const [messages, setMessages]         = useState<Message[]>(INITIAL_MESSAGES)
   const [input, setInput]               = useState('')
   const [showProposal, setShowProposal] = useState(false)
@@ -79,11 +80,8 @@ export default function ChatbotScreen({ onBack }: Props) {
     // 멱등성 키 생성 (Idempotency-Key)
     const idempotencyKey = crypto.randomUUID()
     
-    // 실제 API(또는 mockApi) 호출 시 멱등성 키 전달
-    // const response = await mockApi.chat('dummy_review_id', text, idempotencyKey)
-    console.log(`[Chat] Sending message with Idempotency-Key: ${idempotencyKey}`);
-    
-    setTimeout(() => {
+    // 실제 API 호출 시 멱등성 키 전달
+    api.chat(reviewId, text, idempotencyKey).then(res => {
       const reply: Message = isOutOfScope
         ? {
             id: `a${Date.now()}`,
@@ -98,7 +96,7 @@ export default function ChatbotScreen({ onBack }: Props) {
             sources: [{ label: '제5조 (근로시간 및 휴게)', type: 'clause' }],
           }
       setMessages(prev => [...prev, reply])
-    }, 900)
+    })
   }
 
   const copyProposal = () => {
@@ -110,7 +108,7 @@ export default function ChatbotScreen({ onBack }: Props) {
   return (
     <div className="animate-fade-up">
       <div className="flex items-center gap-3 mb-6">
-        <button onClick={onBack} className="flex items-center gap-1.5 text-sm text-[#475569] hover:text-[#1E293B] transition-colors">
+        <button onClick={onBack} className="flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-900 transition-colors">
           <ArrowLeft className="w-4 h-4" />
           검토 결과로
         </button>
@@ -118,11 +116,11 @@ export default function ChatbotScreen({ onBack }: Props) {
 
       <div className="grid lg:grid-cols-[1fr_380px] gap-6">
         {/* Chat panel */}
-        <div className="bg-white border border-[#E2E8F0] rounded-2xl flex flex-col" style={{ height: 620 }}>
+        <div className="bg-white border border-slate-200 rounded-2xl flex flex-col" style={{ height: 620 }}>
           {/* Header */}
-          <div className="px-5 py-4 border-b border-[#E2E8F0]">
-            <h2 className="text-sm font-semibold text-[#1E293B]">검토 결과 기반 질의응답</h2>
-            <p className="text-xs text-[#475569] mt-0.5">
+          <div className="px-5 py-4 border-b border-slate-200">
+            <h2 className="text-sm font-semibold text-slate-900">검토 결과 기반 질의응답</h2>
+            <p className="text-xs text-slate-600 mt-0.5">
               이 챗봇은 검토 결과 내 조항 및 표준계약서를 근거로 답변합니다.
             </p>
           </div>
@@ -146,8 +144,8 @@ export default function ChatbotScreen({ onBack }: Props) {
                       </div>
                     ) : (
                       <>
-                        <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl rounded-tl-sm px-4 py-3">
-                          <p className="text-sm text-[#1E293B] leading-relaxed whitespace-pre-line">{msg.text}</p>
+                        <div className="bg-slate-50 border border-slate-200 rounded-xl rounded-tl-sm px-4 py-3">
+                          <p className="text-sm text-slate-900 leading-relaxed whitespace-pre-line">{msg.text}</p>
                         </div>
                         {msg.sources && msg.sources.length > 0 && (
                           <div className="flex flex-wrap gap-1.5">
@@ -156,8 +154,8 @@ export default function ChatbotScreen({ onBack }: Props) {
                                 key={i}
                                 className={`inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border ${
                                   s.type === 'law'
-                                    ? 'bg-[#EEF2FF] border-[#C7D2FE] text-[#6366F1]'
-                                    : 'bg-[#F8FAFC] border-[#E2E8F0] text-[#475569]'
+                                    ? 'bg-blue-50 border-blue-200 text-blue-600'
+                                    : 'bg-slate-50 border-slate-200 text-slate-600'
                                 }`}
                               >
                                 {s.type === 'law' ? <Scale className="w-2.5 h-2.5" /> : <BookOpen className="w-2.5 h-2.5" />}
@@ -171,7 +169,7 @@ export default function ChatbotScreen({ onBack }: Props) {
                   </div>
                 )}
                 {msg.role === 'user' && (
-                  <div className="bg-[#6366F1] text-white rounded-xl rounded-tr-sm px-4 py-3 max-w-[80%]">
+                  <div className="bg-blue-600 text-white rounded-xl rounded-tr-sm px-4 py-3 max-w-[80%]">
                     <p className="text-sm leading-relaxed">{msg.text}</p>
                   </div>
                 )}
@@ -187,7 +185,7 @@ export default function ChatbotScreen({ onBack }: Props) {
                 <button
                   key={i}
                   onClick={() => send(s)}
-                  className="shrink-0 px-3 py-1.5 text-[11px] text-[#6366F1] bg-[#EEF2FF] border border-[#C7D2FE] rounded-full hover:bg-[#C7D2FE]/40 transition-colors whitespace-nowrap"
+                  className="shrink-0 px-3 py-1.5 text-[11px] text-blue-600 bg-blue-50 border border-blue-200 rounded-full hover:bg-blue-200/40 transition-colors whitespace-nowrap"
                 >
                   {s}
                 </button>
@@ -204,12 +202,12 @@ export default function ChatbotScreen({ onBack }: Props) {
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), send(input))}
                 placeholder="검토 결과에 대해 질문해 주세요"
-                className="flex-1 px-4 py-2.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-sm text-[#1E293B] placeholder:text-[#64748B] focus:outline-none focus:border-[#6366F1] focus:ring-1 focus:ring-[#6366F1]"
+                className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-500 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
               />
               <button
                 onClick={() => send(input)}
                 disabled={!input.trim()}
-                className="w-10 h-10 bg-[#6366F1] text-white rounded-xl flex items-center justify-center hover:bg-[#4F46E5] disabled:bg-[#E2E8F0] disabled:text-[#64748B] transition-colors shrink-0"
+                className="w-10 h-10 bg-blue-600 text-white rounded-xl flex items-center justify-center hover:bg-blue-700 disabled:bg-slate-200 disabled:text-slate-500 transition-colors shrink-0"
                 aria-label="전송"
               >
                 <Send className="w-4 h-4" />
@@ -222,17 +220,17 @@ export default function ChatbotScreen({ onBack }: Props) {
         <div className="space-y-4">
           <button
             onClick={() => setShowProposal(!showProposal)}
-            className="w-full flex items-center justify-between px-5 py-4 bg-white border border-[#E2E8F0] rounded-xl hover:border-[#C7D2FE] transition-colors"
+            className="w-full flex items-center justify-between px-5 py-4 bg-white border border-slate-200 rounded-xl hover:border-blue-200 transition-colors"
           >
             <div className="text-left">
-              <p className="text-sm font-semibold text-[#1E293B]">협의 문구 제안</p>
-              <p className="text-xs text-[#475569] mt-0.5">제5조 (근로시간 및 휴게)</p>
+              <p className="text-sm font-semibold text-slate-900">협의 문구 제안</p>
+              <p className="text-xs text-slate-600 mt-0.5">제5조 (근로시간 및 휴게)</p>
             </div>
-            <ChevronDown className={`w-4 h-4 text-[#475569] transition-transform ${showProposal ? 'rotate-180' : ''}`} />
+            <ChevronDown className={`w-4 h-4 text-slate-600 transition-transform ${showProposal ? 'rotate-180' : ''}`} />
           </button>
 
           {showProposal && (
-            <div className="bg-white border border-[#E2E8F0] rounded-xl overflow-hidden">
+            <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
               {/* Disclaimer */}
               <div className="bg-amber-50 border-b border-amber-200 px-4 py-3">
                 <p className="text-[11px] text-amber-700 leading-relaxed">
@@ -245,32 +243,32 @@ export default function ChatbotScreen({ onBack }: Props) {
                 {/* Meta */}
                 <div className="space-y-2">
                   <div>
-                    <p className="text-[10px] font-semibold text-[#64748B] uppercase tracking-wider mb-1">생성 목적</p>
-                    <p className="text-xs text-[#475569] leading-relaxed">{PROPOSAL.purpose}</p>
+                    <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">생성 목적</p>
+                    <p className="text-xs text-slate-600 leading-relaxed">{PROPOSAL.purpose}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] font-semibold text-[#64748B] uppercase tracking-wider mb-1">주요 변경 내용</p>
-                    <p className="text-xs text-[#475569] leading-relaxed">{PROPOSAL.diff}</p>
+                    <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">주요 변경 내용</p>
+                    <p className="text-xs text-slate-600 leading-relaxed">{PROPOSAL.diff}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] font-semibold text-[#64748B] uppercase tracking-wider mb-1">참고 표준조항</p>
-                    <p className="text-xs text-[#6366F1]">{PROPOSAL.reference}</p>
+                    <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">참고 표준조항</p>
+                    <p className="text-xs text-blue-600">{PROPOSAL.reference}</p>
                   </div>
                 </div>
 
                 {/* Proposed text */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <p className="text-[10px] font-semibold text-[#64748B] uppercase tracking-wider">제안 문구</p>
+                    <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">제안 문구</p>
                     <button
                       onClick={copyProposal}
-                      className="flex items-center gap-1 text-[11px] text-[#475569] hover:text-[#1E293B] transition-colors"
+                      className="flex items-center gap-1 text-[11px] text-slate-600 hover:text-slate-900 transition-colors"
                     >
                       {copiedProp ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
                       {copiedProp ? '복사됨' : '복사'}
                     </button>
                   </div>
-                  <pre className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg px-4 py-4 text-[11px] text-[#1E293B] font-mono leading-relaxed whitespace-pre-wrap break-words">
+                  <pre className="bg-slate-50 border border-slate-200 rounded-lg px-4 py-4 text-[11px] text-slate-900 font-mono leading-relaxed whitespace-pre-wrap break-words">
                     {PROPOSAL.text}
                   </pre>
                 </div>
