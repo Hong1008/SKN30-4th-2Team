@@ -13,7 +13,6 @@ interface Props {
 
 type Mode = 'running' | 'error' | 'done'
 
-const USE_REAL_API = false // TODO: 실제 API 연동 시 true로 변경
 
 export default function ProcessingScreen({ reviewId, onDone }: Props) {
   const { metadata } = useMetadata()
@@ -33,7 +32,7 @@ export default function ProcessingScreen({ reviewId, onDone }: Props) {
     let isSubscribed = true
     let eventSource: EventSource | null = null
     let lastEventId: string | null = null
-    let currentPercent = progress?.percent || 0 // Mock용
+    let currentPercent = progress?.percent || 0
 
     const handleUpdate = (review_state: string, newProgress: ReviewProgress) => {
       setProgress(newProgress)
@@ -52,90 +51,39 @@ export default function ProcessingScreen({ reviewId, onDone }: Props) {
       }
     }
 
-    const connectSSE = () => {
+    const connectPolling = () => {
       if (!isSubscribed) return
 
-      if (USE_REAL_API) {
-        // [Real API] SSE 연결 및 Fallback 처리
-        const url = new URL(`http://localhost:8000/api/v1/reviews/${reviewId}/events`) // TODO: config의 API_BASE_URL 사용
-        if (lastEventId) {
-          url.searchParams.append('last_event_id', lastEventId)
-        }
-
-        eventSource = new EventSource(url.toString(), { withCredentials: true })
-
-        eventSource.onmessage = (event) => {
+      const poll = async () => {
+        try {
+          const res = await api.pollReviewStatus(reviewId, currentPercent)
           if (!isSubscribed) return
-          const data = JSON.parse(event.data)
-          // SSE 응답 최상위에 있는 sequence나 event.lastEventId 갱신
-          lastEventId = event.lastEventId || data.sequence?.toString() || lastEventId
-          handleUpdate(data.review_state, data) // data 자체가 progress 정보를 담고 있다고 가정
-        }
-
-        eventSource.onerror = async () => {
+          handleUpdate(res.data.review_state, res.data.progress)
+          if (res.data.review_state !== 'COMPLETED' && res.data.review_state !== 'FAILED') {
+            setTimeout(poll, 1500)
+          }
+        } catch (err: any) {
           if (!isSubscribed) return
-          eventSource?.close()
-          console.warn('[SSE] Connection lost. Attempting state sync & reconnect...')
-
-          try {
-            // 1. 상태 동기화 (Polling Fallback)
-            const syncRes = await fetch(`http://localhost:8000/api/v1/reviews/${reviewId}`, { credentials: 'include' })
-            if (!syncRes.ok) throw new Error('Sync failed')
-            const syncData = await syncRes.json()
-            
-            // 2. 동기화된 상태 반영
-            handleUpdate(syncData.review_state, syncData.progress || syncData)
-            
-            // 3. 아직 진행 중이라면 다시 SSE 연결 (재귀)
-            if (syncData.review_state !== 'COMPLETED' && syncData.review_state !== 'FAILED') {
-              setTimeout(connectSSE, 2000)
-            }
-          } catch (e: any) {
-            const status = e?.response?.status || e?.status
-            if (status === 404 || status === 410) {
-              showToast('유효하지 않거나 만료된 세션입니다. 처음부터 다시 시작합니다.', 'error')
-              localStorage.clear()
-              setTimeout(() => window.location.reload(), 1500)
-            } else {
-              setMode('error')
-              setErrorMsg('서버 연결이 끊어졌으며 복구에 실패했습니다.')
-              setIsRetryable(true)
-            }
+          const status = err?.response?.status || err?.status
+          if (status === 404 || status === 410) {
+            showToast('유효하지 않거나 만료된 세션입니다. 처음부터 다시 시작합니다.', 'error')
+            localStorage.clear()
+            setTimeout(() => window.location.reload(), 1500)
+            return
           }
+          setMode('error')
+          setErrorMsg('서버 상태 조회 중 오류가 발생했습니다.')
+          setIsRetryable(true)
         }
-      } else {
-        // [Mock API] 기존의 Polling 시뮬레이션
-        const mockPoll = async () => {
-          try {
-            const res = await api.pollReviewStatus(reviewId, currentPercent)
-            if (!isSubscribed) return
-            handleUpdate(res.data.review_state, res.data.progress)
-            if (res.data.review_state !== 'COMPLETED' && res.data.review_state !== 'FAILED') {
-              setTimeout(mockPoll, 1500)
-            }
-          } catch (err: any) {
-            if (!isSubscribed) return
-            const status = err?.response?.status || err?.status
-            if (status === 404 || status === 410) {
-              showToast('유효하지 않거나 만료된 세션입니다. 처음부터 다시 시작합니다.', 'error')
-              localStorage.clear()
-              setTimeout(() => window.location.reload(), 1500)
-              return
-            }
-            setMode('error')
-            setErrorMsg('통신 중 오류가 발생했습니다.')
-            setIsRetryable(true) // Mock에서는 기본적으로 재시도 허용
-          }
-        }
-        mockPoll()
       }
+      poll()
     }
 
-    connectSSE()
+    connectPolling()
 
     return () => {
       isSubscribed = false
-      eventSource?.close()
+
     }
   }, [mode, reviewId])
 

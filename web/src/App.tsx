@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { BrowserRouter, Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom'
 import type { Screen, ClauseResult } from './types'
 import { SESSION_ID_KEY, REVIEW_ID_KEY } from './config'
 import Header from './components/Header'
@@ -12,17 +13,10 @@ import ChatbotScreen from './screens/ChatbotScreen'
 import { MetadataProvider } from './contexts/MetadataContext'
 import { api } from './api/api'
 
-const DEMO_NAV: { id: Screen; label: string; step: string }[] = [
-  { id: 'upload-and-type', label: '1. 업로드 및 유형선택', step: '1단계' },
-  { id: 'out-of-scope',    label: '2. 범위 외 안내', step: '1단계' },
-  { id: 'processing',      label: '3. 검토 진행',    step: '2단계' },
-  { id: 'results',         label: '4. 검토 결과',    step: '3단계' },
-  { id: 'clause-detail',   label: '5. 조항 상세',    step: '3단계' },
-  { id: 'chatbot',         label: '6. 챗봇/문구',    step: '3단계' },
-]
+function MainApp() {
+  const navigate = useNavigate()
+  const location = useLocation()
 
-export default function App() {
-  const [screen, setScreen] = useState<Screen>('upload-and-type')
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [reviewId, setReviewId] = useState<string | null>(null)
   const [selectedClause, setSelectedClause] = useState<ClauseResult | null>(null)
@@ -35,63 +29,63 @@ export default function App() {
     if (savedSession) setSessionId(savedSession)
     if (savedReview) setReviewId(savedReview)
 
+    // Only run routing on initial mount if not already deep linked
+    const isRoot = location.pathname === '/' || location.pathname === ''
+
     if (savedReview) {
-      // 복구 라우팅
       api.getResults(savedReview).then(res => {
         if (res.data.review.review_state === 'COMPLETED') {
-          setScreen('results')
+          if (isRoot) navigate(`/review/${savedReview}/results`, { replace: true })
         } else {
-          setScreen('processing')
+          if (isRoot) navigate(`/review/${savedReview}/progress`, { replace: true })
         }
       }).catch((err) => {
-        // 404 (Not Found) or 410 (Gone) or other errors mean session lost
         if (err.status === 404 || err.status === 410) {
           localStorage.removeItem(SESSION_ID_KEY)
           localStorage.removeItem(REVIEW_ID_KEY)
           setSessionId(null)
           setReviewId(null)
         }
-        setScreen('upload-and-type')
+        if (isRoot) navigate('/review', { replace: true })
       })
     } else if (savedSession) {
       api.getSession(savedSession).then(() => {
-        setScreen('upload-and-type')
+        if (isRoot) navigate('/review', { replace: true })
       }).catch((err) => {
         if (err.status === 404 || err.status === 410) {
           localStorage.removeItem(SESSION_ID_KEY)
           setSessionId(null)
         }
-        setScreen('upload-and-type')
+        if (isRoot) navigate('/review', { replace: true })
       })
+    } else {
+      if (isRoot) navigate('/review', { replace: true })
     }
-  }, [])
+  }, []) // Run once on mount
 
-  const nav = (s: Screen) => setScreen(s)
+  // Determine current "screen" for Header and Stepper based on location.pathname
+  let screen: Screen = 'upload-and-type'
+  const path = location.pathname
+  if (path.includes('/progress')) screen = 'processing'
+  else if (path.includes('/results/clause')) screen = 'clause-detail'
+  else if (path.includes('/chatbot')) screen = 'chatbot'
+  else if (path.includes('/results')) screen = 'results'
+  else if (path.includes('/out-of-scope')) screen = 'out-of-scope'
+
+  const nav = (s: Screen) => {
+    switch (s) {
+      case 'upload-and-type': return navigate('/review')
+      case 'out-of-scope': return navigate('/out-of-scope')
+      case 'processing': return navigate(`/review/${reviewId || 'new'}/progress`)
+      case 'results': return navigate(`/review/${reviewId || 'new'}/results`)
+      case 'clause-detail': return navigate(`/review/${reviewId || 'new'}/results/clause`)
+      case 'chatbot': return navigate(`/review/${reviewId || 'new'}/chatbot`)
+    }
+  }
 
   return (
     <MetadataProvider>
       <div className="min-h-screen bg-slate-50 flex flex-col">
-
-        {/* ── Demo switcher ── */}
-        <div className="bg-[#1E293B] border-b border-white/10 hidden">
-          <div className="max-w-[1440px] mx-auto px-4 h-10 flex items-center gap-1 overflow-x-auto">
-            <span className="text-[10px] text-white/40 font-medium pr-2 shrink-0 hidden sm:block">화면 전환</span>
-            {DEMO_NAV.map(s => (
-              <button
-                key={s.id}
-                onClick={() => nav(s.id)}
-                className={`px-3 py-1 rounded text-[11px] font-medium whitespace-nowrap transition-colors shrink-0 ${
-                  screen === s.id
-                    ? 'bg-white/20 text-white'
-                    : 'text-white/50 hover:text-white/80 hover:bg-white/10'
-                }`}
-              >
-                {s.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
         {/* ── App header ── */}
         <Header currentScreen={screen} onNavigate={nav} />
 
@@ -101,7 +95,9 @@ export default function App() {
         {/* ── Body ── */}
         <main className="px-4 py-8 sm:px-6 lg:px-8 lg:py-10 flex-1">
           <div key={screen} className="mx-auto w-full max-w-[1080px] animate-page-enter">
-              {screen === 'upload-and-type' && (
+            <Routes>
+              <Route path="/" element={<Navigate to="/review" replace />} />
+              <Route path="/review" element={
                 <UploadAndTypeScreen
                   sessionId={sessionId}
                   setSessionId={setSessionId}
@@ -109,20 +105,20 @@ export default function App() {
                   onNext={() => nav('processing')}
                   onOutOfScope={() => nav('out-of-scope')}
                 />
-              )}
-              {screen === 'out-of-scope' && (
+              } />
+              <Route path="/out-of-scope" element={
                 <OutOfScopeScreen
                   onBack={() => nav('upload-and-type')}
                   onContinue={() => nav('processing')}
                 />
-              )}
-              {screen === 'processing' && (
+              } />
+              <Route path="/review/:id/progress" element={
                 <ProcessingScreen
                   reviewId={reviewId}
                   onDone={() => nav('results')} 
                 />
-              )}
-              {screen === 'results' && (
+              } />
+              <Route path="/review/:id/results" element={
                 <ResultsScreen
                   reviewId={reviewId}
                   onClauseClick={(clause) => {
@@ -131,19 +127,34 @@ export default function App() {
                   }}
                   onChatbot={() => nav('chatbot')}
                 />
-              )}
-              {screen === 'clause-detail' && (
-                <ClauseDetailScreen
-                  clause={selectedClause!}
-                  reviewId={reviewId}
-                  onBack={() => nav('results')}
-                  onChatbot={() => nav('chatbot')}
-                />
-              )}
-              {screen === 'chatbot' && <ChatbotScreen onBack={() => nav('results')} reviewId={reviewId!} />}
-            </div>
-          </main>
+              } />
+              <Route path="/review/:id/results/clause" element={
+                selectedClause ? (
+                  <ClauseDetailScreen
+                    clause={selectedClause}
+                    reviewId={reviewId}
+                    onBack={() => nav('results')}
+                    onChatbot={() => nav('chatbot')}
+                  />
+                ) : (
+                  <Navigate to={`/review/${reviewId || 'new'}/results`} replace />
+                )
+              } />
+              <Route path="/review/:id/chatbot" element={
+                <ChatbotScreen onBack={() => nav('results')} reviewId={reviewId!} />
+              } />
+            </Routes>
+          </div>
+        </main>
       </div>
     </MetadataProvider>
+  )
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <MainApp />
+    </BrowserRouter>
   )
 }

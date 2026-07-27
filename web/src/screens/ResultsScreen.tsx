@@ -60,10 +60,12 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
     let isSubscribed = true
     setIsLoading(true)
 
-    // Fallback ID for demo nav when no actual review process was run
-    const activeReviewId = reviewId || 'rev_mock_456'
+    if (!reviewId) {
+      setIsLoading(false)
+      return
+    }
 
-    api.getResults(activeReviewId).then(res => {
+    api.getResults(reviewId).then(res => {
       if (!isSubscribed) return
       setResultsData(res.data)
       
