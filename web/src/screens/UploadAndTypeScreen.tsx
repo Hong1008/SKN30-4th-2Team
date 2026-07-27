@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 import {
-  UploadCloud, FileText, CheckCircle2, X, ChevronRight, BriefcaseBusiness, Handshake, AlertCircle
+  UploadCloud, FileText, CheckCircle2, X, ChevronRight, AlertCircle
 } from 'lucide-react'
 import { api } from '../api/api'
 import { TEMP_FILE_MAX_SIZE, SESSION_ID_KEY, REVIEW_ID_KEY } from '../config'
@@ -109,8 +109,13 @@ export default function UploadAndTypeScreen({ sessionId, setSessionId, setReview
       const scopeRes = await api.selectContractType(sessionId, selectedType)
       
       // [3] 범위 외 확인(OUT_OF_SCOPE_CONFIRMATION_REQUIRED) 처리
-      if (scopeRes.data.scope_status === 'OUT_OF_SCOPE_CONFIRMATION_REQUIRED') {
+      if (scopeRes.data.review_state === 'OUT_OF_SCOPE_CONFIRMATION_REQUIRED') {
         onOutOfScope()
+        return
+      }
+
+      if (!scopeRes.data.can_start_review && !scopeRes.data.allowed_actions?.includes('START_REVIEW')) {
+        setErrorMsg('현재 계약 유형으로 검토를 시작할 수 없습니다.')
         return
       }
 
@@ -123,11 +128,14 @@ export default function UploadAndTypeScreen({ sessionId, setSessionId, setReview
       // 3. Move to processing screen
       onNext()
     } catch (err: any) {
-      const status = err?.response?.status || err?.status
-      if (status === 409) {
-        // [4] 409 IDEMPOTENCY_KEY_REUSED 처리
-        console.warn('이미 처리 중인 검토 요청입니다.')
-        onNext() // 기존 처리 내역이 있다고 가정하고 넘어감
+      const status = err?.status
+      const existingReviewId = err?.details?.review_id
+      if (status === 409 && existingReviewId) {
+        setReviewId(existingReviewId)
+        localStorage.setItem(REVIEW_ID_KEY, existingReviewId)
+        onNext()
+      } else if (status === 409) {
+        setErrorMsg(err?.message || '동일 요청이 이미 처리 중입니다. 잠시 후 다시 확인해 주세요.')
       } else if (status === 404 || status === 410) {
         showToast('유효하지 않거나 만료된 세션입니다. 처음부터 다시 시작합니다.', 'error')
         reset()

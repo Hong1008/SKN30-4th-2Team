@@ -1,81 +1,102 @@
-import { client } from './client';
-import { mockApi } from './mockApi';
-import type { ApiResponse, MetadataData, ReviewSessionData, ReviewData, ResultsData } from '../types';
+import { API_BASE_URL } from '../config'
+import { client } from './client'
+import type {
+  ApiResponse,
+  ChatResponse,
+  GroundingData,
+  MetadataData,
+  ResultsData,
+  ReviewData,
+  ReviewSessionData,
+  SuggestionResponse,
+} from '../types'
+
+const idempotencyHeaders = (idempotencyKey: string): HeadersInit => ({
+  'Idempotency-Key': idempotencyKey,
+})
 
 export const api = {
-  // --- REAL API (Implemented by Backend) ---
-  // 로컬 개발/미리보기 환경에서 실제 백엔드(8000)가 안 켜져있을 경우 UI 테스트를 위해 Mock으로 자동 폴백합니다.
+  getMetadata: (): Promise<ApiResponse<MetadataData>> => client('/metadata'),
 
-  async getMetadata(): Promise<ApiResponse<MetadataData>> {
-    return client<ApiResponse<MetadataData>>('/metadata');
+  uploadContract(file: File, signal?: AbortSignal): Promise<ApiResponse<ReviewSessionData>> {
+    const formData = new FormData()
+    formData.append('file', file)
+    return client('/review-sessions', { method: 'POST', body: formData, signal })
   },
 
-  async uploadContract(file: File): Promise<ApiResponse<ReviewSessionData>> {
-    const formData = new FormData();
-    formData.append('file', file);
-    return client<ApiResponse<ReviewSessionData>>('/review-sessions', {
-      method: 'POST',
-      body: formData
-    });
-  },
+  getSession: (sessionId: string, signal?: AbortSignal): Promise<ApiResponse<ReviewSessionData>> =>
+    client(`/review-sessions/${encodeURIComponent(sessionId)}`, { signal }),
 
-  async getSession(sessionId: string): Promise<ApiResponse<ReviewSessionData>> {
-    return client<ApiResponse<ReviewSessionData>>(`/review-sessions/${sessionId}`).catch(err => {
-      // 404, 410은 기획된 에러이므로 그대로 throw (복구 로직 테스트용)
-      if (err.status === 404 || err.status === 410) throw err;
-      throw err; // getSession은 mockApi에 없으므로 그냥 에러 던짐
-    });
-  },
-
-  async selectContractType(sessionId: string, type: string): Promise<ApiResponse<ReviewSessionData>> {
-    return client<ApiResponse<ReviewSessionData>>(`/review-sessions/${sessionId}/contract-type`, {
+  selectContractType(sessionId: string, selectedContractType: string): Promise<ApiResponse<ReviewSessionData>> {
+    return client(`/review-sessions/${encodeURIComponent(sessionId)}/contract-type`, {
       method: 'PATCH',
-      body: JSON.stringify({ contract_type: type })
-    });
+      body: JSON.stringify({ selected_contract_type: selectedContractType }),
+    })
   },
 
-  // --- REVIEW DATA API (Real API with Fallback) ---
-
-  async startReview(sessionId: string, idempotencyKey?: string): Promise<ApiResponse<ReviewData>> {
-    const headers: any = { 'Content-Type': 'application/json' };
-    if (idempotencyKey) headers['Idempotency-Key'] = idempotencyKey;
-
-    return client<ApiResponse<ReviewData>>('/reviews', {
+  confirmOutOfScope(sessionId: string, confirmed: boolean): Promise<ApiResponse<ReviewSessionData>> {
+    return client(`/review-sessions/${encodeURIComponent(sessionId)}/out-of-scope-confirmation`, {
       method: 'POST',
-      headers,
-      body: JSON.stringify({ session_id: sessionId })
-    });
+      body: JSON.stringify({ confirmed }),
+    })
   },
 
-  async pollReviewStatus(reviewId: string, currentPercent: number): Promise<ApiResponse<ReviewData>> {
-    return client<ApiResponse<ReviewData>>(`/reviews/${reviewId}`);
-  },
-
-  async getResults(reviewId: string): Promise<ApiResponse<ResultsData>> {
-    return client<ApiResponse<ResultsData>>(`/reviews/${reviewId}/results`);
-  },
-
-  async getGrounding(reviewId: string, category: string): Promise<ApiResponse<any>> {
-    return client<ApiResponse<any>>(`/reviews/${reviewId}/grounding?category=${category}`);
-  },
-
-  // --- CHAT & SUGGESTIONS API (Mock for now until Chat API spec is final) ---
-
-  async retryReview(reviewId: string, idempotencyKey?: string): Promise<ApiResponse<ReviewData>> {
-    const headers: any = { 'Content-Type': 'application/json' };
-    if (idempotencyKey) headers['Idempotency-Key'] = idempotencyKey;
-
-    return client<ApiResponse<ReviewData>>(`/reviews/${reviewId}/retry`, {
+  startReview(sessionId: string, idempotencyKey: string): Promise<ApiResponse<ReviewData>> {
+    return client('/reviews', {
       method: 'POST',
-      headers
-    });
+      headers: idempotencyHeaders(idempotencyKey),
+      body: JSON.stringify({ session_id: sessionId }),
+    })
   },
 
-  async chat(reviewId: string, message: string, idempotencyKey?: string): Promise<ApiResponse<any>> {
-    return mockApi.chat(reviewId, message, idempotencyKey);
+  pollReviewStatus: (reviewId: string, signal?: AbortSignal): Promise<ApiResponse<ReviewData>> =>
+    client(`/reviews/${encodeURIComponent(reviewId)}`, { signal }),
+
+  getResults: (reviewId: string, signal?: AbortSignal): Promise<ApiResponse<ResultsData>> =>
+    client(`/reviews/${encodeURIComponent(reviewId)}/results`, { signal }),
+
+  deleteReview(reviewId: string, idempotencyKey: string): Promise<void> {
+    return client(`/reviews/${encodeURIComponent(reviewId)}`, {
+      method: 'DELETE',
+      headers: idempotencyHeaders(idempotencyKey),
+    })
   },
 
-  async suggestions(reviewId: string, clauseId: string, idempotencyKey?: string): Promise<ApiResponse<any>> {
-    return mockApi.suggestions(reviewId, clauseId, idempotencyKey);
-  }
-};
+  retryReview(reviewId: string, idempotencyKey: string): Promise<ApiResponse<ReviewData>> {
+    return client(`/reviews/${encodeURIComponent(reviewId)}/retry`, {
+      method: 'POST',
+      headers: idempotencyHeaders(idempotencyKey),
+    })
+  },
+
+  getGrounding(reviewId: string, category: string, signal?: AbortSignal): Promise<ApiResponse<GroundingData>> {
+    const query = new URLSearchParams({ category })
+    return client(`/reviews/${encodeURIComponent(reviewId)}/grounding?${query}`, { signal })
+  },
+
+  chat(reviewId: string, message: string, idempotencyKey: string): Promise<ApiResponse<ChatResponse>> {
+    return client(`/reviews/${encodeURIComponent(reviewId)}/chat/messages`, {
+      method: 'POST',
+      headers: idempotencyHeaders(idempotencyKey),
+      body: JSON.stringify({ message }),
+    })
+  },
+
+  suggestions(
+    reviewId: string,
+    userClauseId: string,
+    purpose: string,
+    idempotencyKey: string,
+    inputs?: Record<string, unknown>,
+  ): Promise<ApiResponse<SuggestionResponse>> {
+    return client(`/reviews/${encodeURIComponent(reviewId)}/suggestions`, {
+      method: 'POST',
+      headers: idempotencyHeaders(idempotencyKey),
+      body: JSON.stringify({ user_clause_id: userClauseId, purpose, inputs }),
+    })
+  },
+
+  reviewEventsUrl(reviewId: string): string {
+    return `${API_BASE_URL}/reviews/${encodeURIComponent(reviewId)}/events`
+  },
+}

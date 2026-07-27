@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Search, SlidersHorizontal, MessageSquare, ChevronRight, RotateCcw, ChevronDown, ChevronUp, AlertTriangle, CheckSquare, Loader2 } from 'lucide-react'
+import { Search, SlidersHorizontal, MessageSquare, ChevronRight, RotateCcw, ChevronDown, ChevronUp, AlertTriangle, CheckSquare } from 'lucide-react'
 import Badge from '../components/Badge'
 import type { ResultCode, ClauseResult, ResultsData } from '../types'
 import { api } from '../api/api'
@@ -40,16 +40,16 @@ interface Props {
 
 export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Props) {
   const { metadata } = useMetadata()
+  const resultCodeDetails = metadata?.result_code_details ?? (metadata?.result_codes ?? []).map((code) => ({ code, label: code }))
   const categories = ['전체', ...(metadata?.categories.map(c => c.label) || [])]
   const statuses: { id: ResultCode | 'all'; label: string }[] = [
     { id: 'all', label: '전체' },
-    ...(metadata?.result_codes.map(r => ({ id: r.code as ResultCode, label: r.label })) || [])
+    ...resultCodeDetails.map(r => ({ id: r.code as ResultCode, label: r.label }))
   ]
   const [filterStatus, setFilterStatus]     = useState<ResultCode | 'all'>('all')
   const [filterCategory, setFilterCategory] = useState('전체')
   const [search, setSearch]                 = useState('')
   const [expandedMissing, setExpandedMissing] = useState<string | null>(null)
-  const [expandedNote, setExpandedNote]     = useState<string | null>(null)
   const [activeTab, setActiveTab]           = useState<'results' | 'notes'>('results')
 
   const [isLoading, setIsLoading] = useState(true)
@@ -162,10 +162,10 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
   // Generate SUMMARY based on actual data
   const summaryCounts = resultsData.summary.clause_results
   const uiSummary = [
-    { status: 'NONE' as ResultCode,  count: summaryCounts.NONE || 0,  label: metadata?.result_codes.find(r => r.code === 'NONE')?.label || '대응 표준조항 있음',   text: 'text-emerald-700', dot: 'bg-emerald-500' },
-    { status: 'EXTRA' as ResultCode, count: summaryCounts.EXTRA || 0,  label: metadata?.result_codes.find(r => r.code === 'EXTRA')?.label || '추가·변형 내용 확인',  text: 'text-amber-700',   dot: 'bg-amber-500' },
-    { status: 'NO_MATCH' as ResultCode,   count: summaryCounts.NO_MATCH || 0,  label: metadata?.result_codes.find(r => r.code === 'NO_MATCH')?.label || '대응 조항 확인 필요',  text: 'text-rose-700',    dot: 'bg-rose-500' },
-    { status: 'MISSING' as ResultCode,  count: resultsData.summary.missing_standard_clauses || 0,  label: metadata?.result_codes.find(r => r.code === 'MISSING')?.label || '포함 여부 확인 필요',  text: 'text-slate-600',   dot: 'bg-slate-400' },
+    { status: 'NONE' as ResultCode,  count: summaryCounts.NONE || 0,  label: resultCodeDetails.find(r => r.code === 'NONE')?.label || '대응 표준조항 있음',   text: 'text-emerald-700', dot: 'bg-emerald-500' },
+    { status: 'EXTRA' as ResultCode, count: summaryCounts.EXTRA || 0,  label: resultCodeDetails.find(r => r.code === 'EXTRA')?.label || '추가·변형 내용 확인',  text: 'text-amber-700',   dot: 'bg-amber-500' },
+    { status: 'NO_MATCH' as ResultCode,   count: summaryCounts.NO_MATCH || 0,  label: resultCodeDetails.find(r => r.code === 'NO_MATCH')?.label || '대응 조항 확인 필요',  text: 'text-rose-700',    dot: 'bg-rose-500' },
+    { status: 'MISSING' as ResultCode,  count: resultsData.summary.missing_standard_clauses || 0,  label: resultCodeDetails.find(r => r.code === 'MISSING')?.label || '포함 여부 확인 필요',  text: 'text-slate-600',   dot: 'bg-slate-400' },
   ]
 
   return (
@@ -364,7 +364,7 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
                       {/* Status row */}
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="flex flex-wrap items-center gap-2">
-                          <Badge code={c.status} label={metadata?.result_codes.find(r => r.code === c.status)?.label || ''} />
+                          <Badge code={c.status} label={resultCodeDetails.find(r => r.code === c.status)?.label || ''} />
             
                           <span className="
                             rounded-md border border-slate-200 bg-white/75

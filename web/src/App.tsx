@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { BrowserRouter, Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, useNavigate, useLocation, useParams, Navigate } from 'react-router-dom'
 import type { Screen, ClauseResult } from './types'
 import { SESSION_ID_KEY, REVIEW_ID_KEY } from './config'
 import Header from './components/Header'
@@ -12,6 +12,78 @@ import ClauseDetailScreen from './screens/ClauseDetailScreen'
 import ChatbotScreen from './screens/ChatbotScreen'
 import { MetadataProvider } from './contexts/MetadataContext'
 import { api } from './api/api'
+
+function ProcessingRoute({ fallbackReviewId, onDone }: { fallbackReviewId: string | null; onDone: (id: string) => void }) {
+  const { id } = useParams()
+  const reviewId = id ?? fallbackReviewId
+  return <ProcessingScreen reviewId={reviewId} onDone={() => reviewId && onDone(reviewId)} />
+}
+
+function ResultsRoute({ fallbackReviewId, onClauseClick, onChatbot }: {
+  fallbackReviewId: string | null
+  onClauseClick: (clause: ClauseResult, reviewId: string) => void
+  onChatbot: (reviewId: string) => void
+}) {
+  const { id } = useParams()
+  const reviewId = id ?? fallbackReviewId
+  return reviewId ? <ResultsScreen reviewId={reviewId} onClauseClick={(clause) => onClauseClick(clause, reviewId)} onChatbot={() => onChatbot(reviewId)} /> : <Navigate to="/review" replace />
+}
+
+function ClauseRoute({ fallbackReviewId, selectedClause, onBack, onChatbot }: {
+  fallbackReviewId: string | null
+  selectedClause: ClauseResult | null
+  onBack: (reviewId: string) => void
+  onChatbot: (reviewId: string) => void
+}) {
+  const { id, clauseId } = useParams()
+  const reviewId = id ?? fallbackReviewId
+  const [clause, setClause] = useState<ClauseResult | null>(selectedClause?.id === clauseId ? selectedClause : null)
+
+  useEffect(() => {
+    if (!reviewId || clause) return
+    const controller = new AbortController()
+    api.getResults(reviewId, controller.signal)
+      .then((response) => {
+        const rawClause = response.data.clause_results.find((item) => {
+          const raw = item as unknown as { id?: string; user_clause_id?: string }
+          return raw.id === clauseId || raw.user_clause_id === clauseId
+        }) as unknown as {
+          user_clause_id?: string
+          user_clause?: string
+          deviation?: { code?: ClauseResult['status'] }
+          match?: { standard?: { category?: { code?: string; label?: string }; title?: string; text?: string; source?: string } }
+          explanation?: string
+          toxic_patterns?: ClauseResult['toxic_patterns']
+        } | undefined
+        if (!rawClause?.user_clause_id) return setClause(null)
+        setClause({
+          id: rawClause.user_clause_id,
+          article: rawClause.user_clause?.split(' ')[0] || '조항',
+          excerpt: rawClause.user_clause || '',
+          status: rawClause.deviation?.code || 'NO_MATCH',
+          category: rawClause.match?.standard?.category?.label || '기타',
+          categoryCode: rawClause.match?.standard?.category?.code,
+          summary: rawClause.explanation || '',
+          toxic_patterns: rawClause.toxic_patterns,
+          standardTitle: rawClause.match?.standard?.title,
+          standardText: rawClause.match?.standard?.text,
+          standardSource: rawClause.match?.standard?.source,
+        })
+      })
+      .catch(() => setClause(null))
+    return () => controller.abort()
+  }, [reviewId, clauseId, clause])
+
+  if (!reviewId) return <Navigate to="/review" replace />
+  if (!clause) return <Navigate to={`/review/${reviewId}/results`} replace />
+  return <ClauseDetailScreen clause={clause} reviewId={reviewId} onBack={() => onBack(reviewId)} onChatbot={() => onChatbot(reviewId)} />
+}
+
+function ChatRoute({ fallbackReviewId, onBack }: { fallbackReviewId: string | null; onBack: (reviewId: string) => void }) {
+  const { id } = useParams()
+  const reviewId = id ?? fallbackReviewId
+  return reviewId ? <ChatbotScreen onBack={() => onBack(reviewId)} reviewId={reviewId} /> : <Navigate to="/review" replace />
+}
 
 function MainApp() {
   const navigate = useNavigate()
@@ -108,40 +180,26 @@ function MainApp() {
               } />
               <Route path="/out-of-scope" element={
                 <OutOfScopeScreen
+                  sessionId={sessionId}
                   onBack={() => nav('upload-and-type')}
-                  onContinue={() => nav('processing')}
+                  onContinue={(id) => {
+                    setReviewId(id)
+                    navigate(`/review/${id}/progress`)
+                  }}
                 />
               } />
               <Route path="/review/:id/progress" element={
-                <ProcessingScreen
-                  reviewId={reviewId}
-                  onDone={() => nav('results')} 
-                />
+                <ProcessingRoute fallbackReviewId={reviewId} onDone={(id) => navigate(`/review/${id}/results`)} />
               } />
               <Route path="/review/:id/results" element={
-                <ResultsScreen
-                  reviewId={reviewId}
-                  onClauseClick={(clause) => {
+                <ResultsRoute fallbackReviewId={reviewId} onClauseClick={(clause, id) => {
                     setSelectedClause(clause)
-                    nav('clause-detail')
-                  }}
-                  onChatbot={() => nav('chatbot')}
-                />
+                    navigate(`/review/${id}/results/clause/${clause.id}`)
+                  }} onChatbot={(id) => navigate(`/review/${id}/chatbot`)} />
               } />
-              <Route path="/review/:id/results/clause" element={
-                selectedClause ? (
-                  <ClauseDetailScreen
-                    clause={selectedClause}
-                    reviewId={reviewId}
-                    onBack={() => nav('results')}
-                    onChatbot={() => nav('chatbot')}
-                  />
-                ) : (
-                  <Navigate to={`/review/${reviewId || 'new'}/results`} replace />
-                )
-              } />
+              <Route path="/review/:id/results/clause/:clauseId" element={<ClauseRoute fallbackReviewId={reviewId} selectedClause={selectedClause} onBack={(id) => navigate(`/review/${id}/results`)} onChatbot={(id) => navigate(`/review/${id}/chatbot`)} />} />
               <Route path="/review/:id/chatbot" element={
-                <ChatbotScreen onBack={() => nav('results')} reviewId={reviewId!} />
+                <ChatRoute fallbackReviewId={reviewId} onBack={(id) => navigate(`/review/${id}/results`)} />
               } />
             </Routes>
           </div>

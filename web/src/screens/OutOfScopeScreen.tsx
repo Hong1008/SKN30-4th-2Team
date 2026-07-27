@@ -1,11 +1,48 @@
+import { useState } from 'react'
 import { AlertCircle, ArrowLeft, ChevronRight, FileQuestion } from 'lucide-react'
+import { api } from '../api/api'
+import { REVIEW_ID_KEY } from '../config'
 
 interface Props {
+  sessionId: string | null
   onBack: () => void
-  onContinue: () => void
+  onContinue: (reviewId: string) => void
 }
 
-export default function OutOfScopeScreen({ onBack, onContinue }: Props) {
+export default function OutOfScopeScreen({ sessionId, onBack, onContinue }: Props) {
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState('')
+
+  const continueReview = async () => {
+    if (!sessionId) {
+      setError('검토 세션을 찾을 수 없습니다. 계약서를 다시 업로드해 주세요.')
+      return
+    }
+
+    setIsSubmitting(true)
+    setError('')
+    try {
+      const confirmation = await api.confirmOutOfScope(sessionId, true)
+      if (!confirmation.data.can_start_review && !confirmation.data.allowed_actions?.includes('START_REVIEW')) {
+        setError('현재 상태에서는 검토를 시작할 수 없습니다.')
+        return
+      }
+      const review = await api.startReview(sessionId, crypto.randomUUID())
+      localStorage.setItem(REVIEW_ID_KEY, review.data.review_id)
+      onContinue(review.data.review_id)
+    } catch (err: any) {
+      const existingReviewId = err?.details?.review_id
+      if (err?.status === 409 && existingReviewId) {
+        localStorage.setItem(REVIEW_ID_KEY, existingReviewId)
+        onContinue(existingReviewId)
+      } else {
+        setError(err?.message || '검토 시작 요청에 실패했습니다. 다시 시도해 주세요.')
+      }
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
   return (
     <div className="mx-auto w-full max-w-[760px] space-y-8 animate-fade-up">
       {/* Title */}
@@ -72,6 +109,7 @@ export default function OutOfScopeScreen({ onBack, onContinue }: Props) {
       </div>
 
       {/* Actions */}
+      {error && <p className="text-sm text-rose-600" role="alert">{error}</p>}
       <div className="flex items-center gap-3 pt-2">
         <button
           onClick={onBack}
@@ -81,10 +119,11 @@ export default function OutOfScopeScreen({ onBack, onContinue }: Props) {
           유형 다시 선택
         </button>
         <button
-          onClick={onContinue}
+          onClick={continueReview}
+          disabled={isSubmitting}
           className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-semibold text-white shadow-[0_1px_2px_rgba(37,99,235,0.2),0_6px_16px_rgba(37,99,235,0.16)] transition-[background-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:bg-blue-700 hover:shadow-md active:translate-y-0 active:bg-blue-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/20"
         >
-          계속 검토하기
+          {isSubmitting ? '검토를 시작하는 중...' : '계속 검토하기'}
           <ChevronRight className="w-4 h-4" />
         </button>
       </div>

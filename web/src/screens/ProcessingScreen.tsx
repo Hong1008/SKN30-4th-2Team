@@ -1,285 +1,140 @@
-import { useState, useEffect } from 'react'
-import { Check, AlertCircle, RefreshCw, ChevronRight } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { AlertCircle, Check, ChevronRight, RefreshCw } from 'lucide-react'
 import { api } from '../api/api'
-import { ReviewProgress } from '../types'
+import type { ReviewData, ReviewProgress } from '../types'
 import { useToast } from '../contexts/ToastContext'
-
 import { useMetadata } from '../contexts/MetadataContext'
 
 interface Props {
-  reviewId: string | null;
+  reviewId: string | null
   onDone: () => void
 }
 
 type Mode = 'running' | 'error' | 'done'
 
-
 export default function ProcessingScreen({ reviewId, onDone }: Props) {
   const { metadata } = useMetadata()
   const { showToast } = useToast()
-  
-  const stages = metadata?.progress_stages || []
-
+  const stages = (metadata?.progress_stages ?? []).map((code) => ({ code, label: code }))
   const [activeStep, setActiveStep] = useState(0)
   const [progress, setProgress] = useState<ReviewProgress | null>(null)
   const [mode, setMode] = useState<Mode>('running')
-  const [errorMsg, setErrorMsg] = useState('')
-  const [isRetryable, setIsRetryable] = useState(false)
+  const [errorMessage, setErrorMessage] = useState('')
+  const [retryable, setRetryable] = useState(false)
 
   useEffect(() => {
     if (mode !== 'running' || !reviewId) return
 
-    let isSubscribed = true
-    let eventSource: EventSource | null = null
-    let lastEventId: string | null = null
-    let currentPercent = progress?.percent || 0
+    let subscribed = true
+    let source: EventSource | null = null
+    let pollingTimer: ReturnType<typeof setTimeout> | null = null
+    let pollingStarted = false
+    let lastSequence = -1
 
-    const handleUpdate = (review_state: string, newProgress: ReviewProgress) => {
-      setProgress(newProgress)
-      currentPercent = newProgress.percent
-
-      const stepIndex = stages.findIndex(s => s.code === newProgress.stage)
-      if (stepIndex !== -1) setActiveStep(stepIndex)
-
-      if (review_state === 'COMPLETED') {
-        setActiveStep(stages.length - 1)
+    const update = (reviewState: string, nextProgress?: ReviewProgress | null, reviewError?: ReviewData['error']) => {
+      if (nextProgress) {
+        setProgress(nextProgress)
+        const index = stages.findIndex((stage) => stage.code === nextProgress.stage)
+        if (index >= 0) setActiveStep(index)
+      }
+      if (reviewState === 'COMPLETED') {
+        setActiveStep(Math.max(stages.length - 1, 0))
         setMode('done')
-      } else if (review_state === 'FAILED') {
+      }
+      if (reviewState === 'FAILED') {
         setMode('error')
-        setErrorMsg('서버에서 검토 중 오류가 발생했습니다.')
-        setIsRetryable((newProgress as any).error?.retryable === true || (newProgress as any).retryable === true)
+        setErrorMessage(reviewError?.message || '검토 중 오류가 발생했습니다.')
+        setRetryable(reviewError?.retryable === true)
       }
     }
 
-    const connectPolling = () => {
-      if (!isSubscribed) return
-
+    const startPolling = () => {
+      if (!subscribed || pollingStarted) return
+      pollingStarted = true
       const poll = async () => {
         try {
-          const res = await api.pollReviewStatus(reviewId, currentPercent)
-          if (!isSubscribed) return
-          handleUpdate(res.data.review_state, res.data.progress)
-          if (res.data.review_state !== 'COMPLETED' && res.data.review_state !== 'FAILED') {
-            setTimeout(poll, 1500)
+          const response = await api.pollReviewStatus(reviewId)
+          if (!subscribed) return
+          update(response.data.review_state, response.data.progress, response.data.error)
+          if (!['COMPLETED', 'FAILED', 'CANCELLED', 'EXPIRED'].includes(response.data.review_state)) {
+            pollingTimer = setTimeout(poll, 1500)
           }
-        } catch (err: any) {
-          if (!isSubscribed) return
-          const status = err?.response?.status || err?.status
-          if (status === 404 || status === 410) {
-            showToast('유효하지 않거나 만료된 세션입니다. 처음부터 다시 시작합니다.', 'error')
-            localStorage.clear()
-            setTimeout(() => window.location.reload(), 1500)
+        } catch (error: any) {
+          if (!subscribed) return
+          if (error?.status === 404 || error?.status === 410) {
+            showToast('검토 정보를 찾을 수 없거나 만료되었습니다. 처음부터 다시 시작해 주세요.', 'error')
             return
           }
           setMode('error')
-          setErrorMsg('서버 상태 조회 중 오류가 발생했습니다.')
-          setIsRetryable(true)
+          setErrorMessage(error?.message || '검토 상태를 불러오지 못했습니다.')
+          setRetryable(error?.retryable === true)
         }
       }
-      poll()
+      void poll()
     }
 
-    connectPolling()
+    try {
+      source = new EventSource(api.reviewEventsUrl(reviewId), { withCredentials: true })
+      const onEvent = (event: MessageEvent<string>) => {
+        const data = JSON.parse(event.data) as ReviewData & { sequence?: number }
+        const sequence = data.sequence ?? Number(event.lastEventId)
+        if (Number.isFinite(sequence) && sequence <= lastSequence) return
+        if (Number.isFinite(sequence)) lastSequence = sequence
+        update(data.review_state, data.progress, data.error)
+      }
+      source.addEventListener('progress', onEvent)
+      source.addEventListener('completed', onEvent)
+      source.addEventListener('failed', onEvent)
+      source.onerror = () => {
+        source?.close()
+        startPolling()
+      }
+    } catch {
+      startPolling()
+    }
 
     return () => {
-      isSubscribed = false
-
+      subscribed = false
+      source?.close()
+      if (pollingTimer) clearTimeout(pollingTimer)
     }
-  }, [mode, reviewId])
+  }, [mode, reviewId, showToast, stages])
 
-  const triggerError = () => {
-    setMode('error')
-    setErrorMsg('오류 상태 미리보기용 테스트 오류입니다.')
-    setIsRetryable(true)
-  }
-
-  const handleRetry = async () => {
+  const retry = async () => {
     if (!reviewId) return
-    
-    // 멱등성 키 생성 (Idempotency-Key)
-    const idempotencyKey = crypto.randomUUID()
-    console.log(`[Processing] Retrying review with Idempotency-Key: ${idempotencyKey}`)
-    
     try {
-      await api.retryReview(reviewId, idempotencyKey)
+      await api.retryReview(reviewId, crypto.randomUUID())
       setActiveStep(0)
       setProgress(null)
       setMode('running')
-      setIsRetryable(false)
-    } catch (err: any) {
-      const status = err?.response?.status || err?.status
-      if (status === 409) {
-        // [4] 409 IDEMPOTENCY_KEY_REUSED
-        console.warn('이미 재시도 요청이 진행 중입니다.')
-        setActiveStep(0)
-        setProgress(null)
-        setMode('running')
-        setIsRetryable(false)
-      } else if (status === 404 || status === 410) {
-        showToast('유효하지 않거나 만료된 세션입니다. 처음부터 다시 시작합니다.', 'error')
-        localStorage.clear()
-        setTimeout(() => window.location.reload(), 1500)
-      } else {
-        setErrorMsg('재시도 요청에 실패했습니다.')
-      }
+    } catch (error: any) {
+      setErrorMessage(error?.message || '재시도 요청에 실패했습니다.')
+      setRetryable(error?.retryable === true)
     }
   }
 
+  if (!reviewId) return <p className="text-sm text-rose-600">검토 ID를 찾을 수 없습니다.</p>
+
   return (
-    <div className="mx-auto w-full max-w-[760px] space-y-8">
-      {/* Title */}
-      <div className="mb-7">
-        <h1 className="
-          text-2xl font-bold leading-tight
-          tracking-[-0.025em] text-slate-950 sm:text-3xl
-        ">
-          {mode === 'error' ? '검토 중 오류가 발생했습니다' : '계약서를 검토하고 있습니다'}
-        </h1>
-        <p className="
-          mt-2 max-w-2xl break-keep
-          text-sm leading-6 text-slate-500
-        ">
-          {mode === 'error'
-            ? '진행하던 단계에서 처리가 중단되었습니다. 다시 시도해 주세요.'
-            : '표준계약서와 조항을 비교하고 있습니다. 잠시 기다려 주세요.'}
-        </p>
+    <div className="mx-auto w-full max-w-[760px] space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-slate-950">계약서를 검토하고 있습니다</h1>
+        <p className="mt-2 text-sm text-slate-500">진행 상태는 실시간으로 갱신됩니다.</p>
       </div>
-
-      {/* Progress bar */}
-      {mode !== 'error' && (
-        <section className="
-          rounded-2xl border border-slate-200/80 bg-white
-          shadow-[0_1px_2px_rgba(15,23,42,0.025),0_10px_30px_rgba(15,23,42,0.035)]
-          p-5
-        ">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-xs font-semibold text-slate-900">검토 진행 상태</p>
-            <p className="text-xs font-medium text-blue-600">
-              {mode === 'done' ? '완료됨' : '처리 중'}
-            </p>
-          </div>
-          <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-            <div
-              className="
-                relative h-full overflow-hidden rounded-full bg-blue-600
-                transition-[width] duration-700 ease-out
-                after:absolute after:inset-0
-                after:translate-x-[-100%]
-                after:bg-gradient-to-r after:from-transparent
-                after:via-white/35 after:to-transparent
-                after:animate-[progress-shine_1.8s_ease-in-out_infinite]
-              "
-              style={{ width: `${progress?.percent || 0}%` }}
-            />
-          </div>
-          {mode === 'running' && progress && (
-            <p className="text-xs text-slate-600 mt-3">
-              현재 처리 중:{' '}
-              <span className="font-medium text-slate-900">{progress.message}</span>
-            </p>
-          )}
-        </section>
-      )}
-
-      {/* Step list */}
-      <section className="
-        rounded-2xl border border-slate-200/80 bg-white
-        shadow-[0_1px_2px_rgba(15,23,42,0.025),0_10px_30px_rgba(15,23,42,0.035)]
-        divide-y divide-[#F1F5F9]
-      ">
-        {stages.map((step, i) => {
-          const done = i < activeStep || mode === 'done'
-          const current = i === activeStep && mode === 'running'
-          const error = mode === 'error' && i === activeStep
-          const ahead = i > activeStep && mode !== 'done'
-
-          return (
-            <div key={step.code} className={`flex items-center gap-4 px-5 py-4 ${current ? 'bg-blue-50/40' : ''}`}>
-              {/* Status icon */}
-              <div className="w-7 h-7 shrink-0 flex items-center justify-center">
-                {done && !error && (
-                  <div className="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center">
-                    <Check className="w-3.5 h-3.5 text-white" strokeWidth={2.5} />
-                  </div>
-                )}
-                {current && (
-                  <div className="w-7 h-7 rounded-full border-2 border-blue-600 border-t-transparent animate-spin-slow" />
-                )}
-                {error && (
-                  <div className="w-7 h-7 rounded-full bg-rose-100 flex items-center justify-center">
-                    <AlertCircle className="w-4 h-4 text-rose-500" />
-                  </div>
-                )}
-                {ahead && (
-                  <div className="w-7 h-7 rounded-full border-2 border-slate-200" />
-                )}
-              </div>
-
-              <div className="flex-1 min-w-0">
-                <p className={`text-sm font-medium ${done ? 'text-slate-900' : current ? 'text-slate-900' : error ? 'text-rose-600' : 'text-slate-500'
-                  }`}>
-                  {step.label}
-                </p>
-                {error && (
-                  <p className="text-xs text-rose-500 mt-0.5">조항 비교 중 서버 응답을 받지 못했습니다</p>
-                )}
-              </div>
-
-              {done && (
-                <span className="text-[11px] text-slate-600 shrink-0">완료</span>
-              )}
-              {current && (
-                <span className="text-[11px] text-blue-600 font-medium shrink-0 animate-pulse-dot">진행 중</span>
-              )}
-            </div>
-          )
-        })}
+      {mode !== 'error' && <div className="rounded-2xl border border-slate-200 bg-white p-5">
+        <div className="mb-3 flex justify-between text-sm"><span>검토 진행 상태</span><span className="text-blue-600">{progress?.percent ?? 0}%</span></div>
+        <div className="h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full bg-blue-600 transition-all" style={{ width: `${progress?.percent ?? 0}%` }} /></div>
+        {progress?.message && <p className="mt-3 text-xs text-slate-600">{progress.message}</p>}
+      </div>}
+      <section className="divide-y rounded-2xl border border-slate-200 bg-white">
+        {stages.map((stage, index) => <div key={stage.code} className="flex items-center gap-3 px-5 py-4">
+          {mode === 'done' || index < activeStep ? <Check className="size-5 text-blue-600" /> : index === activeStep && mode === 'running' ? <RefreshCw className="size-5 animate-spin text-blue-600" /> : <span className="size-5 rounded-full border border-slate-300" />}
+          <span className="text-sm text-slate-700">{stage.label}</span>
+        </div>)}
       </section>
-
-      {/* Error detail */}
-      {mode === 'error' && (
-        <div className="bg-rose-50 border border-rose-200 rounded-xl p-5">
-          <div className="flex items-start gap-3">
-            <AlertCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
-            <div>
-              <p className="text-sm font-semibold text-rose-700 mb-1">진행 중 오류 발생</p>
-              <p className="text-xs text-rose-600 leading-relaxed">
-                {errorMsg}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Actions */}
-      <div className="flex items-center gap-3 pt-2">
-        {mode === 'error' && isRetryable && (
-          <button
-            onClick={handleRetry}
-            className="flex items-center gap-2 px-5 py-3 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors"
-          >
-            <RefreshCw className="w-4 h-4" />
-            다시 시도
-          </button>
-        )}
-        {mode === 'done' && (
-          <button
-            onClick={onDone}
-            className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors"
-          >
-            검토 결과 확인하기
-            <ChevronRight className="w-4 h-4" />
-          </button>
-        )}
-        {mode === 'running' && (
-          <button
-            onClick={triggerError}
-            className="text-xs text-slate-500 hover:text-slate-600 transition-colors"
-          >
-            오류 상태 미리보기 →
-          </button>
-        )}
-      </div>
+      {mode === 'error' && <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700"><AlertCircle className="mr-2 inline size-4" />{errorMessage}</div>}
+      {mode === 'error' && retryable && <button onClick={retry} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white"><RefreshCw className="size-4" />다시 시도</button>}
+      {mode === 'done' && <button onClick={onDone} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white">검토 결과 확인 <ChevronRight className="size-4" /></button>}
     </div>
   )
 }

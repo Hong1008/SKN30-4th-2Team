@@ -43,10 +43,10 @@ export interface ApiResponse<T> {
 export interface ApiError {
   code: string;
   message: string;
-  field: string | null;
-  retryable: boolean;
-  next_action: string;
-  details: any;
+  field?: string | null;
+  retryable?: boolean;
+  next_action?: string;
+  details?: unknown;
 }
 
 export interface ReviewSessionData {
@@ -75,20 +75,20 @@ export interface ReviewProgress {
   current: number;
   total: number;
   percent: number;
-  message: string;
+  message?: string | null;
 }
 
 export interface ReviewData {
   review_id: string;
   review_state: string;
   mcp_review_status: string | null;
-  snapshot?: any;
-  progress: ReviewProgress;
+  snapshot?: unknown;
+  progress?: ReviewProgress | null;
   error?: ApiError | null;
   started_at?: string;
   completed_at?: string;
   expires_at?: string;
-  links?: any;
+  links?: Record<string, string>;
 }
 
 export interface ResultsData {
@@ -112,8 +112,8 @@ export interface ResultsData {
     missing_standard_clauses: number;
     toxic_pattern_candidates: number;
   };
-  clause_results: any[];
-  missing_standard_clauses: any[];
+  clause_results: ClauseResult[];
+  missing_standard_clauses: MissingClauseResult[];
 }
 
 export interface ContractTypeMeta {
@@ -140,7 +140,47 @@ export interface MetadataData {
   updated_at: string;
   contract_types: ContractTypeMeta[];
   categories: MetaCodeLabel[];
-  result_codes: MetaCodeLabel[];
-  progress_stages: MetaCodeLabel[];
+  result_codes: string[];
+  result_code_details?: MetaCodeLabel[];
+  progress_stages: string[];
   file_policy: FilePolicyMeta;
+}
+
+export interface GroundingData {
+  items: Array<{
+    source?: string;
+    title?: string;
+    text?: string;
+    url?: string;
+  }>;
+}
+
+export interface ChatSource {
+  source_type?: 'clause' | 'law' | string;
+  label?: string;
+  title?: string;
+  source_id?: string;
+}
+
+export interface ChatResponse {
+  answer: string | null;
+  sources: ChatSource[];
+  refused: boolean;
+  limitations: string[];
+  disclaimer: string;
+}
+
+export interface RequiredConfirmation {
+  field?: string;
+  message?: string;
+}
+
+export interface SuggestionResponse {
+  outcome: string;
+  text: string | null;
+  purpose: string | null;
+  key_changes: string[];
+  required_confirmations: RequiredConfirmation[];
+  missing_inputs: string[];
+  disclaimer: string;
 }
