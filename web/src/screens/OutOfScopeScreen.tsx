@@ -89,7 +89,7 @@ export default function OutOfScopeScreen({ sessionId, onBack, onContinue, setSes
   }
 
   return (
-    <div className="mx-auto w-full max-w-[760px] space-y-8 animate-fade-up">
+    <div className="mx-auto w-full max-w-[760px] space-y-5 animate-fade-up">
       {/* Title */}
       <div>
         <div className="inline-flex items-center gap-2 text-xs font-medium text-slate-600 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-full mb-4">
@@ -119,7 +119,7 @@ export default function OutOfScopeScreen({ sessionId, onBack, onContinue, setSes
       </div>
 
       {/* Limitation reason */}
-      <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-4">
+      <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50/70 p-5">
         <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">제한 사유</p>
         <ul className="space-y-2.5">
           {[
@@ -138,7 +138,7 @@ export default function OutOfScopeScreen({ sessionId, onBack, onContinue, setSes
       </div>
 
       {/* Proceed caution */}
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
+      <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-5">
         <p className="text-xs font-semibold text-amber-700 mb-2">계속 진행 시 유의사항</p>
         <ul className="space-y-1.5">
           {[

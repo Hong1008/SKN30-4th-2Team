@@ -230,25 +230,39 @@ export default function ProcessingScreen({ reviewId, onDone, onRetry, onStartNew
             : '진행 상태는 실시간으로 갱신됩니다.'}
         </p>
       </div>
-      {mode !== 'error' && <div className="rounded-2xl border border-slate-200 bg-white p-5">
-        <div className="mb-3 flex justify-between text-sm"><span>검토 진행 상태</span><span className="text-blue-600">{progress?.percent ?? 0}%</span></div>
+      {mode !== 'error' && <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="mb-3 flex justify-between text-sm"><span className="font-semibold text-slate-800">검토 진행 상태</span><span className="font-semibold tabular-nums text-blue-700">{progress?.percent ?? 0}%</span></div>
         <div className="h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full bg-blue-600 transition-all" style={{ width: `${progress?.percent ?? 0}%` }} /></div>
-        {progress?.message && <p className="mt-3 text-xs text-slate-600">{progress.message}</p>}
+        {progress?.message && <p className="mt-3 text-sm leading-6 text-slate-600">{progress.message}</p>}
       </div>}
-      <section className="divide-y rounded-2xl border border-slate-200 bg-white">
-        {stages.map((stage, index) => <div key={stage.code} className="flex items-center gap-3 px-5 py-4">
-          {mode === 'done' || index < activeStep ? <Check className="size-5 text-blue-600" /> : index === activeStep && mode === 'running' ? <RefreshCw className="size-5 animate-spin text-blue-600" /> : <span className="size-5 rounded-full border border-slate-300" />}
-          <span className="text-sm text-slate-700">{stage.label}</span>
-        </div>)}
+      <section className="relative rounded-2xl border border-slate-200 bg-white px-5 py-3">
+        <span aria-hidden="true" className="absolute bottom-9 left-[34px] top-9 w-px bg-slate-200" />
+        {stages.map((stage, index) => {
+          const complete = mode === 'done' || index < activeStep
+          const active = index === activeStep && mode === 'running'
+          return <div
+            key={stage.code}
+            className={`relative flex items-center gap-4 rounded-xl px-1 py-3 transition-colors ${
+              active ? 'bg-blue-50/60 pr-4' : ''
+            }`}
+          >
+            <span className={`relative z-10 grid size-7 shrink-0 place-items-center rounded-full bg-white ${
+              active ? 'ring-4 ring-blue-100' : ''
+            }`}>
+              {complete ? <Check className="size-5 text-blue-600" /> : active ? <RefreshCw className="size-5 animate-spin text-blue-600" /> : <span className="size-3 rounded-full border border-slate-300 bg-white" />}
+            </span>
+            <span className={`text-sm ${active ? 'font-semibold text-blue-800' : complete ? 'font-medium text-slate-600' : 'text-slate-400'}`}>{stage.label}</span>
+          </div>
+        })}
       </section>
-      {mode === 'error' && <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700"><AlertCircle className="mr-2 inline size-4" />{errorMessage}</div>}
-      {mode === 'error' && retryable && <button onClick={retry} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white"><RefreshCw className="size-4" />다시 시도</button>}
+      {mode === 'error' && <div className="rounded-2xl border border-rose-200 bg-rose-50/40 p-5 text-sm leading-6 text-rose-700"><AlertCircle className="mr-2 inline size-4" />{errorMessage}</div>}
+      {mode === 'error' && retryable && <button onClick={retry} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/20"><RefreshCw className="size-4" />다시 시도</button>}
       {mode === 'error' && !retryable && (
-        <button onClick={onStartNewReview} className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white">
+        <button onClick={onStartNewReview} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-slate-500/20">
           새 검토 시작
         </button>
       )}
-      {mode === 'done' && <button onClick={onDone} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white">검토 결과 확인 <ChevronRight className="size-4" /></button>}
+      {mode === 'done' && <button onClick={onDone} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/20">검토 결과 확인 <ChevronRight className="size-4" /></button>}
     </div>
   )
 }

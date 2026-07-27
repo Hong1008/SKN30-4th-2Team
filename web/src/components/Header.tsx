@@ -49,36 +49,30 @@ export default function Header({
         <button
           onClick={() => onNavigate('upload-and-type')}
           className="
-            group flex shrink-0 items-center gap-2.5 rounded-xl
+            group flex shrink-0 items-center gap-2.5 rounded-xl px-1 py-1
             focus-visible:outline-none
             focus-visible:ring-4 focus-visible:ring-blue-500/15
           "
         >
           <span className="
-            grid size-9 place-items-center rounded-[11px]
-            bg-gradient-to-br from-blue-500 to-blue-700
-            shadow-[0_4px_12px_rgba(37,99,235,0.24)]
-            ring-1 ring-blue-700/10
+            grid size-9 place-items-center rounded-[10px]
+            bg-gradient-to-br from-blue-500 to-blue-700 text-white
+            shadow-[0_4px_12px_rgba(37,99,235,0.22)]
+            ring-1 ring-inset ring-white/15
+            transition-transform duration-150 group-hover:-translate-y-px
           ">
             <ShieldCheck
-              className="size-[19px] text-white"
-              strokeWidth={2.25}
+              className="size-5 text-white"
+              strokeWidth={2.15}
             />
           </span>
 
-          <span className="flex flex-col items-start">
+          <span className="flex items-baseline">
             <span className="
-              text-[17px] font-semibold leading-[19px]
-              tracking-[-0.025em] text-slate-950
+              text-[18px] font-bold leading-5
+              tracking-[-0.035em] text-slate-950
             ">
-              Work<span className="text-blue-600">shield</span>
-            </span>
-
-            <span className="
-              mt-[3px] text-[8px] font-medium leading-none
-              tracking-[0.16em] text-slate-400/80
-            ">
-              CONTRACT REVIEW
+              Work<span className="font-semibold text-blue-600">shield</span>
             </span>
           </span>
         </button>

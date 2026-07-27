@@ -207,7 +207,7 @@ function MainApp() {
   }
 
   return (
-      <div className="min-h-screen bg-slate-50 flex flex-col">
+      <div className="flex min-h-screen flex-col bg-[#F6F8FA]">
         {/* ── App header ── */}
         <Header
           currentScreen={screen}
@@ -224,7 +224,7 @@ function MainApp() {
         <HorizontalStepper currentScreen={screen} onNavigate={nav} />
 
         {/* ── Body ── */}
-        <main className="px-4 py-8 sm:px-6 lg:px-8 lg:py-10 flex-1">
+        <main className="flex-1 px-4 py-7 sm:px-6 lg:px-8 lg:py-9">
           <div key={screen} className="mx-auto w-full max-w-[1080px] animate-page-enter">
             <Routes>
               <Route path="/" element={<Navigate to="/review" replace />} />

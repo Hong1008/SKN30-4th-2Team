@@ -24,6 +24,7 @@ export default function ClauseDetailScreen({ clause, reviewId, onBack, onChatbot
   const [suggestion, setSuggestion] = useState<SuggestionResponse | null>(null)
   const [loadingSuggestion, setLoadingSuggestion] = useState(false)
   const [suggestionError, setSuggestionError] = useState('')
+  const [suggestionPurpose, setSuggestionPurpose] = useState('책임과 의무 범위를 명확히 하는 협의 문구')
   const suggestionRequestKey = useRef<string | null>(null)
 
   const loadGrounding = useCallback(() => {
@@ -67,19 +68,26 @@ export default function ClauseDetailScreen({ clause, reviewId, onBack, onChatbot
     if (!reviewId || clause.matchStatus !== 'CANDIDATE_SELECTED' || !clause.standardClauseId) return
     setLoadingSuggestion(true)
     setSuggestionError('')
+    setSuggestion(null)
     try {
       const idempotencyKey = suggestionRequestKey.current ?? crypto.randomUUID()
       suggestionRequestKey.current = idempotencyKey
       const response = await api.suggestions(
         reviewId,
         clause.id,
-        '표준계약서 기준의 중립적인 협의 문구 제안',
+        suggestionPurpose.trim(),
         idempotencyKey,
+        {},
       )
       setSuggestion(response.data)
       suggestionRequestKey.current = null
     } catch (error: any) {
-      setSuggestionError(error?.message || '협의 문구를 생성하지 못했습니다.')
+      const messages: Record<string, string> = {
+        INSUFFICIENT_GROUNDING: '협의 문구를 생성할 근거가 충분하지 않습니다.',
+        REQUIRED_VALUE_MISSING: '협의 문구 생성에 필요한 입력값을 확인해 주세요.',
+        LLM_OUTPUT_INVALID: '생성 결과를 안전하게 검증하지 못했습니다. 다시 시도해 주세요.',
+      }
+      setSuggestionError(messages[error?.code] || error?.message || '협의 문구를 생성하지 못했습니다.')
     } finally {
       setLoadingSuggestion(false)
     }
@@ -117,49 +125,49 @@ export default function ClauseDetailScreen({ clause, reviewId, onBack, onChatbot
           </span>
         </div>
         <div>
-          <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2">검토 포인트</p>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">검토 포인트</p>
           <p className="text-sm text-slate-900 leading-relaxed">{clause.summary}</p>
         </div>
       </div>
 
       {/* Comparison */}
-      <div className="grid md:grid-cols-2 gap-4">
+      <div className="grid gap-5 md:grid-cols-2">
         {/* User clause */}
-        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+        <div className="flex min-h-[320px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white">
           <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 bg-slate-50">
             <p className="text-xs font-semibold text-slate-900">업로드한 계약서</p>
             <button
               onClick={() => copy('user', clause.excerpt)}
-              className="flex items-center gap-1 text-[11px] text-slate-600 hover:text-slate-900 transition-colors"
+              className="flex items-center gap-1 text-xs text-slate-600 transition-colors hover:text-slate-900"
               aria-label="원문 복사"
             >
               {copied === 'user' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
               {copied === 'user' ? '복사됨' : '복사'}
             </button>
           </div>
-          <pre className="px-5 py-5 text-xs text-slate-900 leading-loose font-mono whitespace-pre-wrap break-words">
+          <pre className="flex-1 whitespace-pre-wrap break-words px-5 py-5 font-sans text-sm leading-7 text-slate-800">
             {clause.excerpt}
           </pre>
         </div>
 
         {/* Standard clause */}
-        <div className="bg-blue-50/40 border border-blue-200 rounded-2xl overflow-hidden">
+        <div className="flex min-h-[320px] flex-col overflow-hidden rounded-2xl border border-blue-200 bg-blue-50/25">
           <div className="flex items-center justify-between px-5 py-3.5 border-b border-blue-200 bg-blue-50/60">
             <p className="text-xs font-semibold text-blue-600">대응 표준조항 {clause.standardTitle && `(${clause.standardTitle})`}</p>
             <button
               onClick={() => copy('standard', clause.standardText || '')}
-              className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-slate-900 transition-colors"
+              className="flex items-center gap-1 text-xs text-blue-600 transition-colors hover:text-slate-900"
               aria-label="표준조항 복사"
             >
               {copied === 'standard' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
               {copied === 'standard' ? '복사됨' : '복사'}
             </button>
           </div>
-          <pre className="px-5 py-5 text-xs text-slate-900 leading-loose font-mono whitespace-pre-wrap break-words">
+          <pre className="flex-1 whitespace-pre-wrap break-words px-5 py-5 font-sans text-sm leading-7 text-slate-800">
             {clause.standardText || '매칭된 표준 조항이 없습니다.'}
           </pre>
           {clause.standardClauseId && (
-            <div className="border-t border-blue-100 px-5 py-3 text-[11px] leading-5 text-slate-500">
+            <div className="border-t border-blue-100 px-5 py-3 text-xs leading-5 text-slate-500">
               <p>표준조항 ID: {clause.standardClauseId}</p>
               {clause.standardVersion && <p>버전: {clause.standardVersion}</p>}
               {clause.standardSource && <p>출처: {clause.standardSource}</p>}
@@ -193,7 +201,7 @@ export default function ClauseDetailScreen({ clause, reviewId, onBack, onChatbot
                       <span className="text-xs font-semibold text-blue-600 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded">{basis.law_name} {basis.article}</span>
                     </div>
                     <p className="text-xs text-slate-600 leading-relaxed mb-2">{basis.text}</p>
-                    <p className="text-[10px] text-slate-500">출처: {basis.source}</p>
+                    <p className="text-xs text-slate-500">출처: {basis.source}</p>
                   </div>
                 </div>
               </div>
@@ -217,13 +225,31 @@ export default function ClauseDetailScreen({ clause, reviewId, onBack, onChatbot
       </div>
 
       {/* CTAs */}
+      {metadata?.features.basic_suggestion && (
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <label htmlFor="suggestion-purpose" className="mb-2 block text-xs font-semibold text-slate-700">
+            협의 목적
+          </label>
+          <input
+            id="suggestion-purpose"
+            value={suggestionPurpose}
+            maxLength={500}
+            onChange={(event) => {
+              setSuggestionPurpose(event.target.value)
+              suggestionRequestKey.current = null
+            }}
+            placeholder="예: 책임 범위와 지급 조건을 명확히 하고 싶어요"
+            className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
+          />
+        </div>
+      )}
       <div className="flex items-center gap-3 flex-wrap pt-2">
         {metadata?.features.basic_suggestion && (
           <button
             onClick={createSuggestion}
-            disabled={loadingSuggestion || !reviewId || !canCreateSuggestion}
+            disabled={loadingSuggestion || !reviewId || !canCreateSuggestion || !suggestionPurpose.trim()}
             title={!canCreateSuggestion ? '대응 표준조항이 확인된 조항에서만 생성할 수 있습니다.' : undefined}
-            className="flex items-center gap-2 px-5 py-3 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex min-h-11 items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/20 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {loadingSuggestion ? '협의 문구 생성 중' : '협의 문구 제안 보기'}
             {loadingSuggestion ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronRight className="w-4 h-4" />}
@@ -231,7 +257,7 @@ export default function ClauseDetailScreen({ clause, reviewId, onBack, onChatbot
         )}
         {metadata?.features.chat && <button
           onClick={onChatbot}
-          className="flex items-center gap-2 px-5 py-3 bg-white border border-slate-200 text-slate-900 rounded-xl text-sm font-medium hover:bg-slate-50 transition-colors"
+          className="flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-medium text-slate-900 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/15"
         >
           <MessageSquare className="w-4 h-4" />
           이 조항에 대해 질문하기
@@ -240,7 +266,7 @@ export default function ClauseDetailScreen({ clause, reviewId, onBack, onChatbot
 
       {suggestionError && <p className="text-sm text-rose-600" role="alert">{suggestionError}</p>}
       {suggestion && (
-        <section className="rounded-2xl border border-blue-200 bg-blue-50/40 p-5 space-y-3">
+        <section className="space-y-3 rounded-2xl border border-blue-200 bg-white p-5 shadow-sm">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-sm font-semibold text-slate-900">협의 문구 제안</h2>
             {suggestion.text && (
@@ -254,6 +280,21 @@ export default function ClauseDetailScreen({ clause, reviewId, onBack, onChatbot
               </button>
             )}
           </div>
+          <p className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
+            suggestion.outcome === 'GENERATED'
+              ? 'bg-emerald-50 text-emerald-700'
+              : suggestion.outcome === 'INSUFFICIENT_GROUNDING'
+                ? 'bg-amber-50 text-amber-700'
+                : 'bg-rose-50 text-rose-700'
+          }`}>
+            {{
+              GENERATED: '제안 생성 완료',
+              INSUFFICIENT_GROUNDING: '근거 부족',
+              REQUIRED_VALUE_MISSING: '필수값 확인 필요',
+              GENERATED_FACT_NOT_GROUNDED: '근거 검증 실패',
+              LLM_OUTPUT_INVALID: '생성 결과 검증 실패',
+            }[suggestion.outcome] || suggestion.outcome}
+          </p>
           {suggestion.text
             ? <p className="whitespace-pre-wrap text-sm leading-7 text-slate-800">{suggestion.text}</p>
             : <p className="text-sm text-slate-600">제안 생성에 필요한 정보가 부족합니다.</p>}
@@ -275,7 +316,7 @@ export default function ClauseDetailScreen({ clause, reviewId, onBack, onChatbot
             </div>
           )}
           {(suggestion.standard_clause_ids.length > 0 || suggestion.grounding_source_ids.length > 0) && (
-            <div className="text-[11px] leading-5 text-slate-500">
+            <div className="text-xs leading-5 text-slate-500">
               {suggestion.standard_clause_ids.length > 0 && (
                 <p>참고 표준조항: {suggestion.standard_clause_ids.join(', ')}</p>
               )}
@@ -284,7 +325,7 @@ export default function ClauseDetailScreen({ clause, reviewId, onBack, onChatbot
               )}
             </div>
           )}
-          <p className="text-[11px] text-slate-500">{suggestion.disclaimer}</p>
+          <p className="text-xs leading-5 text-slate-500">{suggestion.disclaimer}</p>
         </section>
       )}
     </div>

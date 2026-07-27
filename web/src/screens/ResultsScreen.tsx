@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
-import { Search, SlidersHorizontal, MessageSquare, ChevronRight, RotateCcw, ChevronDown, ChevronUp, AlertTriangle, CheckSquare } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Search, SlidersHorizontal, MessageSquare, ChevronRight, RotateCcw, ChevronDown, ChevronUp, AlertTriangle, CheckSquare, Trash2, Loader2 } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import Badge from '../components/Badge'
 import type { ResultCode, ClauseResult, ResultsData } from '../types'
 import { api } from '../api/api'
@@ -61,6 +62,10 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
   const [errorMessage, setErrorMessage] = useState('')
   const [resultsData, setResultsData] = useState<ResultsData | null>(null)
   const [clauses, setClauses] = useState<ClauseResult[]>([])
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false)
+  const [isDiscarding, setIsDiscarding] = useState(false)
+  const [discardError, setDiscardError] = useState('')
+  const discardRequestKey = useRef<string | null>(null)
 
   useEffect(() => {
     let isSubscribed = true
@@ -111,6 +116,31 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
   const resetFilters = () => { setFilterStatus('all'); setFilterCategory('전체'); setSearch('') }
   const hasFilter = filterStatus !== 'all' || filterCategory !== '전체' || search !== ''
 
+  const discardReview = async () => {
+    if (!reviewId || isDiscarding) return
+    setIsDiscarding(true)
+    setDiscardError('')
+    try {
+      const key = discardRequestKey.current ?? crypto.randomUUID()
+      discardRequestKey.current = key
+      await api.deleteReview(reviewId, key)
+      discardRequestKey.current = null
+      localStorage.removeItem(SESSION_ID_KEY)
+      localStorage.removeItem(REVIEW_ID_KEY)
+      window.location.assign('/review')
+    } catch (error: any) {
+      if (error?.status === 404 || error?.status === 410) {
+        localStorage.removeItem(SESSION_ID_KEY)
+        localStorage.removeItem(REVIEW_ID_KEY)
+        window.location.assign('/review')
+        return
+      }
+      setDiscardError(error?.message || '검토 결과를 폐기하지 못했습니다. 다시 시도해 주세요.')
+    } finally {
+      setIsDiscarding(false)
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="mx-auto w-full space-y-6 animate-pulse">
@@ -151,12 +181,12 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
 
   if (!resultsData) {
     return (
-      <div className="text-center py-20">
+      <div className="rounded-2xl border border-slate-200 bg-white px-6 py-16 text-center shadow-sm">
         <p className="text-slate-600">{errorMessage || '검토 결과를 불러올 수 없습니다.'}</p>
         <button
           type="button"
           onClick={() => window.location.assign('/review')}
-          className="mt-4 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
+          className="mt-4 min-h-11 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/20"
         >
           새 검토 시작
         </button>
@@ -172,9 +202,9 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
     '계약 유형',
   )
   const uiSummary = [
-    { status: 'NONE' as ResultCode,  count: summaryCounts.NONE || 0,  label: getMetadataLabel(resultCodeDetails, 'NONE', '대응 표준조항 있음'),   text: 'text-emerald-700', dot: 'bg-emerald-500' },
+    { status: 'NONE' as ResultCode,  count: summaryCounts.NONE || 0,  label: getMetadataLabel(resultCodeDetails, 'NONE', '대응 표준조항 있음'),   text: 'text-slate-700', dot: 'bg-emerald-500' },
     { status: 'EXTRA' as ResultCode, count: summaryCounts.EXTRA || 0,  label: getMetadataLabel(resultCodeDetails, 'EXTRA', '추가·변형 내용 확인'),  text: 'text-amber-700',   dot: 'bg-amber-500' },
-    { status: 'NO_MATCH' as ResultCode,   count: summaryCounts.NO_MATCH || 0,  label: getMetadataLabel(resultCodeDetails, 'NO_MATCH', '대응 조항 확인 필요'),  text: 'text-rose-700',    dot: 'bg-rose-500' },
+    { status: 'NO_MATCH' as ResultCode,   count: summaryCounts.NO_MATCH || 0,  label: getMetadataLabel(resultCodeDetails, 'NO_MATCH', '대응 조항 확인 필요'),  text: 'text-slate-700',    dot: 'bg-rose-400' },
     { status: 'MISSING' as ResultCode,  count: resultsData.summary.missing_standard_clauses || 0,  label: getMetadataLabel(resultCodeDetails, 'MISSING', '포함 여부 확인 필요'),  text: 'text-slate-600',   dot: 'bg-slate-400' },
   ]
   const toxicCandidates = clauses.flatMap(clause =>
@@ -196,7 +226,7 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
             </span>
           </div>
 
-          <p className="mt-2 text-sm font-normal text-slate-400">
+          <p className="mt-2 text-sm font-normal text-slate-500">
             {contractTypeLabel} 기준
             <span className="mx-1.5 text-slate-300">·</span>
             {resultsData.review.completed_at
@@ -205,23 +235,38 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
           </p>
         </div>
 
-        {metadata?.features.chat && <button
-          type="button"
-          onClick={onChatbot}
-          className="
-            inline-flex h-10 shrink-0 items-center justify-center gap-2 self-start
-            rounded-full border border-slate-200 bg-transparent px-4
-            text-sm font-medium text-slate-600
-            transition-colors duration-150
-            hover:border-blue-200 hover:bg-blue-50/60 hover:text-blue-700
-            focus-visible:outline-none focus-visible:ring-4
-            focus-visible:ring-blue-500/15
-            sm:self-auto
-          "
-        >
-          <MessageSquare className="size-4" aria-hidden="true" />
-          결과 기반 질의응답
-        </button>}
+        <div className="flex flex-wrap items-center gap-2">
+          {metadata?.features.chat && <Link
+            to={`/review/${encodeURIComponent(reviewId ?? '')}/chatbot`}
+            onClick={onChatbot}
+            className="
+              inline-flex h-10 shrink-0 items-center justify-center gap-2 self-start
+              rounded-full border border-slate-200 bg-transparent px-4
+              text-sm font-medium text-slate-600
+              transition-colors duration-150
+              hover:border-blue-200 hover:bg-blue-50/60 hover:text-blue-700
+              focus-visible:outline-none focus-visible:ring-4
+              focus-visible:ring-blue-500/15
+              sm:self-auto
+            "
+          >
+            <MessageSquare className="size-4" aria-hidden="true" />
+            결과 기반 질의응답
+          </Link>}
+          {metadata?.features.server_side_cancel && (
+            <button
+              type="button"
+              onClick={() => {
+                setDiscardError('')
+                setShowDiscardConfirm(true)
+              }}
+              className="inline-flex h-10 items-center gap-2 rounded-full border border-rose-200 px-4 text-sm font-medium text-rose-700 hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-rose-500/15"
+            >
+              <Trash2 className="size-4" />
+              검토 결과 폐기
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Disclaimer */}
@@ -234,7 +279,7 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
           aria-hidden="true"
         />
 
-        <p className="text-xs leading-5 text-slate-400">
+        <p className="text-xs leading-5 text-slate-500">
           표준계약서 대비 검토 후보이며
           <span className="ml-1 font-semibold text-slate-600">
             법률 자문이 아닙니다.
@@ -243,7 +288,7 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {uiSummary.map(s => (
           <button
             key={s.status}
@@ -256,9 +301,9 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
                 setFilterStatus(s.status)
               }
             }}
-            className={`group relative min-h-36 overflow-hidden rounded-2xl border bg-white/90 p-5 text-left shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_rgba(15,23,42,0.04)] backdrop-blur-xl transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-[0_12px_32px_rgba(37,99,235,0.10)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/15 ${
+            className={`group relative min-h-28 overflow-hidden rounded-2xl border bg-white p-4 text-left shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition-all duration-200 hover:border-blue-300 hover:shadow-sm focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/15 ${
               filterStatus === s.status
-                ? 'border-blue-500 bg-blue-50/40 ring-1 ring-blue-500/20 before:absolute before:inset-y-4 before:left-0 before:w-1 before:rounded-r-full before:bg-blue-600'
+                ? 'border-blue-400 bg-blue-50/20 ring-2 ring-blue-500/10 before:absolute before:inset-y-4 before:left-0 before:w-1 before:rounded-r-full before:bg-blue-600'
                 : 'border-slate-200/80'
             }`}
           >
@@ -273,12 +318,12 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
               />
             </div>
 
-            <div className="mt-5 flex items-end justify-between">
-              <p className="tabular-nums text-[34px] font-bold leading-none tracking-[-0.04em] text-slate-950">
+            <div className="mt-4 flex items-end justify-between">
+              <p className="tabular-nums text-3xl font-semibold leading-none tracking-[-0.04em] text-slate-950">
                 {s.count}
               </p>
 
-              <span className="text-[11px] font-medium text-slate-400 mb-1">
+              <span className="mb-1 text-xs font-medium text-slate-500">
                 조항
               </span>
             </div>
@@ -292,7 +337,7 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
           <button
             key={id}
             onClick={() => setActiveTab(id)}
-            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
+            className={`-mb-px min-h-11 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-blue-500/15 ${
               activeTab === id
                 ? 'border-blue-600 text-slate-900'
                 : 'border-transparent text-slate-600 hover:text-slate-900'
@@ -306,7 +351,7 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
       {activeTab === 'results' && (
         <>
           {/* Filter bar */}
-          <div className="sticky top-[84px] z-20 space-y-3 rounded-2xl border border-slate-200/80 bg-white/90 p-4 shadow-sm backdrop-blur-xl">
+          <div className="sticky top-[84px] z-20 space-y-3 border-y border-slate-200/80 bg-[#F6F8FA]/95 py-4 backdrop-blur-xl">
             {/* Search */}
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -326,7 +371,7 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
                   <button
                     key={s.id}
                     onClick={() => setFilterStatus(s.id as ResultCode | 'all')}
-                    className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                    className={`min-h-9 rounded-full px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/15 ${
                       filterStatus === s.id
                         ? 'bg-blue-600 text-white'
                         : 'bg-slate-50 border border-slate-200 text-slate-600 hover:border-slate-300'
@@ -340,12 +385,12 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
               <select
                 value={filterCategory}
                 onChange={e => setFilterCategory(e.target.value)}
-                className="text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 bg-slate-50 text-slate-600 focus:outline-none focus:border-blue-600"
+                className="min-h-9 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs text-slate-600 outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-500/10"
               >
                 {categories.map(c => <option key={c}>{c}</option>)}
               </select>
               {hasFilter && (
-                <button onClick={resetFilters} className="flex items-center gap-1 text-xs text-slate-600 hover:text-slate-900 transition-colors ml-auto">
+                <button onClick={resetFilters} className="ml-auto flex min-h-9 items-center gap-1 rounded-lg px-2 text-xs text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/15">
                   <RotateCcw className="w-3 h-3" />
                   필터 초기화
                 </button>
@@ -364,12 +409,12 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
                     key={c.id}
                     className={`
                       group relative overflow-hidden rounded-2xl border border-slate-200/80
-                      bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]
+                      bg-white p-5
                       transition-[border-color,box-shadow,background-color] duration-200
                       before:absolute before:inset-y-0 before:left-0 before:w-1
                       ${visual.accent} ${visual.hover}
                       motion-safe:hover:-translate-y-px
-                      hover:shadow-[0_8px_24px_rgba(15,23,42,0.06)]
+                      hover:shadow-sm
                       sm:p-6
                     `}
                   >
@@ -458,7 +503,7 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
             <div className="bg-white border border-slate-200 rounded-xl p-12 text-center">
               <p className="text-sm font-medium text-slate-600 mb-1">현재 비교 결과가 생성되지 않았습니다</p>
               <p className="text-xs text-slate-500">필터를 변경하거나 초기화해 보세요</p>
-              <button onClick={resetFilters} className="mt-4 text-xs font-medium text-blue-600 hover:underline">
+              <button onClick={resetFilters} className="mt-4 min-h-9 rounded-lg px-3 text-xs font-medium text-blue-600 hover:bg-blue-50 hover:underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/15">
                 필터 초기화
               </button>
             </div>
@@ -470,9 +515,9 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
         <div className="space-y-6">
           <div>
             <div className="mb-4 flex items-center gap-2">
-              <AlertTriangle className="size-4 text-rose-500" aria-hidden="true" />
+              <AlertTriangle className="size-4 text-amber-500" aria-hidden="true" />
               <h2 className="text-sm font-semibold text-slate-900">주의 문구 후보</h2>
-              <span className="rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-700">
+              <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800">
                 {toxicCandidates.length}건
               </span>
             </div>
@@ -483,13 +528,13 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
                     type="button"
                     key={`${clause.id}-${pattern.code}`}
                     onClick={() => onClauseClick(clause)}
-                    className="flex w-full items-center justify-between rounded-xl border border-rose-200 bg-rose-50/50 px-4 py-3 text-left hover:bg-rose-50"
+                    className="flex min-h-11 w-full items-center justify-between rounded-xl border border-amber-200 bg-amber-50/40 px-4 py-3 text-left hover:bg-amber-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-500/15"
                   >
                     <span>
-                      <span className="block text-sm font-semibold text-rose-800">{pattern.label}</span>
+                      <span className="block text-sm font-semibold text-amber-900">{pattern.label}</span>
                       <span className="mt-0.5 block text-xs text-slate-600">{clause.article} · {clause.category}</span>
                     </span>
-                    <ChevronRight className="size-4 text-rose-500" />
+                    <ChevronRight className="size-4 text-amber-600" />
                   </button>
                 ))}
               </div>
@@ -518,19 +563,19 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
                   <div key={item.standard.clause_id} className="bg-slate-50 border border-slate-300 rounded-xl overflow-hidden">
                     <button
                       onClick={() => setExpandedMissing(open ? null : item.standard.clause_id)}
-                      className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-blue-50 transition-colors"
+                      className="flex min-h-11 w-full items-center gap-3 px-5 py-4 text-left transition-colors hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-blue-500/15"
                       aria-expanded={open}
                     >
                       <div className="w-4 h-4 rounded border-2 border-[#94A3B8] shrink-0 flex items-center justify-center" aria-hidden="true" />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-slate-900">{item.standard.title}</p>
-                        <p className="text-[11px] text-slate-600 mt-0.5">{item.standard.source}</p>
+                        <p className="mt-1 text-xs text-slate-600">{item.standard.source}</p>
                       </div>
                       {open ? <ChevronUp className="w-4 h-4 text-slate-500 shrink-0" /> : <ChevronDown className="w-4 h-4 text-slate-500 shrink-0" />}
                     </button>
                     {open && (
                       <div className="px-5 pb-5 border-t border-slate-200">
-                        <p className="text-[11px] font-semibold text-slate-600 uppercase tracking-wider mt-4 mb-2">표준조항 원문</p>
+                        <p className="mb-2 mt-4 text-xs font-semibold uppercase tracking-wider text-slate-600">표준조항 원문</p>
                         <p className="text-xs text-slate-600 leading-relaxed bg-white border border-slate-200 rounded-lg px-4 py-3 font-mono">
                           {item.standard.text}
                         </p>
@@ -539,6 +584,36 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
                   </div>
                 )
               })}
+            </div>
+          </div>
+        </div>
+      )}
+      {showDiscardConfirm && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-4" role="dialog" aria-modal="true" aria-labelledby="discard-title">
+          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
+            <h2 id="discard-title" className="text-lg font-bold text-slate-950">검토 결과를 폐기할까요?</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              검토 결과와 임시 계약서 파일이 삭제되며 되돌릴 수 없습니다.
+            </p>
+            {discardError && <p className="mt-3 text-sm text-rose-600" role="alert">{discardError}</p>}
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowDiscardConfirm(false)}
+                disabled={isDiscarding}
+                className="min-h-10 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/15 disabled:opacity-50"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={discardReview}
+                disabled={isDiscarding}
+                className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-rose-500/20 disabled:opacity-50"
+              >
+                {isDiscarding && <Loader2 className="size-4 animate-spin" />}
+                {isDiscarding ? '폐기 중' : '폐기'}
+              </button>
             </div>
           </div>
         </div>

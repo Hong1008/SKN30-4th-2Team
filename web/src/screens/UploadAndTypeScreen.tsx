@@ -215,14 +215,13 @@ export default function UploadAndTypeScreen({ sessionId, setSessionId, setReview
     <div className="mx-auto w-full max-w-[760px] space-y-8 pb-24">
       {/* ── 1. Upload & Type Section ── */}
       <section className="
-        rounded-2xl border border-slate-200/80 bg-white
-        shadow-[0_1px_2px_rgba(15,23,42,0.025),0_10px_30px_rgba(15,23,42,0.035)]
-        p-6 sm:p-8 space-y-8
+        space-y-7 rounded-2xl border border-slate-200/80 bg-white
+        p-6 shadow-[0_1px_2px_rgba(15,23,42,0.03)] sm:p-8
       ">
         <div className="mb-7">
           <h1 className="
-            text-2xl font-bold leading-tight
-            tracking-[-0.025em] text-slate-950 sm:text-3xl
+            text-xl font-semibold leading-tight
+            tracking-[-0.02em] text-slate-950 sm:text-2xl
           ">
             검토할 계약서를 업로드해 주세요
           </h1>
@@ -274,7 +273,7 @@ export default function UploadAndTypeScreen({ sessionId, setSessionId, setReview
             onClick={() => {
               fileRef.current?.click()
             }}
-            className={`group relative flex min-h-[240px] cursor-pointer flex-col items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed px-6 py-8 text-center transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/15 ${
+            className={`group relative flex min-h-[200px] cursor-pointer flex-col items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed px-6 py-6 text-center transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/15 ${
               isDragging
                 ? 'scale-[1.01] border-blue-500 bg-blue-50 shadow-lg shadow-blue-500/10'
                 : 'border-slate-300 bg-slate-50/60 hover:border-blue-400 hover:bg-blue-50/50'
@@ -283,24 +282,24 @@ export default function UploadAndTypeScreen({ sessionId, setSessionId, setReview
             <input ref={fileRef} type="file" className="hidden" accept={formats.map(f => `.${f.toLowerCase()}`).join(',')} onChange={handleFileChange} />
             
             <div className="flex w-full flex-col items-center justify-center px-4 py-6">
-              <div className={`mb-4 flex size-14 items-center justify-center rounded-2xl transition-all duration-200 group-hover:-translate-y-1 ${
+              <div className={`mb-3 flex size-12 items-center justify-center rounded-xl transition-all duration-200 group-hover:-translate-y-0.5 ${
                 isDragging
                   ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/25'
                   : 'bg-white text-blue-600 shadow-sm ring-1 ring-slate-200'
               }`}>
-                <UploadCloud className={`size-8 transition-colors ${isDragging ? 'text-white' : 'text-blue-600'}`} />
+                <UploadCloud className={`size-6 transition-colors ${isDragging ? 'text-white' : 'text-blue-600'}`} />
               </div>
               <p className="mb-2 text-[15px] font-semibold leading-6 tracking-[-0.01em] text-slate-900">
                 파일을 이곳에 드래그하거나 직접 선택하세요
               </p>
               
-              <p className="mb-6 text-[11px] font-medium tracking-[0.08em] text-slate-400">
+              <p className="mb-4 text-xs font-medium tracking-[0.08em] text-slate-500">
                 {formats.join(' · ')}
               </p>
 
               <button
                 onClick={e => { e.stopPropagation(); fileRef.current?.click() }}
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-semibold text-white shadow-[0_1px_2px_rgba(37,99,235,0.2),0_6px_16px_rgba(37,99,235,0.16)] transition-[background-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:bg-blue-700 hover:shadow-md active:translate-y-0 active:bg-blue-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/20"
+                className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-700 transition-colors duration-150 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/15"
               >
                 파일 선택
               </button>
@@ -355,7 +354,7 @@ export default function UploadAndTypeScreen({ sessionId, setSessionId, setReview
           </div>
         )}
         {/* ── 2. Contract Type Section ── */}
-        <div className="pt-4 border-t border-slate-100 space-y-4">
+        <div className="space-y-4 border-t border-slate-100 pt-6">
 
         <div className="grid md:grid-cols-3 gap-3">
           {contractTypes.map((type) => {
@@ -368,30 +367,30 @@ export default function UploadAndTypeScreen({ sessionId, setSessionId, setReview
                   startRequestKey.current = null
                 }}
                 aria-pressed={active}
-                className={`relative min-h-28 rounded-2xl border p-5 text-left transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/15 ${
+                className={`relative min-h-20 rounded-xl border px-4 py-3.5 text-left transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/15 ${
                   active 
-                    ? 'border-blue-500 bg-blue-50/70 shadow-sm ring-4 ring-blue-500/10' 
-                    : 'border-slate-200 bg-white hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md'
+                    ? 'border-blue-500 bg-blue-50/30 shadow-sm ring-2 ring-blue-500/10'
+                    : 'border-slate-200 bg-white hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-sm'
                 }`}
               >
-                <div className="flex items-center justify-between w-full mb-1">
-                  <h3 className={`text-[15px] font-semibold ${active ? 'text-blue-700' : 'text-slate-900'}`}>{type.label}</h3>
+                <div className="flex w-full items-center justify-between gap-2">
+                  <h3 className={`text-sm font-semibold ${active ? 'text-blue-700' : 'text-slate-900'}`}>{type.label}</h3>
                   {active && (
                     <CheckCircle2 className="w-5 h-5 text-blue-600" />
                   )}
                 </div>
-                <p className="text-[12px] text-slate-500 leading-relaxed break-keep">{type.description}</p>
+                <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{type.description}</p>
               </button>
             )
           })}
 
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white px-5 py-4">
+        <div className="rounded-xl bg-slate-50/70 px-5 py-4">
           <p className="text-xs text-slate-600 leading-relaxed flex-1">
             현재 지원 범위: {contractTypes.map(type => type.label).join(', ')}
             <br />
-            문서가 선택 유형과 충분히 대응하지 않으면 검토 시작 전에 별도 확인 화면이 표시됩니다.
+            선택한 계약 유형과 문서 내용이 일치하지 않는 경우, 검토 전에 확인 안내가 표시됩니다.
           </p>
         </div>
         <div className="flex justify-end">
@@ -403,14 +402,14 @@ export default function UploadAndTypeScreen({ sessionId, setSessionId, setReview
       </section>
 
       {/* ── 3. Bottom Controls & Help ── */}
-      <div className="sticky bottom-4 z-20 flex flex-col-reverse gap-3 rounded-2xl border border-slate-200/80 bg-white/90 p-3 shadow-xl shadow-slate-900/10 backdrop-blur-xl sm:flex-row sm:items-center sm:justify-end">
+      <div className="sticky bottom-4 z-20 flex flex-col-reverse gap-3 rounded-2xl border border-slate-200/80 bg-white/95 p-3 shadow-[0_8px_24px_rgba(15,23,42,0.07)] backdrop-blur-xl sm:flex-row sm:items-center sm:justify-end">
         <button
           onClick={handleNext}
           disabled={uploadState !== 'success' || !selectedType}
           className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-5 text-sm font-semibold transition-[background-color,box-shadow,transform] duration-150 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/20 ${
             uploadState === 'success' && selectedType
               ? 'bg-blue-600 text-white shadow-[0_1px_2px_rgba(37,99,235,0.2),0_6px_16px_rgba(37,99,235,0.16)] hover:-translate-y-px hover:bg-blue-700 hover:shadow-md active:translate-y-0 active:bg-blue-800'
-              : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+              : 'cursor-not-allowed bg-slate-200 text-slate-500'
           }`}
         >
           선택한 유형으로 검토 시작 <ChevronRight className="w-4 h-4" />
