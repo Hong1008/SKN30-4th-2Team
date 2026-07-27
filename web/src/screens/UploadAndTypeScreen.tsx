@@ -11,7 +11,7 @@ interface Props {
   sessionId: string | null;
   setSessionId: (id: string | null) => void;
   setReviewId: (id: string | null) => void;
-  onNext: () => void;
+  onNext: (reviewId: string) => void;
   onOutOfScope: () => void;
 }
 
@@ -126,14 +126,14 @@ export default function UploadAndTypeScreen({ sessionId, setSessionId, setReview
       localStorage.setItem(REVIEW_ID_KEY, reviewRes.data.review_id)
       
       // 3. Move to processing screen
-      onNext()
+      onNext(reviewRes.data.review_id)
     } catch (err: any) {
       const status = err?.status
       const existingReviewId = err?.details?.review_id
       if (status === 409 && existingReviewId) {
         setReviewId(existingReviewId)
         localStorage.setItem(REVIEW_ID_KEY, existingReviewId)
-        onNext()
+        onNext(existingReviewId)
       } else if (status === 409) {
         setErrorMsg(err?.message || '동일 요청이 이미 처리 중입니다. 잠시 후 다시 확인해 주세요.')
       } else if (status === 404 || status === 410) {

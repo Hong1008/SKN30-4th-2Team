@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AlertCircle, Check, ChevronRight, RefreshCw } from 'lucide-react'
 import { api } from '../api/api'
-import type { ReviewData, ReviewProgress } from '../types'
+import type { ReviewData, ReviewProgress, ReviewSseEvent } from '../types'
 import { useToast } from '../contexts/ToastContext'
 import { useMetadata } from '../contexts/MetadataContext'
 import { getMetadataLabel } from '../utils/metadata'
+import { isTerminalReviewState, toReviewProgress } from '../utils/reviewProgress'
 
 interface Props {
   reviewId: string | null
@@ -35,11 +36,14 @@ export default function ProcessingScreen({ reviewId, onDone }: Props) {
     let subscribed = true
     let source: EventSource | null = null
     let pollingTimer: ReturnType<typeof setTimeout> | null = null
+    let watchdogTimer: ReturnType<typeof setTimeout> | null = null
     let pollingStarted = false
     let lastSequence = -1
 
     const update = (reviewState: string, nextProgress?: ReviewProgress | null, reviewError?: ReviewData['error']) => {
       if (nextProgress) {
+        if (nextProgress.sequence < lastSequence) return
+        lastSequence = Math.max(lastSequence, nextProgress.sequence)
         setProgress(nextProgress)
         const index = stages.findIndex((stage) => stage.code === nextProgress.stage)
         if (index >= 0) setActiveStep(index)
@@ -48,10 +52,18 @@ export default function ProcessingScreen({ reviewId, onDone }: Props) {
         setActiveStep(Math.max(stages.length - 1, 0))
         setMode('done')
       }
-      if (reviewState === 'FAILED') {
+      if (['FAILED', 'CANCELLED', 'EXPIRED'].includes(reviewState)) {
         setMode('error')
-        setErrorMessage(reviewError?.message || '검토 중 오류가 발생했습니다.')
+        setErrorMessage(reviewError?.message || '검토가 중단되었거나 만료되었습니다.')
         setRetryable(reviewError?.retryable === true)
+      }
+    }
+
+    const stopPolling = () => {
+      pollingStarted = false
+      if (pollingTimer) {
+        clearTimeout(pollingTimer)
+        pollingTimer = null
       }
     }
 
@@ -63,13 +75,18 @@ export default function ProcessingScreen({ reviewId, onDone }: Props) {
           const response = await api.pollReviewStatus(reviewId)
           if (!subscribed) return
           update(response.data.review_state, response.data.progress, response.data.error)
-          if (!['COMPLETED', 'FAILED', 'CANCELLED', 'EXPIRED'].includes(response.data.review_state)) {
+          if (!isTerminalReviewState(response.data.review_state)) {
             pollingTimer = setTimeout(poll, 1500)
+          } else {
+            stopPolling()
           }
         } catch (error: any) {
           if (!subscribed) return
           if (error?.status === 404 || error?.status === 410) {
             showToast('검토 정보를 찾을 수 없거나 만료되었습니다. 처음부터 다시 시작해 주세요.', 'error')
+            setMode('error')
+            setErrorMessage('검토 정보를 찾을 수 없거나 만료되었습니다.')
+            setRetryable(false)
             return
           }
           setMode('error')
@@ -80,18 +97,49 @@ export default function ProcessingScreen({ reviewId, onDone }: Props) {
       void poll()
     }
 
+    const scheduleWatchdog = () => {
+      if (watchdogTimer) clearTimeout(watchdogTimer)
+      watchdogTimer = setTimeout(startPolling, 5000)
+    }
+
+    const syncCurrentStatus = async () => {
+      try {
+        const response = await api.pollReviewStatus(reviewId)
+        if (!subscribed) return
+        update(response.data.review_state, response.data.progress, response.data.error)
+      } catch {
+        // SSE 연결이 실패하면 onerror에서 polling으로 복구한다.
+      }
+    }
+
+    void syncCurrentStatus()
+
     try {
       source = new EventSource(api.reviewEventsUrl(reviewId), { withCredentials: true })
       const onEvent = (event: MessageEvent<string>) => {
-        const data = JSON.parse(event.data) as ReviewData & { sequence?: number }
-        const sequence = data.sequence ?? Number(event.lastEventId)
-        if (Number.isFinite(sequence) && sequence <= lastSequence) return
-        if (Number.isFinite(sequence)) lastSequence = sequence
-        update(data.review_state, data.progress, data.error)
+        try {
+          const data = JSON.parse(event.data) as ReviewSseEvent
+          const sequence = Number.isFinite(data.sequence)
+            ? data.sequence
+            : Number(event.lastEventId)
+          if (!Number.isFinite(sequence) || sequence < lastSequence) return
+
+          stopPolling()
+          update(
+            data.review_state,
+            toReviewProgress({ ...data, sequence }),
+            data.error,
+          )
+          if (!isTerminalReviewState(data.review_state)) scheduleWatchdog()
+        } catch {
+          source?.close()
+          startPolling()
+        }
       }
       source.addEventListener('progress', onEvent)
       source.addEventListener('completed', onEvent)
       source.addEventListener('failed', onEvent)
+      scheduleWatchdog()
       source.onerror = () => {
         source?.close()
         startPolling()
@@ -104,6 +152,7 @@ export default function ProcessingScreen({ reviewId, onDone }: Props) {
       subscribed = false
       source?.close()
       if (pollingTimer) clearTimeout(pollingTimer)
+      if (watchdogTimer) clearTimeout(watchdogTimer)
     }
   }, [mode, reviewId, showToast, stages])
 

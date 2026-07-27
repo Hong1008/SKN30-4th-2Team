@@ -15,8 +15,10 @@ import { api } from './api/api'
 
 function ProcessingRoute({ fallbackReviewId, onDone }: { fallbackReviewId: string | null; onDone: (id: string) => void }) {
   const { id } = useParams()
-  const reviewId = id ?? fallbackReviewId
-  return <ProcessingScreen reviewId={reviewId} onDone={() => reviewId && onDone(reviewId)} />
+  const reviewId = (id && id !== 'new' ? id : null) ?? fallbackReviewId
+  return reviewId
+    ? <ProcessingScreen reviewId={reviewId} onDone={() => onDone(reviewId)} />
+    : <Navigate to="/review" replace />
 }
 
 function ResultsRoute({ fallbackReviewId, onClauseClick, onChatbot }: {
@@ -105,8 +107,8 @@ function MainApp() {
     const isRoot = location.pathname === '/' || location.pathname === ''
 
     if (savedReview) {
-      api.getResults(savedReview).then(res => {
-        if (res.data.review.review_state === 'COMPLETED') {
+      api.pollReviewStatus(savedReview).then(res => {
+        if (res.data.review_state === 'COMPLETED') {
           if (isRoot) navigate(`/review/${savedReview}/results`, { replace: true })
         } else {
           if (isRoot) navigate(`/review/${savedReview}/progress`, { replace: true })
@@ -148,10 +150,10 @@ function MainApp() {
     switch (s) {
       case 'upload-and-type': return navigate('/review')
       case 'out-of-scope': return navigate('/out-of-scope')
-      case 'processing': return navigate(`/review/${reviewId || 'new'}/progress`)
-      case 'results': return navigate(`/review/${reviewId || 'new'}/results`)
-      case 'clause-detail': return navigate(`/review/${reviewId || 'new'}/results/clause`)
-      case 'chatbot': return navigate(`/review/${reviewId || 'new'}/chatbot`)
+      case 'processing': return navigate(reviewId ? `/review/${reviewId}/progress` : '/review')
+      case 'results': return navigate(reviewId ? `/review/${reviewId}/results` : '/review')
+      case 'clause-detail': return navigate(reviewId ? `/review/${reviewId}/results/clause` : '/review')
+      case 'chatbot': return navigate(reviewId ? `/review/${reviewId}/chatbot` : '/review')
     }
   }
 
@@ -174,7 +176,7 @@ function MainApp() {
                   sessionId={sessionId}
                   setSessionId={setSessionId}
                   setReviewId={setReviewId}
-                  onNext={() => nav('processing')}
+                  onNext={(id) => navigate(`/review/${id}/progress`)}
                   onOutOfScope={() => nav('out-of-scope')}
                 />
               } />

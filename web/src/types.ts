@@ -73,9 +73,22 @@ export interface ReviewProgress {
   sequence: number;
   stage: string;
   current: number;
-  total: number;
+  total: number | null;
   percent: number;
   message?: string | null;
+}
+
+export interface ReviewSseEvent {
+  review_id: string;
+  sequence: number;
+  review_state: string;
+  stage: string | null;
+  current: number | null;
+  total: number | null;
+  percent: number | null;
+  message?: string | null;
+  mcp_review_status?: string | null;
+  error?: ApiError | null;
 }
 
 export interface ReviewData {

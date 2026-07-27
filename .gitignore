@@ -18,7 +18,6 @@ web/.env.*.local
 api/**/*.py[cod]
 
 # API 로컬 SQLite 데이터
-api/data/*.db
-api/data/*.db-*
+api/data/
 .test-tmp/
 .tmp/
