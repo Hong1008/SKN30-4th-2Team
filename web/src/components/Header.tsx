@@ -23,20 +23,16 @@ export default function Header({ currentScreen, onNavigate }: Props) {
       }
     }
     
-    window.addEventListener('mousemove', resetTimer)
     window.addEventListener('keydown', resetTimer)
     window.addEventListener('click', resetTimer)
-    window.addEventListener('scroll', resetTimer)
 
     const interval = setInterval(() => {
       setTimeLeft(prev => (prev > 0 ? prev - 1 : 0))
     }, 1000)
 
     return () => {
-      window.removeEventListener('mousemove', resetTimer)
       window.removeEventListener('keydown', resetTimer)
       window.removeEventListener('click', resetTimer)
-      window.removeEventListener('scroll', resetTimer)
       clearInterval(interval)
       if (timeoutId) clearTimeout(timeoutId)
     }
