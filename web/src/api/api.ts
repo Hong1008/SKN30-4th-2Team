@@ -43,7 +43,7 @@ export const api = {
     });
   },
 
-  // --- MOCK API (Pending Backend Implementation) ---
+  // --- REVIEW DATA API (Real API with Fallback) ---
 
   async startReview(sessionId: string, idempotencyKey?: string): Promise<ApiResponse<ReviewData>> {
     const headers: any = { 'Content-Type': 'application/json' };
@@ -80,8 +80,19 @@ export const api = {
     });
   },
 
+  // --- CHAT & SUGGESTIONS API (Mock for now until Chat API spec is final) ---
+
   async retryReview(reviewId: string, idempotencyKey?: string): Promise<ApiResponse<ReviewData>> {
-    return mockApi.retryReview(reviewId, idempotencyKey);
+    const headers: any = { 'Content-Type': 'application/json' };
+    if (idempotencyKey) headers['Idempotency-Key'] = idempotencyKey;
+
+    return client<ApiResponse<ReviewData>>(`/reviews/${reviewId}/retry`, {
+      method: 'POST',
+      headers
+    }).catch(err => {
+      console.warn('Real API failed, falling back to mock API for retryReview', err);
+      return mockApi.retryReview(reviewId, idempotencyKey);
+    });
   },
 
   async chat(reviewId: string, message: string, idempotencyKey?: string): Promise<ApiResponse<any>> {
