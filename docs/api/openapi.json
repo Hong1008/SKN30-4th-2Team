@@ -2549,7 +2549,7 @@
             "type": "string",
             "title": "Schema Version",
             "description": "메타데이터 스키마 버전",
-            "default": "1.1"
+            "default": "1.2"
           },
           "updated_at": {
             "type": "string",
@@ -2621,6 +2621,14 @@
             "title": "Progress Stages",
             "description": "검토 진행 단계 코드 목록"
           },
+          "progress_stage_details": {
+            "items": {
+              "$ref": "#/components/schemas/ProgressStageMetadata"
+            },
+            "type": "array",
+            "title": "Progress Stage Details",
+            "description": "검토 진행 단계 코드 및 화면 표시명 목록"
+          },
           "grounding_statuses": {
             "items": {
               "$ref": "#/components/schemas/GroundingStatus"
@@ -2689,6 +2697,7 @@
           "result_codes",
           "result_code_details",
           "progress_stages",
+          "progress_stage_details",
           "grounding_statuses",
           "chat_outcomes",
           "draft_outcomes",
@@ -2803,6 +2812,26 @@
         ],
         "title": "ProgressStage",
         "description": "화면에 노출하는 검토 진행 단계."
+      },
+      "ProgressStageMetadata": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code",
+            "description": "검토 진행 단계 코드"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label",
+            "description": "검토 진행 단계 화면 표시명"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "label"
+        ],
+        "title": "ProgressStageMetadata"
       },
       "RequiredConfirmation": {
         "properties": {

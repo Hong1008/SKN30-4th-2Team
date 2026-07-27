@@ -35,6 +35,11 @@ class ResultCodeMetadata(BaseModel):
     label: str = Field(description="결과 코드 표시명")
 
 
+class ProgressStageMetadata(BaseModel):
+    code: str = Field(description="검토 진행 단계 코드")
+    label: str = Field(description="검토 진행 단계 화면 표시명")
+
+
 class FilePolicy(BaseModel):
     extensions: list[str] = Field(description="허용 파일 확장자 목록")
     max_size_bytes: int = Field(description="최대 업로드 허용 파일 크기 (바이트)")
@@ -52,7 +57,7 @@ class FeatureFlags(BaseModel):
 
 
 class MetadataResponse(BaseModel):
-    schema_version: str = Field(default="1.1", description="메타데이터 스키마 버전")
+    schema_version: str = Field(default="1.2", description="메타데이터 스키마 버전")
     updated_at: datetime = Field(description="메타데이터 최종 업데이트 일시")
     contract_types: list[MetadataCode] = Field(description="지원 계약 유형 목록")
     categories: list[CategoryMetadata] = Field(description="검토 카테고리 목록")
@@ -62,6 +67,9 @@ class MetadataResponse(BaseModel):
     result_codes: list[str] = Field(description="검토 결과 코드 목록")
     result_code_details: list[ResultCodeMetadata] = Field(description="검토 결과 코드 상세 목록")
     progress_stages: list[str] = Field(description="검토 진행 단계 코드 목록")
+    progress_stage_details: list[ProgressStageMetadata] = Field(
+        description="검토 진행 단계 코드 및 화면 표시명 목록"
+    )
     grounding_statuses: list[GroundingStatus] = Field(description="법령 근거 조회 상태 코드 목록")
     chat_outcomes: list[ChatOutcome] = Field(description="질의응답 결과 유형 목록")
     draft_outcomes: list[SuggestionOutcome] = Field(description="제안 생성 결과 유형 목록")

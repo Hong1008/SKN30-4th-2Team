@@ -9,7 +9,7 @@
 ```json
 {
   "data": {
-    "schema_version": "1.1",
+    "schema_version": "1.2",
     "updated_at": "2026-07-24T09:00:00+09:00",
     "contract_types": [
       {
@@ -48,7 +48,22 @@
       {"code": "NO_MATCH", "label": "표준조항 검색 후보 없음"},
       {"code": "MISSING", "label": "표준조항 누락 가능성"}
     ],
-    "progress_stages": [],
+    "progress_stages": [
+      "PREPARE",
+      "BATCH_SEARCH",
+      "RERANK",
+      "CLAUSE_REVIEW",
+      "MISSING_DETECTION",
+      "RESULT_ASSEMBLY"
+    ],
+    "progress_stage_details": [
+      {"code": "PREPARE", "label": "검토 준비"},
+      {"code": "BATCH_SEARCH", "label": "조항 검색 및 분류"},
+      {"code": "RERANK", "label": "관련 조항 재정렬"},
+      {"code": "CLAUSE_REVIEW", "label": "조항 비교 검토"},
+      {"code": "MISSING_DETECTION", "label": "누락 조항 확인"},
+      {"code": "RESULT_ASSEMBLY", "label": "결과 정리"}
+    ],
     "grounding_statuses": [],
     "chat_outcomes": [],
     "draft_outcomes": [],
@@ -83,7 +98,7 @@
 
 ```http
 Cache-Control: public, max-age=300, stale-while-revalidate=600
-ETag: "metadata-1.1-20260724"
+ETag: "metadata-1.2-20260727"
 ```
 
 프론트는 요청 라이브러리의 메모리 캐시를 사용한다. MVP에서는 `localStorage` 영속 캐시를 사용하지 않는다.
