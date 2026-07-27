@@ -102,10 +102,10 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
   // Generate SUMMARY based on actual data
   const summaryCounts = resultsData.summary.clause_results
   const uiSummary = [
-    { status: 'matched' as BadgeStatus,  count: summaryCounts.NONE || 0,  label: '대응 표준조항 있음',   bg: 'bg-emerald-50',  border: 'border-emerald-200', text: 'text-emerald-700', num: 'text-emerald-600' },
-    { status: 'modified' as BadgeStatus, count: summaryCounts.EXTRA || 0,  label: '추가·변형 내용 확인',  bg: 'bg-amber-50',    border: 'border-amber-200',   text: 'text-amber-700',   num: 'text-amber-600' },
-    { status: 'review' as BadgeStatus,   count: summaryCounts.NO_MATCH || 0,  label: '대응 조항 확인 필요',  bg: 'bg-rose-50',     border: 'border-rose-200',    text: 'text-rose-700',    num: 'text-rose-600' },
-    { status: 'missing' as BadgeStatus,  count: resultsData.summary.missing_standard_clauses || 0,  label: '포함 여부 확인 필요',  bg: 'bg-slate-100',   border: 'border-slate-200',   text: 'text-[#475569]',   num: 'text-[#475569]' },
+    { status: 'matched' as BadgeStatus,  count: summaryCounts.NONE || 0,  label: '대응 표준조항 있음',   text: 'text-emerald-700', dot: 'bg-emerald-500' },
+    { status: 'modified' as BadgeStatus, count: summaryCounts.EXTRA || 0,  label: '추가·변형 내용 확인',  text: 'text-amber-700',   dot: 'bg-amber-500' },
+    { status: 'review' as BadgeStatus,   count: summaryCounts.NO_MATCH || 0,  label: '대응 조항 확인 필요',  text: 'text-rose-700',    dot: 'bg-rose-500' },
+    { status: 'missing' as BadgeStatus,  count: resultsData.summary.missing_standard_clauses || 0,  label: '포함 여부 확인 필요',  text: 'text-slate-600',   dot: 'bg-slate-400' },
   ]
 
   return (
@@ -113,12 +113,12 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
       {/* Title row */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-[22px] font-semibold text-[#1E293B] tracking-tight mb-1">계약서 검토 결과</h1>
-          <p className="text-sm text-[#475569]">근로계약서 ({resultsData.review.contract_type}) 기준 · {new Date(resultsData.review.completed_at).toLocaleDateString()}</p>
+          <h1 className="text-[22px] font-semibold text-slate-900 tracking-tight mb-1">계약서 검토 결과</h1>
+          <p className="text-sm text-slate-500">근로계약서 ({resultsData.review.contract_type}) 기준 · {new Date(resultsData.review.completed_at).toLocaleDateString()}</p>
         </div>
         <button
           onClick={onChatbot}
-          className="flex items-center gap-2 px-4 py-2.5 bg-[#EEF2FF] text-[#6366F1] border border-[#C7D2FE] rounded-xl text-sm font-medium hover:bg-[#E0E7FF] transition-colors shrink-0"
+          className="flex items-center gap-2 px-4 py-2.5 bg-blue-50 text-blue-600 border border-blue-200 rounded-xl text-sm font-medium hover:bg-blue-100 transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/15"
         >
           <MessageSquare className="w-4 h-4" />
           결과 기반 질의응답
@@ -126,9 +126,9 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
       </div>
 
       {/* Disclaimer banner */}
-      <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-5 py-4 flex items-start gap-3">
-        <AlertTriangle className="w-4 h-4 text-[#475569] shrink-0 mt-0.5" aria-hidden="true" />
-        <p className="text-xs text-[#475569] leading-relaxed">
+      <div className="bg-slate-50 border border-slate-200 rounded-xl px-5 py-4 flex items-start gap-3">
+        <AlertTriangle className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" aria-hidden="true" />
+        <p className="text-xs text-slate-500 leading-relaxed">
           {resultsData.review.disclaimer}
         </p>
       </div>
@@ -139,11 +139,16 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
           <button
             key={s.status}
             onClick={() => setFilterStatus(s.status)}
-            className={`text-left p-4 rounded-xl border transition-all hover:shadow-sm ${s.bg} ${s.border} ${
-              filterStatus === s.status ? 'ring-2 ring-[#6366F1]/40' : ''
+            className={`rounded-2xl border bg-white p-5 text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/15 ${
+              filterStatus === s.status
+                ? 'border-blue-500 ring-4 ring-blue-500/10'
+                : 'border-slate-200'
             }`}
           >
-            <p className={`text-3xl font-bold tracking-tight mb-1 ${s.num}`}>{s.count}</p>
+            <div className="flex items-center gap-2 mb-1">
+              <span className={`w-2.5 h-2.5 rounded-full ${s.dot}`} aria-hidden="true" />
+              <p className="text-3xl font-bold tracking-tight text-slate-950">{s.count}</p>
+            </div>
             <p className={`text-xs font-medium leading-tight ${s.text}`}>{s.label}</p>
           </button>
         ))}
@@ -169,16 +174,16 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
       {activeTab === 'results' && (
         <>
           {/* Filter bar */}
-          <div className="bg-white border border-[#E2E8F0] rounded-xl p-4 space-y-3">
+          <div className="sticky top-4 z-20 space-y-3 rounded-2xl border border-slate-200/80 bg-white/90 p-4 shadow-sm backdrop-blur-xl">
             {/* Search */}
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#64748B]" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
                 type="text"
                 placeholder="조항명, 키워드로 검색"
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                className="w-full pl-9 pr-4 py-2.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg text-sm text-[#1E293B] placeholder:text-[#64748B] focus:outline-none focus:border-[#6366F1] focus:ring-1 focus:ring-[#6366F1]"
+                className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-4 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 hover:border-slate-300 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
               />
             </div>
             {/* Filters row */}
@@ -220,29 +225,35 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
           {filtered.length > 0 ? (
             <div className="space-y-3">
               {filtered.map(c => (
-                <div key={c.id} className="bg-white border border-[#E2E8F0] rounded-xl p-5 hover:border-[#C7D2FE] hover:shadow-sm transition-all">
+                <div key={c.id} className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all duration-200 hover:border-blue-200 hover:shadow-md sm:p-6">
                   <div className="flex items-start gap-3 justify-between flex-wrap">
                     <div className="flex items-center gap-2 flex-wrap">
                       <Badge status={c.status} />
-                      <span className="text-xs text-[#64748B] bg-[#F8FAFC] border border-[#E2E8F0] px-2 py-0.5 rounded">{c.category}</span>
+                      <span className="text-xs text-slate-500 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded">{c.category}</span>
                       {c.toxic_patterns && c.toxic_patterns.length > 0 && (
                         <span className="text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded">
                           주의 신호 포함
                         </span>
                       )}
                     </div>
+                  </div>
+                  
+                  <p className="text-base font-bold text-slate-900 mt-4">{c.article}</p>
+                  
+                  <div className="my-4 rounded-xl border-l-4 border-slate-300 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-600 line-clamp-3">
+                    "{c.excerpt}"
+                  </div>
+                  
+                  <p className="text-sm text-slate-600 leading-relaxed">{c.summary}</p>
+                  
+                  <div className="mt-5 pt-4 border-t border-slate-100 flex justify-end">
                     <button
                       onClick={onClauseClick}
-                      className="flex items-center gap-1 text-xs font-medium text-[#6366F1] hover:text-[#1E293B] transition-colors shrink-0"
+                      className="inline-flex items-center gap-1 text-sm font-semibold text-blue-600 hover:text-blue-700 transition-colors focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/15 rounded"
                     >
-                      상세 보기 <ChevronRight className="w-3.5 h-3.5" />
+                      상세 분석 보기 <ChevronRight className="w-4 h-4" />
                     </button>
                   </div>
-                  <p className="text-sm font-semibold text-[#1E293B] mt-3 mb-1">{c.article}</p>
-                  <p className="text-xs text-[#475569] line-clamp-2 leading-relaxed mb-3 bg-[#F8FAFC] rounded-lg px-3 py-2 border border-[#E2E8F0] font-mono">
-                    "{c.excerpt}"
-                  </p>
-                  <p className="text-xs text-[#475569] leading-relaxed">{c.summary}</p>
                 </div>
               ))}
             </div>
