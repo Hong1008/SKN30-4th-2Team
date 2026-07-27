@@ -1,5 +1,7 @@
 # API의 비밀값은 로컬 파일에만 보관합니다.
 **/.env
+**/.env.local
+**/.env.prod
 
 # web dependencies, build outputs, and local configuration
 web/node_modules/
