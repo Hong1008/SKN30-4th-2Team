@@ -1,9 +1,9 @@
 """Suggestions API와 LLM 구조화 출력 DTO."""
 
 from enum import StrEnum
-from typing import Any
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, RootModel
 
 
 class SuggestionOutcome(StrEnum):
@@ -37,9 +37,34 @@ class RequiredConfirmation(BaseModel):
     placeholder: str = Field(description="입력 힌트/치환문구")
 
 
-class SuggestionStructuredOutput(BaseModel):
-    outcome: SuggestionOutcome = Field(description="LLM 생성 결과 유형")
-    text: str | None = Field(default=None, description="생성된 협의 문구 초안")
+class SuggestionGeneratedOutput(BaseModel):
+    """생성 성공 시 출처 식별자를 빠짐없이 요구하는 LLM 출력."""
+
+    outcome: Literal[SuggestionOutcome.GENERATED] = Field(
+        description="생성 성공 결과 유형"
+    )
+    text: str = Field(min_length=1, description="생성된 협의 문구 초안")
+    key_changes: list[str] = Field(
+        default_factory=list, description="주요 변경 사항 목록"
+    )
+    standard_clause_ids: list[str] = Field(
+        min_length=1, description="참조한 표준조항 ID 목록"
+    )
+    grounding_source_ids: list[str] = Field(
+        min_length=1, description="참조한 법령 근거 ID 목록"
+    )
+    required_confirmations: list[RequiredConfirmation] = Field(
+        default_factory=list, description="사용자 직접 확인/입력 필요 항목 목록"
+    )
+
+
+class SuggestionInsufficientGroundingOutput(BaseModel):
+    """근거가 부족해 협의 문구를 만들 수 없을 때의 LLM 출력."""
+
+    outcome: Literal[SuggestionOutcome.INSUFFICIENT_GROUNDING] = Field(
+        description="생성 불가 결과 유형"
+    )
+    text: None = Field(default=None, description="생성 불가 시 본문 없음")
     key_changes: list[str] = Field(
         default_factory=list, description="주요 변경 사항 목록"
     )
@@ -52,6 +77,16 @@ class SuggestionStructuredOutput(BaseModel):
     required_confirmations: list[RequiredConfirmation] = Field(
         default_factory=list, description="사용자 직접 확인/입력 필요 항목 목록"
     )
+
+
+SuggestionStructuredValue = Annotated[
+    SuggestionGeneratedOutput | SuggestionInsufficientGroundingOutput,
+    Field(discriminator="outcome"),
+]
+
+
+class SuggestionStructuredOutput(RootModel[SuggestionStructuredValue]):
+    """생성 성공과 근거 부족을 구분하는 provider 공통 구조화 출력 계약."""
 
 
 class SuggestionResponse(BaseModel):

@@ -35,3 +35,31 @@ ollama-pod-stop:
 # Pod와 연결 디스크를 삭제합니다. 다음 시작 시 모델을 다시 내려받습니다.
 ollama-pod-delete:
     {{python}} deploy/manage_ollama_pod.py pod-delete --confirm
+
+# 운영 시연용 RunPod Serverless Ollama worker 이미지를 build합니다.
+ollama-serverless-image-build:
+    {{python}} deploy/manage_ollama_pod.py serverless-build --confirm
+
+# 운영 시연용 RunPod Serverless Ollama worker 이미지를 push합니다.
+ollama-serverless-image-push:
+    {{python}} deploy/manage_ollama_pod.py serverless-push --confirm
+
+# Serverless 전용 Template과 Endpoint를 각각 생성합니다.
+ollama-serverless-template-create:
+    {{python}} deploy/manage_ollama_pod.py serverless-template-create --confirm
+
+ollama-serverless-create:
+    {{python}} deploy/manage_ollama_pod.py serverless-create --confirm
+
+# build·push·Serverless Template·Endpoint 생성을 한 번에 수행합니다.
+ollama-serverless-deploy:
+    {{python}} deploy/manage_ollama_pod.py serverless-deploy --confirm
+
+ollama-serverless-list:
+    {{python}} deploy/manage_ollama_pod.py serverless-list
+
+ollama-serverless-info:
+    {{python}} deploy/manage_ollama_pod.py serverless-info
+
+ollama-serverless-delete:
+    {{python}} deploy/manage_ollama_pod.py serverless-delete --confirm

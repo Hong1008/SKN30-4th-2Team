@@ -22,6 +22,7 @@ from typing import Final
 ROOT: Final = Path(__file__).resolve().parents[1]
 ENV_FILE: Final = ROOT / "api" / ".env"
 DOCKER_CONTEXT: Final = ROOT / "deploy" / "ollama-pod"
+SERVERLESS_DOCKER_CONTEXT: Final = ROOT / "deploy" / "ollama-serverless"
 DEFAULTS: Final = {
     "RUNPOD_OLLAMA_TEMPLATE_NAME": "workshield-ollama-qwen35-9b",
     "RUNPOD_OLLAMA_POD_NAME": "workshield-ollama-qwen35-9b",
@@ -30,6 +31,13 @@ DEFAULTS: Final = {
     "RUNPOD_OLLAMA_CONTAINER_DISK_GB": "30",
     "RUNPOD_OLLAMA_MODEL": "hf.co/unsloth/Qwen3.5-9B-GGUF:Q4_K_M",
     "RUNPOD_OLLAMA_AUTO_TERMINATE_MINUTES": "0",
+    "RUNPOD_OLLAMA_SERVERLESS_TEMPLATE_NAME": "workshield-ollama-qwen35-9b-serverless",
+    "RUNPOD_OLLAMA_SERVERLESS_ENDPOINT_NAME": "workshield-ollama-qwen35-9b",
+    "RUNPOD_OLLAMA_SERVERLESS_GPU_ID": "NVIDIA RTX A5000",
+    "RUNPOD_OLLAMA_SERVERLESS_WORKERS_MIN": "0",
+    "RUNPOD_OLLAMA_SERVERLESS_WORKERS_MAX": "1",
+    "RUNPOD_OLLAMA_SERVERLESS_IDLE_TIMEOUT_SECONDS": "5",
+    "RUNPOD_OLLAMA_SERVERLESS_EXECUTION_TIMEOUT_SECONDS": "600",
 }
 
 
@@ -45,9 +53,7 @@ def load_environment() -> None:
             line = line.removeprefix("export ").lstrip()
         key, separator, raw_value = line.partition("=")
         key = key.strip()
-        if not separator or (
-            not key.startswith("RUNPOD_") and key != "OLLAMA_API_KEY"
-        ):
+        if not separator or not key.startswith("RUNPOD_"):
             continue
         try:
             values = shlex.split(raw_value.strip(), posix=True)
@@ -68,46 +74,14 @@ def require_command(command: str) -> None:
         raise RuntimeError(f"{command}을 찾을 수 없습니다. 설치 후 PATH에 추가하세요.")
 
 
-def display_command(command: list[str]) -> str:
-    """Pod 접근 키가 담긴 Template 환경변수는 화면에서 마스킹한다."""
-    displayed = command.copy()
-    for index, item in enumerate(displayed):
-        if "POD_API_KEY" in item:
-            displayed[index] = '{"OLLAMA_MODEL":"%s","POD_API_KEY":"***"}' % (
-                setting("RUNPOD_OLLAMA_MODEL")
-            )
-    return shlex.join(displayed)
-
-
-def redact_output(value: object) -> object:
-    """RunPod 응답에 포함될 수 있는 비밀값을 출력 전에 마스킹한다."""
-    if isinstance(value, dict):
-        return {
-            key: "***"
-            if any(marker in key.upper() for marker in ("KEY", "TOKEN", "PASSWORD", "SECRET"))
-            else redact_output(item)
-            for key, item in value.items()
-        }
-    if isinstance(value, list):
-        return [redact_output(item) for item in value]
-    return value
-
-
-def display_output(output: str) -> str:
-    try:
-        return json.dumps(redact_output(json.loads(output)), ensure_ascii=False, indent=2)
-    except json.JSONDecodeError:
-        return output
-
-
 def run(command: list[str], *, confirm: bool = False) -> str:
     """명령을 안전하게 실행하고 stdout JSON을 그대로 반환한다."""
-    print(display_command(command))
+    print(shlex.join(command))
     if not confirm:
         return ""
     completed = subprocess.run(command, check=True, capture_output=True, text=True, env=os.environ.copy())
     if completed.stdout.strip():
-        print(display_output(completed.stdout.strip()))
+        print(completed.stdout.strip())
     return completed.stdout
 
 
@@ -138,10 +112,7 @@ def auto_terminate_argument() -> list[str]:
 
 
 def template_create_command() -> list[str]:
-    template_env = json.dumps({
-        "OLLAMA_MODEL": setting("RUNPOD_OLLAMA_MODEL"),
-        "POD_API_KEY": setting("OLLAMA_API_KEY", required=True),
-    })
+    template_env = json.dumps({"OLLAMA_MODEL": setting("RUNPOD_OLLAMA_MODEL")})
     return [
         "runpodctl", "template", "create",
         "--name", setting("RUNPOD_OLLAMA_TEMPLATE_NAME"),
@@ -149,7 +120,7 @@ def template_create_command() -> list[str]:
         "--ports", "11434/http",
         "--container-disk-in-gb", setting("RUNPOD_OLLAMA_CONTAINER_DISK_GB"),
         "--env", template_env,
-        "--readme", "Ollama Qwen3.5 9B GGUF Pod template. Delete Pods after use to minimise cost.",
+        "--readme", "Local Ollama Qwen3.5 9B validation Pod. Public proxy has no application authentication; delete after use.",
     ]
 
 
@@ -174,22 +145,127 @@ def pod_id() -> str:
     return setting("RUNPOD_OLLAMA_POD_ID", required=True)
 
 
+def serverless_template_create_command() -> list[str]:
+    return [
+        "runpodctl", "template", "create",
+        "--name", setting("RUNPOD_OLLAMA_SERVERLESS_TEMPLATE_NAME"),
+        "--image", setting("RUNPOD_OLLAMA_SERVERLESS_IMAGE", required=True),
+        "--serverless",
+        "--container-disk-in-gb", setting("RUNPOD_OLLAMA_CONTAINER_DISK_GB"),
+        "--env", json.dumps({"OLLAMA_MODEL": setting("RUNPOD_OLLAMA_MODEL")}),
+        "--readme", "RunPod Serverless Ollama Qwen3.5 9B worker. Authenticate calls with a restricted RunPod API key.",
+    ]
+
+
+def serverless_create_command(template_id: str | None = None) -> list[str]:
+    return [
+        "runpodctl", "serverless", "create",
+        "--name", setting("RUNPOD_OLLAMA_SERVERLESS_ENDPOINT_NAME"),
+        "--template-id", template_id or setting("RUNPOD_OLLAMA_SERVERLESS_TEMPLATE_ID", required=True),
+        "--gpu-id", setting("RUNPOD_OLLAMA_SERVERLESS_GPU_ID"),
+        "--gpu-count", "1",
+        "--workers-min", setting("RUNPOD_OLLAMA_SERVERLESS_WORKERS_MIN"),
+        "--workers-max", setting("RUNPOD_OLLAMA_SERVERLESS_WORKERS_MAX"),
+        "--idle-timeout", setting("RUNPOD_OLLAMA_SERVERLESS_IDLE_TIMEOUT_SECONDS"),
+        "--execution-timeout", setting("RUNPOD_OLLAMA_SERVERLESS_EXECUTION_TIMEOUT_SECONDS"),
+    ]
+
+
+def serverless_endpoint_id() -> str:
+    return setting("RUNPOD_OLLAMA_ENDPOINT_ID", required=True)
+
+
+def require_runpod_api_key() -> None:
+    setting("RUNPOD_API_KEY", required=True)
+
+
+def serverless_deploy(*, confirm: bool) -> None:
+    """운영 시연용 이미지·Serverless Template·Endpoint를 한 번에 만든다."""
+    image = setting("RUNPOD_OLLAMA_SERVERLESS_IMAGE", required=True)
+    run(serverless_docker_build_command(image), confirm=confirm)
+    run(["docker", "push", image], confirm=confirm)
+    template_output = run(serverless_template_create_command(), confirm=confirm)
+    template_id = resource_id(template_output, "template")
+    if not template_id:
+        if confirm:
+            raise RuntimeError("Serverless Template ID를 응답에서 찾지 못했습니다.")
+        return
+    endpoint_output = run(serverless_create_command(template_id), confirm=True)
+    endpoint_id = resource_id(endpoint_output, "endpoint")
+    if endpoint_id:
+        print(f"\n생성된 Serverless Endpoint ID: {endpoint_id}")
+        print("api/.env의 RUNPOD_OLLAMA_ENDPOINT_ID에 직접 기록하세요.")
+
+
+def serverless_docker_build_command(image: str) -> list[str]:
+    return [
+        "docker", "build", "--platform", "linux/amd64",
+        "--build-arg", f"OLLAMA_MODEL={setting('RUNPOD_OLLAMA_MODEL')}",
+        "--tag", image, str(SERVERLESS_DOCKER_CONTEXT),
+    ]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("build", "push", "template-create", "pod-create", "pod-list", "pod-info", "pod-stop", "pod-delete"))
+    parser.add_argument(
+        "action",
+        choices=(
+            "build", "push", "template-create", "pod-create", "pod-list", "pod-info", "pod-stop", "pod-delete",
+            "serverless-build", "serverless-push", "serverless-template-create", "serverless-create",
+            "serverless-list", "serverless-info", "serverless-delete", "serverless-deploy",
+        ),
+    )
     parser.add_argument("--confirm", action="store_true", help="유료·외부 상태 변경 명령을 실제 실행합니다.")
     args = parser.parse_args()
     load_environment()
 
     try:
-        if args.action in {"build", "push"}:
+        if args.action in {"build", "push", "serverless-build", "serverless-push"}:
             require_command("docker")
-            image = setting("RUNPOD_OLLAMA_IMAGE", required=True)
-            command = (["docker", "build", "--platform", "linux/amd64", "--tag", image, str(DOCKER_CONTEXT)] if args.action == "build" else ["docker", "push", image])
+            is_serverless = args.action.startswith("serverless-")
+            image = setting(
+                "RUNPOD_OLLAMA_SERVERLESS_IMAGE" if is_serverless else "RUNPOD_OLLAMA_IMAGE",
+                required=True,
+            )
+            command = (
+                serverless_docker_build_command(image)
+                if is_serverless and args.action.endswith("build")
+                else ["docker", "build", "--platform", "linux/amd64", "--tag", image, str(DOCKER_CONTEXT)]
+                if args.action.endswith("build") else ["docker", "push", image]
+            )
             run(command, confirm=args.confirm)
             return 0
 
         require_command("runpodctl")
+        if args.action.startswith("serverless-"):
+            require_runpod_api_key()
+            if args.action == "serverless-template-create":
+                output = run(serverless_template_create_command(), confirm=args.confirm)
+                template_id = resource_id(output, "template")
+                if template_id:
+                    print(f"\n생성된 Serverless Template ID: {template_id}")
+                    print("api/.env의 RUNPOD_OLLAMA_SERVERLESS_TEMPLATE_ID에 직접 기록하세요.")
+                return 0
+            if args.action == "serverless-create":
+                output = run(serverless_create_command(), confirm=args.confirm)
+                endpoint_id = resource_id(output, "endpoint")
+                if endpoint_id:
+                    print(f"\n생성된 Serverless Endpoint ID: {endpoint_id}")
+                    print("api/.env의 RUNPOD_OLLAMA_ENDPOINT_ID에 직접 기록하세요.")
+                return 0
+            if args.action == "serverless-list":
+                run(["runpodctl", "serverless", "list"], confirm=True)
+                return 0
+            if args.action == "serverless-info":
+                run(["runpodctl", "serverless", "get", serverless_endpoint_id()], confirm=True)
+                return 0
+            if args.action == "serverless-delete":
+                run(["runpodctl", "serverless", "delete", serverless_endpoint_id()], confirm=args.confirm)
+                return 0
+            if args.action == "serverless-deploy":
+                require_command("docker")
+                serverless_deploy(confirm=args.confirm)
+                return 0
         if args.action == "template-create":
             output = run(template_create_command(), confirm=args.confirm)
             template_id = resource_id(output, "template")

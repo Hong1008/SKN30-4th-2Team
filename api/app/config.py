@@ -28,6 +28,7 @@ class LLMProvider(StrEnum):
     OPENAI = "openai"
     GEMINI = "gemini"
     OLLAMA = "ollama"
+    RUNPOD_SERVERLESS = "runpod_serverless"
 
 
 class MCPTransport(StrEnum):
@@ -74,7 +75,8 @@ class Settings(BaseSettings):
 
     openai_api_key: SecretStr | None = None
     gemini_api_key: SecretStr | None = None
-    ollama_api_key: SecretStr | None = None
+    runpod_api_key: SecretStr | None = None
+    runpod_ollama_endpoint_id: str | None = None
     ollama_base_url: AnyHttpUrl = "http://localhost:11434"
     workshield_mcp_transport: MCPTransport = MCPTransport.STDIO
     workshield_mcp_url: AnyHttpUrl = "http://localhost:8000/mcp"
@@ -129,9 +131,9 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def validate_production_provider(self) -> "Settings":
         """운영 환경의 외부 전송과 민감한 디버그 출력을 막는다."""
-        if self.app_env == "prod" and self.llm_provider is not LLMProvider.OLLAMA:
+        if self.app_env == "prod" and self.llm_provider is not LLMProvider.RUNPOD_SERVERLESS:
             raise ValueError(
-                "운영 환경에서는 LLM_PROVIDER=ollama만 사용할 수 있습니다."
+                "운영 환경에서는 LLM_PROVIDER=runpod_serverless만 사용할 수 있습니다."
             )
         if self.app_env == "prod" and self.app_debug:
             raise ValueError("운영 환경에서는 APP_DEBUG=false여야 합니다.")
@@ -145,6 +147,8 @@ class Settings(BaseSettings):
             return self.openai_api_key
         if self.llm_provider is LLMProvider.GEMINI:
             return self.gemini_api_key
+        if self.llm_provider is LLMProvider.RUNPOD_SERVERLESS:
+            return self.runpod_api_key
         return None
 
 

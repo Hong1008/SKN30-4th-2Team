@@ -20,6 +20,7 @@ from app.domains.reviews.context import (
 )
 from app.domains.reviews.domain import Review, ReviewState
 from app.domains.suggestions.schemas import (
+    SuggestionGeneratedOutput,
     SuggestionRequest,
     SuggestionResponse,
     SuggestionStructuredOutput,
@@ -124,7 +125,7 @@ async def generate_suggestion(
             structured.ainvoke(prompt),
             timeout=settings.llm_timeout_seconds,
         )
-        output = (
+        structured_output = (
             raw
             if isinstance(raw, SuggestionStructuredOutput)
             else SuggestionStructuredOutput.model_validate(raw)
@@ -139,7 +140,8 @@ async def generate_suggestion(
     except Exception:
         return _response("LLM_OUTPUT_INVALID", payload=payload)
 
-    if output.outcome != "GENERATED" or not output.text:
+    output = structured_output.root
+    if not isinstance(output, SuggestionGeneratedOutput):
         return _response("INSUFFICIENT_GROUNDING", payload=payload)
     if set(output.standard_clause_ids) != {expected_standard_id}:
         return _response("LLM_OUTPUT_INVALID", payload=payload)

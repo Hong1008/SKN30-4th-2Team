@@ -16,6 +16,8 @@ def _settings(provider: str, **overrides: object) -> Settings:
         "llm_model": "configured-model",
         "openai_api_key": "openai-secret",
         "gemini_api_key": "gemini-secret",
+        "runpod_api_key": "runpod-secret",
+        "runpod_ollama_endpoint_id": "endpoint-id",
         "ollama_base_url": "http://ollama.internal:11434",
     }
     values.update(overrides)
@@ -47,6 +49,21 @@ def test_factory_requires_model_name() -> None:
 def test_factory_rejects_missing_selected_provider_key() -> None:
     with pytest.raises(LLMConfigurationError, match="GEMINI_API_KEY"):
         create_chat_model(_settings("gemini", gemini_api_key=None))
+
+
+@pytest.mark.parametrize(
+    ("overrides", "message"),
+    [
+        ({"runpod_api_key": None}, "RUNPOD_API_KEY"),
+        ({"runpod_ollama_endpoint_id": None}, "RUNPOD_OLLAMA_ENDPOINT_ID"),
+    ],
+)
+def test_factory_requires_runpod_serverless_configuration(
+    overrides: dict[str, object],
+    message: str,
+) -> None:
+    with pytest.raises(LLMConfigurationError, match=message):
+        create_chat_model(_settings("runpod_serverless", **overrides))
 
 
 def test_configuration_error_does_not_expose_secret() -> None:

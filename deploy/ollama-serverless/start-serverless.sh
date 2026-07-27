@@ -23,7 +23,7 @@ until ollama list >/dev/null 2>&1; do
   sleep 1
 done
 
-echo "Ollama 모델을 준비합니다: ${OLLAMA_MODEL}"
+echo "Ollama Serverless 모델을 준비합니다: ${OLLAMA_MODEL}"
 ollama pull "$OLLAMA_MODEL"
 
-wait "$ollama_pid"
+exec python3 -u /app/handler.py
