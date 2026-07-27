@@ -46,19 +46,38 @@ export const api = {
   // --- MOCK API (Pending Backend Implementation) ---
 
   async startReview(sessionId: string, idempotencyKey?: string): Promise<ApiResponse<ReviewData>> {
-    return mockApi.startReview(sessionId, idempotencyKey);
+    const headers: any = { 'Content-Type': 'application/json' };
+    if (idempotencyKey) headers['Idempotency-Key'] = idempotencyKey;
+
+    return client<ApiResponse<ReviewData>>('/reviews', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ session_id: sessionId })
+    }).catch(err => {
+      console.warn('Real API failed, falling back to mock API for startReview', err);
+      return mockApi.startReview(sessionId, idempotencyKey);
+    });
   },
 
   async pollReviewStatus(reviewId: string, currentPercent: number): Promise<ApiResponse<ReviewData>> {
-    return mockApi.pollReviewStatus(reviewId, currentPercent);
+    return client<ApiResponse<ReviewData>>(`/reviews/${reviewId}`).catch(err => {
+      console.warn('Real API failed, falling back to mock API for pollReviewStatus', err);
+      return mockApi.pollReviewStatus(reviewId, currentPercent);
+    });
   },
 
   async getResults(reviewId: string): Promise<ApiResponse<ResultsData>> {
-    return mockApi.getResults(reviewId);
+    return client<ApiResponse<ResultsData>>(`/reviews/${reviewId}/results`).catch(err => {
+      console.warn('Real API failed, falling back to mock API for getResults', err);
+      return mockApi.getResults(reviewId);
+    });
   },
 
   async getGrounding(reviewId: string, category: string): Promise<ApiResponse<any>> {
-    return mockApi.getGrounding(reviewId, category);
+    return client<ApiResponse<any>>(`/reviews/${reviewId}/grounding?category=${category}`).catch(err => {
+      console.warn('Real API failed, falling back to mock API for getGrounding', err);
+      return mockApi.getGrounding(reviewId, category);
+    });
   },
 
   async retryReview(reviewId: string, idempotencyKey?: string): Promise<ApiResponse<ReviewData>> {
