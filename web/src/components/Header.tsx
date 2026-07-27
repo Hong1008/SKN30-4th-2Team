@@ -83,9 +83,6 @@ export default function Header({ currentScreen, onNavigate }: Props) {
               세션 유지 중 · 60분
             </span>
           </div>
-          <div className="grid size-9 place-items-center rounded-full border border-slate-200 bg-white text-xs font-semibold text-slate-700 shadow-sm">
-            김
-          </div>
         </div>
       </div>
     </header>
