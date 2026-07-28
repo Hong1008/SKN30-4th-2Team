@@ -29,6 +29,7 @@ class LLMProvider(StrEnum):
     GEMINI = "gemini"
     OLLAMA = "ollama"
     RUNPOD_SERVERLESS = "runpod_serverless"
+    VLLM = "vllm"
 
 
 class MCPTransport(StrEnum):
@@ -78,6 +79,8 @@ class Settings(BaseSettings):
     runpod_api_key: SecretStr | None = None
     runpod_ollama_endpoint_id: str | None = None
     ollama_base_url: AnyHttpUrl = "http://localhost:11434"
+    vllm_base_url: AnyHttpUrl | None = None
+    vllm_api_key: SecretStr | None = None
     workshield_mcp_transport: MCPTransport = MCPTransport.STDIO
     workshield_mcp_url: AnyHttpUrl = "http://localhost:8000/mcp"
     workshield_mcp_project_dir: Path = API_ROOT.parent / "mcp"
@@ -93,6 +96,10 @@ class Settings(BaseSettings):
     storage_cleanup_interval_seconds: int = Field(default=60, gt=0)
     metadata_cache_ttl_seconds: int = Field(default=5 * 60, gt=0)
     llm_timeout_seconds: float = Field(default=60.0, gt=0)
+    llm_temperature: float = Field(default=0.0, ge=0, le=2)
+    llm_top_p: float = Field(default=1.0, gt=0, le=1)
+    llm_seed: int = 42
+    llm_max_completion_tokens: int = Field(default=512, gt=0, le=1000)
 
     @field_validator("cors_origins", mode="before")
     @classmethod
@@ -131,9 +138,9 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def validate_production_provider(self) -> "Settings":
         """운영 환경의 외부 전송과 민감한 디버그 출력을 막는다."""
-        if self.app_env == "prod" and self.llm_provider is not LLMProvider.RUNPOD_SERVERLESS:
+        if self.app_env == "prod" and self.llm_provider is not LLMProvider.VLLM:
             raise ValueError(
-                "운영 환경에서는 LLM_PROVIDER=runpod_serverless만 사용할 수 있습니다."
+                "운영 환경에서는 LLM_PROVIDER=vllm만 사용할 수 있습니다."
             )
         if self.app_env == "prod" and self.app_debug:
             raise ValueError("운영 환경에서는 APP_DEBUG=false여야 합니다.")
@@ -149,6 +156,8 @@ class Settings(BaseSettings):
             return self.gemini_api_key
         if self.llm_provider is LLMProvider.RUNPOD_SERVERLESS:
             return self.runpod_api_key
+        if self.llm_provider is LLMProvider.VLLM:
+            return self.vllm_api_key
         return None
 
 
