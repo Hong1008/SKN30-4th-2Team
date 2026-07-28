@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AlertCircle, Check, ChevronRight, RefreshCw } from 'lucide-react'
 import { api } from '../api/api'
+import { getErrorMessage } from '../utils/apiErrors'
 import type { ReviewData, ReviewProgress, ReviewSseEvent } from '../types'
 import { useToast } from '../contexts/ToastContext'
 import { useMetadata } from '../contexts/MetadataContext'
@@ -73,18 +74,7 @@ export default function ProcessingScreen({ reviewId, onDone, onRetry, onStartNew
         }
         stopPolling()
         setMode('error')
-        const fallbackByCode: Record<string, string> = {
-          CORPUS_UNAVAILABLE: '표준 비교 기준 자료를 현재 사용할 수 없습니다.',
-          INVALID_CONFIG: '검토 서비스 설정을 확인할 수 없습니다. 관리자에게 문의해 주세요.',
-          PIPELINE_ERROR: '검토 처리 시간이 초과되었거나 처리 중 오류가 발생했습니다.',
-          MCP_TIMEOUT: '검토 서비스 응답이 지연되어 작업이 중단되었습니다.',
-          SESSION_EXPIRED: '검토 세션이 만료되었습니다. 새 검토를 시작해 주세요.',
-        }
-        setErrorMessage(
-          reviewError?.message
-          || fallbackByCode[reviewError?.code || '']
-          || '검토가 중단되었거나 만료되었습니다.',
-        )
+        setErrorMessage(getErrorMessage(reviewError, '검토가 중단되었거나 만료되었습니다.'))
         setRetryable(
           reviewError?.retryable === true
           || getNextAction(reviewError) === 'RETRY_REVIEW'
@@ -123,7 +113,7 @@ export default function ProcessingScreen({ reviewId, onDone, onRetry, onStartNew
             return
           }
           setMode('error')
-          setErrorMessage(error?.message || '검토 상태를 불러오지 못했습니다.')
+          setErrorMessage(getErrorMessage(error, '검토 상태를 불러오지 못했습니다.'))
           setRetryable(
             error?.retryable === true
             || getNextAction(error) === 'RETRY_REVIEW'
@@ -208,7 +198,7 @@ export default function ProcessingScreen({ reviewId, onDone, onRetry, onStartNew
       setProgress(null)
       onRetry(response.data.review_id)
     } catch (error: any) {
-      setErrorMessage(error?.message || '재시도 요청에 실패했습니다.')
+      setErrorMessage(getErrorMessage(error, '재시도 요청에 실패했습니다.'))
       setRetryable(
         error?.retryable === true
         || getNextAction(error) === 'RETRY_REVIEW'

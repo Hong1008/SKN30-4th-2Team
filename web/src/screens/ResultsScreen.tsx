@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { Search, SlidersHorizontal, MessageSquare, ChevronRight, RotateCcw, ChevronDown, ChevronUp, AlertTriangle, CheckSquare, Trash2, Loader2 } from 'lucide-react'
-import { Link } from 'react-router-dom'
 import Badge from '../components/Badge'
 import type { ResultCode, ClauseResult, ResultsData } from '../types'
 import { api } from '../api/api'
+import { getErrorMessage } from '../utils/apiErrors'
 import { useMetadata } from '../contexts/MetadataContext'
 import { getMetadataLabel } from '../utils/metadata'
 import { mapClauseResult } from '../utils/reviewResults'
@@ -56,7 +56,7 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
   const [filterCategory, setFilterCategory] = useState('전체')
   const [search, setSearch]                 = useState('')
   const [expandedMissing, setExpandedMissing] = useState<string | null>(null)
-  const [activeTab, setActiveTab]           = useState<'results' | 'notes'>('results')
+  const [notesOpen, setNotesOpen]           = useState(false)
 
   const [isLoading, setIsLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState('')
@@ -99,7 +99,7 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
       } else if (error?.status === 409) {
         setErrorMessage('검토가 아직 완료되지 않았습니다. 진행 화면에서 상태를 확인해 주세요.')
       } else {
-        setErrorMessage(error?.message || '검토 결과를 불러오지 못했습니다.')
+        setErrorMessage(getErrorMessage(error, '검토 결과를 불러오지 못했습니다.'))
       }
     })
 
@@ -135,7 +135,7 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
         window.location.assign('/review')
         return
       }
-      setDiscardError(error?.message || '검토 결과를 폐기하지 못했습니다. 다시 시도해 주세요.')
+      setDiscardError(getErrorMessage(error, '검토 결과를 폐기하지 못했습니다. 다시 시도해 주세요.'))
     } finally {
       setIsDiscarding(false)
     }
@@ -236,15 +236,15 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {metadata?.features.chat && <Link
-            to={`/review/${encodeURIComponent(reviewId ?? '')}/chatbot`}
+          {metadata?.features.chat && <button
+            type="button"
             onClick={onChatbot}
             className="
               inline-flex h-10 shrink-0 items-center justify-center gap-2 self-start
-              rounded-full border border-slate-200 bg-transparent px-4
-              text-sm font-medium text-slate-600
+              rounded-xl bg-blue-600 px-4
+              text-sm font-semibold text-white shadow-sm
               transition-colors duration-150
-              hover:border-blue-200 hover:bg-blue-50/60 hover:text-blue-700
+              hover:bg-blue-700
               focus-visible:outline-none focus-visible:ring-4
               focus-visible:ring-blue-500/15
               sm:self-auto
@@ -252,7 +252,7 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
           >
             <MessageSquare className="size-4" aria-hidden="true" />
             결과 기반 질의응답
-          </Link>}
+          </button>}
           {metadata?.features.server_side_cancel && (
             <button
               type="button"
@@ -294,14 +294,13 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
             key={s.status}
             onClick={() => {
               if (s.status === 'MISSING') {
-                setActiveTab('notes')
+                setNotesOpen(true)
                 setFilterStatus('all')
               } else {
-                setActiveTab('results')
                 setFilterStatus(s.status)
               }
             }}
-            className={`group relative min-h-28 overflow-hidden rounded-2xl border bg-white p-4 text-left shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition-all duration-200 hover:border-blue-300 hover:shadow-sm focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/15 ${
+            className={`group relative min-h-24 overflow-hidden rounded-xl border bg-white p-4 text-left shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition-all duration-200 hover:border-blue-300 hover:shadow-sm focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/15 ${
               filterStatus === s.status
                 ? 'border-blue-400 bg-blue-50/20 ring-2 ring-blue-500/10 before:absolute before:inset-y-4 before:left-0 before:w-1 before:rounded-r-full before:bg-blue-600'
                 : 'border-slate-200/80'
@@ -318,8 +317,8 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
               />
             </div>
 
-            <div className="mt-4 flex items-end justify-between">
-              <p className="tabular-nums text-3xl font-semibold leading-none tracking-[-0.04em] text-slate-950">
+            <div className="mt-3 flex items-end justify-between">
+              <p className="tabular-nums text-2xl font-semibold leading-none tracking-[-0.04em] text-slate-950">
                 {s.count}
               </p>
 
@@ -331,25 +330,7 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
         ))}
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 border-b border-slate-200">
-        {([['results', '조항별 검토 결과'], ['notes', '주의 문구 후보 및 누락 체크리스트']] as const).map(([id, label]) => (
-          <button
-            key={id}
-            onClick={() => setActiveTab(id)}
-            className={`-mb-px min-h-11 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-blue-500/15 ${
-              activeTab === id
-                ? 'border-blue-600 text-slate-900'
-                : 'border-transparent text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {activeTab === 'results' && (
-        <>
+      <section aria-label="조항별 검토 결과" className="space-y-4">
           {/* Filter bar */}
           <div className="sticky top-[84px] z-20 space-y-3 border-y border-slate-200/80 bg-[#F6F8FA]/95 py-4 backdrop-blur-xl">
             {/* Search */}
@@ -462,24 +443,17 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
                       </h3>
             
                       {/* Original clause */}
-                      <blockquote className="
-                        my-4 rounded-xl border border-slate-200/80 bg-white/65
-                        px-4 py-3 text-sm leading-6 tracking-[-0.005em]
-                        text-slate-600 backdrop-blur-sm line-clamp-3
-                      ">
+                      <blockquote className="mt-2 line-clamp-2 text-sm leading-6 tracking-[-0.005em] text-slate-500">
                         "{c.excerpt}"
                       </blockquote>
             
                       {/* Analysis */}
-                      <p className="
-                        break-keep text-sm leading-6
-                        tracking-[-0.005em] text-slate-600
-                      ">
+                      <p className="mt-3 break-keep text-sm leading-6 tracking-[-0.005em] text-slate-700">
                         {c.summary}
                       </p>
             
                       {/* Action */}
-                      <div className="mt-5 flex justify-end border-t border-slate-200/70 pt-4">
+                      <div className="mt-4 flex justify-end">
                         <button
                           onClick={() => onClauseClick(c)}
                           className="
@@ -508,11 +482,14 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
               </button>
             </div>
           )}
-        </>
-      )}
+      </section>
 
-      {activeTab === 'notes' && (
-        <div className="space-y-6">
+      <section className="rounded-2xl border border-slate-200 bg-white" aria-label="추가 확인 항목">
+        <button type="button" onClick={() => setNotesOpen(open => !open)} aria-expanded={notesOpen} className="flex min-h-14 w-full items-center justify-between px-5 text-left focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-blue-500/15">
+          <span><span className="block text-sm font-semibold text-slate-900">추가 확인 항목</span><span className="mt-0.5 block text-xs text-slate-500">주의 문구 후보와 포함 여부 체크리스트</span></span>
+          {notesOpen ? <ChevronUp className="size-5 text-slate-500" /> : <ChevronDown className="size-5 text-slate-500" />}
+        </button>
+        {notesOpen && <div className="space-y-6 border-t border-slate-200 p-5">
           <div>
             <div className="mb-4 flex items-center gap-2">
               <AlertTriangle className="size-4 text-amber-500" aria-hidden="true" />
@@ -586,8 +563,8 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
               })}
             </div>
           </div>
-        </div>
-      )}
+        </div>}
+      </section>
       {showDiscardConfirm && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-4" role="dialog" aria-modal="true" aria-labelledby="discard-title">
           <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
@@ -616,8 +593,7 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
               </button>
             </div>
           </div>
-        </div>
-      )}
+        </div>)}
     </div>
   )
 }

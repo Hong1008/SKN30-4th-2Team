@@ -4,8 +4,8 @@ import Badge from '../components/Badge'
 import type { ClauseResult, GroundingItem, SuggestionResponse } from '../types'
 import { api } from '../api/api'
 import { useMetadata } from '../contexts/MetadataContext'
-import { getMetadataLabel } from '../utils/metadata'
-import { getNextAction } from '../utils/apiErrors'
+import { getMetadataLabel, getStatusPresentation } from '../utils/metadata'
+import { getErrorMessage } from '../utils/apiErrors'
 
 interface Props {
   clause: ClauseResult
@@ -21,25 +21,30 @@ export default function ClauseDetailScreen({ clause, reviewId, onBack, onChatbot
   const [loadingGrounding, setLoadingGrounding] = useState(false)
   const [groundingMessage, setGroundingMessage] = useState('')
   const [groundingStatus, setGroundingStatus] = useState('')
+  const [groundingRetryable, setGroundingRetryable] = useState(false)
   const [suggestion, setSuggestion] = useState<SuggestionResponse | null>(null)
   const [loadingSuggestion, setLoadingSuggestion] = useState(false)
   const [suggestionError, setSuggestionError] = useState('')
   const [suggestionPurpose, setSuggestionPurpose] = useState('책임과 의무 범위를 명확히 하는 협의 문구')
+  const [suggestionInputs, setSuggestionInputs] = useState<Record<string, string>>({})
   const suggestionRequestKey = useRef<string | null>(null)
 
   const loadGrounding = useCallback(() => {
     if (!reviewId || !clause.categoryCode) return
     setLoadingGrounding(true)
     setGroundingMessage('')
+    setGroundingRetryable(false)
     api.getGrounding(reviewId, clause.categoryCode).then(res => {
         setLegalBasis(res.data.items)
         setGroundingStatus(res.data.grounding_status)
-        setGroundingMessage(res.data.message || '')
+        setGroundingMessage('')
+        setGroundingRetryable(res.data.retryable === true)
         setLoadingGrounding(false)
       }).catch((error) => {
         setLegalBasis([])
-        setGroundingStatus(getNextAction(error) || error?.code || 'REQUEST_FAILED')
-        setGroundingMessage(error?.message || '관련 법령 근거를 불러오지 못했습니다.')
+        setGroundingStatus(error?.code || 'REQUEST_FAILED')
+        setGroundingMessage(getErrorMessage(error, '관련 법령 근거를 불러오지 못했습니다.'))
+        setGroundingRetryable(error?.retryable === true)
         setLoadingGrounding(false)
       })
   }, [reviewId, clause.categoryCode])
@@ -48,14 +53,8 @@ export default function ClauseDetailScreen({ clause, reviewId, onBack, onChatbot
     loadGrounding()
   }, [loadGrounding])
 
-  const canReloadGrounding = [
-    'UPSTREAM_ERROR',
-    'TIMEOUT',
-    'GROUNDING_TIMEOUT',
-    'GROUNDING_UPSTREAM_ERROR',
-    'RELOAD_GROUNDING',
-    'REQUEST_FAILED',
-  ].includes(groundingStatus)
+  const groundingPresentation = getStatusPresentation(metadata?.grounding_status_details, groundingStatus)
+  const canReloadGrounding = groundingRetryable || groundingPresentation?.retryable === true
 
   const copy = (which: 'user' | 'standard' | 'suggestion', text: string) => {
     if (!text) return
@@ -77,17 +76,12 @@ export default function ClauseDetailScreen({ clause, reviewId, onBack, onChatbot
         clause.id,
         suggestionPurpose.trim(),
         idempotencyKey,
-        {},
+        suggestionInputs,
       )
       setSuggestion(response.data)
       suggestionRequestKey.current = null
     } catch (error: any) {
-      const messages: Record<string, string> = {
-        INSUFFICIENT_GROUNDING: '협의 문구를 생성할 근거가 충분하지 않습니다.',
-        REQUIRED_VALUE_MISSING: '협의 문구 생성에 필요한 입력값을 확인해 주세요.',
-        LLM_OUTPUT_INVALID: '생성 결과를 안전하게 검증하지 못했습니다. 다시 시도해 주세요.',
-      }
-      setSuggestionError(messages[error?.code] || error?.message || '협의 문구를 생성하지 못했습니다.')
+      setSuggestionError(getErrorMessage(error, '협의 문구를 생성하지 못했습니다.'))
     } finally {
       setLoadingSuggestion(false)
     }
@@ -100,6 +94,12 @@ export default function ClauseDetailScreen({ clause, reviewId, onBack, onChatbot
   )
   const canCreateSuggestion = clause.matchStatus === 'CANDIDATE_SELECTED'
     && Boolean(clause.standardClauseId && clause.standardText)
+  const suggestionInputFields = suggestion
+    ? Array.from(new Map<string, string>([
+        ...suggestion.required_confirmations.map(item => [item.field, item.placeholder] as [string, string]),
+        ...suggestion.missing_inputs.map(field => [field, field] as [string, string]),
+      ]).entries())
+    : []
 
   return (
     <div className="space-y-6 animate-fade-up">
@@ -188,7 +188,7 @@ export default function ClauseDetailScreen({ clause, reviewId, onBack, onChatbot
             <Loader2 className="w-5 h-5 animate-spin mb-2" />
             <p className="text-xs">관련 법령을 불러오고 있습니다...</p>
           </div>
-        ) : legalBasis.length > 0 ? (
+        ) : groundingStatus === 'OK' && legalBasis.length > 0 ? (
           <div className="space-y-3">
             {legalBasis.map((basis, i) => (
               <div key={i} className="bg-white border border-slate-200 rounded-xl p-5">
@@ -209,7 +209,7 @@ export default function ClauseDetailScreen({ clause, reviewId, onBack, onChatbot
           </div>
         ) : (
            <div className="bg-white border border-slate-200 rounded-xl p-8 text-center text-slate-500">
-             <p className="text-xs">{groundingMessage || '해당 카테고리에 매핑된 법령 근거가 없습니다.'}</p>
+             <p className="text-xs">{groundingPresentation?.message || groundingMessage || '법령 근거 정보를 확인하지 못했습니다.'}</p>
              {canReloadGrounding && (
                <button
                  type="button"
@@ -295,6 +295,7 @@ export default function ClauseDetailScreen({ clause, reviewId, onBack, onChatbot
               LLM_OUTPUT_INVALID: '생성 결과 검증 실패',
             }[suggestion.outcome] || suggestion.outcome}
           </p>
+          {suggestion.outcome !== 'GENERATED' && <p className="text-sm text-amber-700">{getStatusPresentation(metadata?.draft_outcome_details, suggestion.outcome)?.message || '협의 문구 생성 조건을 확인해 주세요.'}</p>}
           {suggestion.text
             ? <p className="whitespace-pre-wrap text-sm leading-7 text-slate-800">{suggestion.text}</p>
             : <p className="text-sm text-slate-600">제안 생성에 필요한 정보가 부족합니다.</p>}
@@ -304,15 +305,23 @@ export default function ClauseDetailScreen({ clause, reviewId, onBack, onChatbot
               {suggestion.key_changes.map(change => <li key={change}>{change}</li>)}
             </ul>
           )}
-          {suggestion.missing_inputs.length > 0 && (
-            <p className="text-xs text-amber-700">추가 정보: {suggestion.missing_inputs.join(', ')}</p>
-          )}
-          {suggestion.required_confirmations.length > 0 && (
-            <div className="space-y-1 text-xs text-amber-700">
+          {suggestionInputFields.length > 0 && (
+            <div className="space-y-2 text-xs text-amber-700">
               <p className="font-semibold">확인이 필요한 항목</p>
-              {suggestion.required_confirmations.map(item => (
-                <p key={item.field}>{item.field}: {item.placeholder}</p>
+              {suggestionInputFields.map(([field, placeholder]) => (
+                <label key={field} className="block space-y-1">
+                  <span>{field}</span>
+                  <input
+                    value={suggestionInputs[field] || ''}
+                    onChange={(event) => setSuggestionInputs(previous => ({ ...previous, [field]: event.target.value }))}
+                    placeholder={placeholder}
+                    className="w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
+                  />
+                </label>
               ))}
+              <button type="button" onClick={createSuggestion} disabled={loadingSuggestion} className="rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-semibold text-amber-800 disabled:opacity-50">
+                입력값으로 다시 생성
+              </button>
             </div>
           )}
           {(suggestion.standard_clause_ids.length > 0 || suggestion.grounding_source_ids.length > 0) && (
@@ -324,6 +333,9 @@ export default function ClauseDetailScreen({ clause, reviewId, onBack, onChatbot
                 <p>참고 법령 근거: {suggestion.grounding_source_ids.join(', ')}</p>
               )}
             </div>
+          )}
+          {suggestion.outcome === 'GENERATED' && suggestion.grounding_source_ids.length === 0 && (
+            <p className="text-xs text-amber-700">법령 근거 없이 표준조항을 기준으로 작성된 초안입니다.</p>
           )}
           <p className="text-xs leading-5 text-slate-500">{suggestion.disclaimer}</p>
         </section>

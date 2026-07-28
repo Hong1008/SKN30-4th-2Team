@@ -64,7 +64,7 @@ export default function UploadAndTypeScreen({ sessionId, setSessionId, setReview
           setSessionId(null)
           localStorage.removeItem(SESSION_ID_KEY)
         } else {
-          setErrorMsg(error?.message || '이전 검토 세션을 불러오지 못했습니다.')
+          setErrorMsg(getErrorMessage(error, '이전 검토 세션을 불러오지 못했습니다.'))
         }
       })
 
@@ -116,7 +116,7 @@ export default function UploadAndTypeScreen({ sessionId, setSessionId, setReview
       setSessionId(newSessionId)
       localStorage.setItem(SESSION_ID_KEY, newSessionId)
 
-      showToast('파일이 무사히 업로드되었습니다.', 'success')
+      showToast('파일 업로드가 완료되었습니다.', 'success')
     } catch (err: any) {
       setUploadState('idle')
       const nextAction = getNextAction(err)
@@ -182,7 +182,7 @@ export default function UploadAndTypeScreen({ sessionId, setSessionId, setReview
         localStorage.setItem(REVIEW_ID_KEY, existingReviewId)
         onNext(existingReviewId)
       } else if (status === 409) {
-        setErrorMsg(err?.message || '동일 요청이 이미 처리 중입니다. 잠시 후 다시 확인해 주세요.')
+        setErrorMsg(getErrorMessage(err, '동일 요청이 이미 처리 중입니다. 잠시 후 다시 확인해 주세요.'))
       } else if (status === 404 || status === 410) {
         showToast('유효하지 않거나 만료된 세션입니다. 처음부터 다시 시작합니다.', 'error')
         reset()

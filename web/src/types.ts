@@ -209,6 +209,12 @@ export interface MetaCodeLabel {
   label: string;
 }
 
+export interface StatusPresentation extends MetaCodeLabel {
+  message?: string | null;
+  retryable?: boolean | null;
+  next_action?: string | null;
+}
+
 export interface CategoryMeta extends MetaCodeLabel {
   description?: string | null;
   anchors?: string[];
@@ -248,8 +254,11 @@ export interface MetadataData {
   progress_stages: string[];
   progress_stage_details: MetaCodeLabel[];
   grounding_statuses: string[];
+  grounding_status_details?: StatusPresentation[];
   chat_outcomes: string[];
+  chat_outcome_details?: StatusPresentation[];
   draft_outcomes: string[];
+  draft_outcome_details?: StatusPresentation[];
   error_codes: string[];
   selection_sources: string[];
   next_actions: string[];
@@ -262,6 +271,8 @@ export interface GroundingData {
   category: CodeLabel;
   contract_type: string;
   message?: string | null;
+  retryable?: boolean | null;
+  next_action?: string | null;
   items: GroundingItem[];
 }
 
@@ -294,6 +305,9 @@ export interface ChatResponse {
   limitations: string[];
   tool_status: string;
   disclaimer: string;
+  message?: string | null;
+  retryable?: boolean | null;
+  next_action?: string | null;
 }
 
 export interface RequiredConfirmation {
@@ -313,4 +327,7 @@ export interface SuggestionResponse {
   required_confirmations: RequiredConfirmation[];
   missing_inputs: string[];
   disclaimer: string;
+  message?: string | null;
+  retryable?: boolean | null;
+  next_action?: string | null;
 }

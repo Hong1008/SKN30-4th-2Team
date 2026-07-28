@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { BrowserRouter, Routes, Route, useNavigate, useLocation, useParams, useSearchParams, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, useNavigate, useLocation, useParams, Navigate } from 'react-router-dom'
 import type { Screen, ClauseResult } from './types'
 import { SESSION_ID_KEY, REVIEW_ID_KEY } from './config'
 import Header from './components/Header'
@@ -14,6 +14,7 @@ import { MetadataProvider, useMetadata } from './contexts/MetadataContext'
 import { api } from './api/api'
 import { mapClauseResult } from './utils/reviewResults'
 import { useToast } from './contexts/ToastContext'
+import { getErrorMessage } from './utils/apiErrors'
 
 function ProcessingRoute({ fallbackReviewId, onDone, onRetry, onStartNewReview }: {
   fallbackReviewId: string | null
@@ -42,7 +43,7 @@ function ClauseRoute({ fallbackReviewId, selectedClause, onBack, onChatbot }: {
   fallbackReviewId: string | null
   selectedClause: ClauseResult | null
   onBack: (reviewId: string) => void
-  onChatbot: (reviewId: string, clauseId: string) => void
+  onChatbot: (reviewId: string, clause: ClauseResult) => void
 }) {
   const { id, clauseId } = useParams()
   const reviewId = id ?? fallbackReviewId
@@ -69,28 +70,7 @@ function ClauseRoute({ fallbackReviewId, selectedClause, onBack, onChatbot }: {
   if (!reviewId) return <Navigate to="/review" replace />
   if (isLoading) return <p className="text-sm text-slate-500">조항 정보를 불러오고 있습니다.</p>
   if (!clause) return <Navigate to={`/review/${reviewId}/results`} replace />
-  return <ClauseDetailScreen clause={clause} reviewId={reviewId} onBack={() => onBack(reviewId)} onChatbot={() => onChatbot(reviewId, clause.id)} />
-}
-
-function ChatRoute({ fallbackReviewId, onBack, onStartNewReview }: {
-  fallbackReviewId: string | null
-  onBack: (reviewId: string) => void
-  onStartNewReview: () => void
-}) {
-  const { metadata } = useMetadata()
-  const { id } = useParams()
-  const [searchParams] = useSearchParams()
-  const reviewId = id ?? fallbackReviewId
-  if (!reviewId) return <Navigate to="/review" replace />
-  if (!metadata?.features.chat) return <Navigate to={`/review/${reviewId}/results`} replace />
-  return (
-    <ChatbotScreen
-      onBack={() => onBack(reviewId)}
-      reviewId={reviewId}
-      focusClauseId={searchParams.get('focusClauseId') || undefined}
-      onStartNewReview={onStartNewReview}
-    />
-  )
+  return <ClauseDetailScreen clause={clause} reviewId={reviewId} onBack={() => onBack(reviewId)} onChatbot={() => onChatbot(reviewId, clause)} />
 }
 
 function MainApp() {
@@ -105,7 +85,20 @@ function MainApp() {
   const [sessionExpiresAt, setSessionExpiresAt] = useState<string | null>(null)
   const [isStartingNewReview, setIsStartingNewReview] = useState(false)
   const [showNewReviewConfirm, setShowNewReviewConfirm] = useState(false)
+  const [chatTarget, setChatTarget] = useState<{ reviewId: string; clause?: ClauseResult } | null>(null)
+  const [isChatOpen, setIsChatOpen] = useState(false)
   const discardRequestKey = useRef<string | null>(null)
+  const chatTriggerRef = useRef<HTMLElement | null>(null)
+
+  const openChat = (id: string, clause?: ClauseResult) => {
+    chatTriggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    setChatTarget({ reviewId: id, clause })
+    setIsChatOpen(true)
+  }
+  const closeChat = () => {
+    setIsChatOpen(false)
+    requestAnimationFrame(() => chatTriggerRef.current?.focus())
+  }
 
   // Recovery logic for session and review IDs
   useEffect(() => {
@@ -179,7 +172,7 @@ function MainApp() {
         localStorage.removeItem(REVIEW_ID_KEY)
         navigate('/review', { replace: true })
       } else {
-        showToast(error?.message || '기존 검토를 정리하지 못했습니다. 다시 시도해 주세요.', 'error')
+        showToast(getErrorMessage(error, '기존 검토를 정리하지 못했습니다. 다시 시도해 주세요.'), 'error')
       }
     } finally {
       setIsStartingNewReview(false)
@@ -265,14 +258,13 @@ function MainApp() {
                 <ResultsRoute fallbackReviewId={reviewId} onClauseClick={(clause, id) => {
                     setSelectedClause(clause)
                     navigate(`/review/${id}/results/clause/${clause.id}`)
-                  }} onChatbot={(id) => navigate(`/review/${id}/chatbot`)} />
+                  }} onChatbot={(id) => openChat(id)} />
               } />
-              <Route path="/review/:id/results/clause/:clauseId" element={<ClauseRoute fallbackReviewId={reviewId} selectedClause={selectedClause} onBack={(id) => navigate(`/review/${id}/results`)} onChatbot={(id, clauseId) => navigate(`/review/${id}/chatbot?focusClauseId=${encodeURIComponent(clauseId)}`)} />} />
-              <Route path="/review/:id/chatbot" element={
-                <ChatRoute fallbackReviewId={reviewId} onBack={(id) => navigate(`/review/${id}/results`)} onStartNewReview={() => setShowNewReviewConfirm(true)} />
-              } />
+              <Route path="/review/:id/results/clause/:clauseId" element={<ClauseRoute fallbackReviewId={reviewId} selectedClause={selectedClause} onBack={(id) => navigate(`/review/${id}/results`)} onChatbot={openChat} />} />
+              <Route path="/review/:id/chatbot" element={<Navigate to="../results" replace />} />
             </Routes>
           </div>
+          {chatTarget && <ChatbotScreen reviewId={chatTarget.reviewId} focusClauseId={chatTarget.clause?.id} focusClauseName={chatTarget.clause?.article} focusClauseTitle={chatTarget.clause?.standardTitle} focusClauseStatus={chatTarget.clause?.status} focusClauseCategory={chatTarget.clause?.category} isOpen={isChatOpen} onClose={closeChat} onClearFocus={() => setChatTarget(target => target ? { reviewId: target.reviewId } : null)} />}
         </main>
         {showNewReviewConfirm && (
           <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-4" role="dialog" aria-modal="true" aria-labelledby="new-review-title">

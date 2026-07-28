@@ -46,7 +46,7 @@ export default function HorizontalStepper({ currentScreen, onNavigate }: Props) 
                   focus-visible:z-10 focus-visible:outline-none
                   focus-visible:ring-4 focus-visible:ring-inset
                   focus-visible:ring-blue-500/15
-                  ${ahead ? 'cursor-default' : 'hover:bg-slate-50/80'}
+                  ${ahead ? 'cursor-default' : 'cursor-pointer'}
                 `}
               >
                 {index < STEPS.length - 1 && (

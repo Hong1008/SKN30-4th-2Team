@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { AlertCircle, ArrowLeft, ChevronRight, FileQuestion } from 'lucide-react'
 import { api } from '../api/api'
+import { getErrorMessage } from '../utils/apiErrors'
 import { REVIEW_ID_KEY } from '../config'
 import { useMetadata } from '../contexts/MetadataContext'
 import { getMetadataLabel } from '../utils/metadata'
@@ -39,7 +40,7 @@ export default function OutOfScopeScreen({ sessionId, onBack, onContinue, setSes
       })
       .catch((requestError) => {
         if (requestError?.name !== 'AbortError') {
-          setError(requestError?.message || '검토 범위 정보를 불러오지 못했습니다.')
+          setError(getErrorMessage(requestError, '검토 범위 정보를 불러오지 못했습니다.'))
         }
       })
       .finally(() => setIsLoading(false))
@@ -81,7 +82,7 @@ export default function OutOfScopeScreen({ sessionId, onBack, onContinue, setSes
         localStorage.setItem(REVIEW_ID_KEY, existingReviewId)
         onContinue(existingReviewId)
       } else {
-        setError(err?.message || '검토 시작 요청에 실패했습니다. 다시 시도해 주세요.')
+        setError(getErrorMessage(err, '검토 시작 요청에 실패했습니다. 다시 시도해 주세요.'))
       }
     } finally {
       setIsSubmitting(false)
