@@ -36,6 +36,23 @@ class GroundingTool:
         }
 
 
+class NoResultGroundingTool:
+    """법령 원문이 조회되지 않는 정상 MCP 상태를 반환한다."""
+
+    name = "get_category_grounding"
+
+    async def ainvoke(self, payload: dict[str, object]) -> dict[str, object]:
+        assert payload == {
+            "contract_type": "SW_FREELANCE",
+            "category": "LIABILITY",
+        }
+        return {
+            "status": "NO_RESULT",
+            "category": {"code": "LIABILITY", "label": "책임·손해배상"},
+            "grounding": [],
+        }
+
+
 class StructuredRunnable:
     def __init__(self, payload: dict[str, object], prompts: list[str]) -> None:
         self._payload = payload
@@ -157,3 +174,58 @@ async def test_backend_only_binds_the_ids_for_selected_source_keys() -> None:
     assert response.user_clause_ids == []
     assert response.standard_clause_ids == ["std_liability_1"]
     assert response.grounding_source_ids == []
+
+
+@pytest.mark.asyncio
+async def test_generates_from_user_and_standard_when_law_is_unavailable() -> None:
+    """법령 NO_RESULT여도 사용자·표준조항 기반 협의 문구를 생성한다."""
+    model = SourceKeyModel({
+        "outcome": "GENERATED",
+        "suggestion": "책임 범위와 변경 절차는 당사자가 서면으로 협의한다.",
+        "major_changes": ["서면 협의 절차 명시"],
+        "used_source_keys": ["SRC_USER", "SRC_STANDARD"],
+        "required_confirmations": [],
+    })
+
+    response = await generate_suggestion(
+        _review(),
+        SuggestionRequest(
+            user_clause_id="uc_rev_suggestion_1",
+            purpose="책임 범위와 협의 절차를 명확히 표현",
+        ),
+        runtime=SimpleNamespace(tools=(NoResultGroundingTool(),)),
+        model=model,
+        settings=Settings(app_env="local", llm_provider="ollama", llm_model="test"),
+    )
+
+    assert response.outcome == "GENERATED"
+    assert response.user_clause_ids == ["uc_rev_suggestion_1"]
+    assert response.standard_clause_ids == ["std_liability_1"]
+    assert response.grounding_source_ids == []
+    assert response.required_confirmations[-1].field == "law_grounding"
+    assert "별도 확인" in response.required_confirmations[-1].placeholder
+
+
+@pytest.mark.asyncio
+async def test_rejects_grounding_source_key_when_law_is_unavailable() -> None:
+    """조회되지 않은 법령 근거를 사용했다고 주장하는 출력을 차단한다."""
+    model = SourceKeyModel({
+        "outcome": "GENERATED",
+        "suggestion": "책임 범위는 당사자가 협의한다.",
+        "major_changes": [],
+        "used_source_keys": ["SRC_USER", "SRC_STANDARD", "SRC_GROUNDING"],
+        "required_confirmations": [],
+    })
+
+    response = await generate_suggestion(
+        _review(),
+        SuggestionRequest(
+            user_clause_id="uc_rev_suggestion_1",
+            purpose="책임 범위를 명확히 표현",
+        ),
+        runtime=SimpleNamespace(tools=(NoResultGroundingTool(),)),
+        model=model,
+        settings=Settings(app_env="local", llm_provider="ollama", llm_model="test"),
+    )
+
+    assert response.outcome == "LLM_OUTPUT_INVALID"

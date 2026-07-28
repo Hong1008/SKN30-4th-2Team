@@ -41,7 +41,10 @@ export default function ChatbotScreen({ reviewId, focusClauseId, focusClauseName
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => { if (isOpen) inputRef.current?.focus() }, [isOpen])
-  useEffect(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), [messages])
+  // scrollIntoView의 반환값(Promise일 수 있음)이 React effect의 cleanup으로 전달되지 않게 한다.
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose() }
     if (!isOpen) return
@@ -54,7 +57,11 @@ export default function ChatbotScreen({ reviewId, focusClauseId, focusClauseName
     if (!text || isSending) return
     setError('')
     setErrorRetryable(false)
-    const history = messages.map(({ role, text }) => ({ role, content: text.slice(0, 2000) })).slice(-10)
+    const history = messages
+      .map(({ role, text }) => ({ role, content: text.slice(0, 2000) }))
+      // 본문 없는 제한 응답은 API의 history 최소 길이 검증(1자 이상)에 실패하므로 제외한다.
+      .filter(({ content }) => content.trim().length > 0)
+      .slice(-10)
     setMessages(previous => [...previous, { id: crypto.randomUUID(), role: 'user', text }])
     setInput(''); setIsSending(true)
     try {
