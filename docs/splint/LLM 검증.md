@@ -115,19 +115,35 @@ https://nk967ii6w52nar-8000.proxy.runpod.net/
 | `/docs`, `/openapi.json` | 404 |
 | 실제 모델 목록·생성 호출 | 경로 미노출로 검증하지 못함 |
 
-현재 `openai.py` provider도 vLLM에 그대로 대응하지 않는다.
+이 확인 이후 API에는 별도 `vllm` provider가 추가되었다.
 
-- `Settings`가 `VLLM_API_KEY`와 vLLM base URL을 정의하지 않는다.
-- `openai.py`는 `model`과 `OPENAI_API_KEY`만 `ChatOpenAI`에 전달한다.
-- OpenAI 기본 endpoint 대신 vLLM URL을 전달하는 설정이 없다.
-- OpenAI용 `reasoning={"effort":"none"}`과 Qwen의 thinking 비활성화
-  방식이 같은지 검증되지 않았다.
-- 운영 설정은 `runpod_serverless` 외 provider를 허용하지 않는다.
+- `Settings`가 `VLLM_API_KEY`와 `VLLM_BASE_URL`을 `SecretStr`·URL로 관리한다.
+- `ChatOpenAI`를 OpenAI-compatible client로 재사용하되 OpenAI provider와
+  reasoning 정책을 분리한다.
+- Qwen thinking은 `chat_template_kwargs.enable_thinking`으로 제어한다.
+- Chat Completions와 JSON Schema structured output을 명시적으로 사용한다.
+- 운영 설정은 `vllm` provider만 허용한다.
 
-따라서 현재 단계에서는 vLLM provider를 채택하거나 실제 모델 호출이
-성공했다고 판단하지 않는다. Pod에서 vLLM 프로세스와 공개 포트를
-확인하고 `/v1/models`가 정상 응답한 뒤 provider 분리 여부를 결정한다.
-이 내용은 RunPod 인증·운영 경계를 변경하지 않는 사전 검증 기록이다.
+이는 클라이언트 구현 완료를 뜻하며 위 404 endpoint의 정상화를 뜻하지는
+않는다. Pod에서 vLLM 프로세스와 공개 포트를 확인하고 `/v1/models`가
+200을 반환한 뒤 실제 Chat/Suggestions 검증을 수행해야 한다.
+
+### 5.1 2026-07-28 구현 후 재검증
+
+동일한 `.env` 설정을 새 `vllm` provider에 바인딩해 재검증했다.
+
+| 확인 항목 | 결과 |
+| --- | --- |
+| OpenAI SDK 형태 `GET /v1/models` | 200 |
+| endpoint model ID와 `LLM_MODEL` | 일치 |
+| 최소 JSON Schema Chat Completions | 성공 |
+| WorkShield Chat structured output | 성공, 9.808초 |
+| WorkShield Suggestions structured output | 성공, 4.219초 |
+
+Python `urllib` 기본 User-Agent 요청은 RunPod/Cloudflare edge에서
+`403 error code: 1010`으로 차단됐지만 OpenAI SDK 형태 User-Agent와 실제
+`ChatOpenAI` 요청은 성공했다. 운영 연결은 임의 HTTP client가 아니라
+검증된 provider 경로를 사용한다.
 
 ## 6. Fixture 구성
 

@@ -17,9 +17,25 @@ def test_get_settings_is_cached() -> None:
     assert get_settings() is get_settings()
 
 
-def test_production_rejects_non_serverless_provider() -> None:
-    with pytest.raises(ValidationError, match="LLM_PROVIDER=runpod_serverless"):
+def test_production_rejects_non_vllm_provider() -> None:
+    with pytest.raises(ValidationError, match="LLM_PROVIDER=vllm"):
         Settings(app_env="prod", llm_provider="openai")
+
+
+def test_production_accepts_vllm_provider() -> None:
+    settings = Settings(
+        app_env="prod",
+        llm_provider="vllm",
+        llm_model="served-qwen-model",
+        vllm_base_url="https://vllm.example.com/v1",
+        vllm_api_key="vllm-secret",
+        app_debug=False,
+        database_echo=False,
+    )
+
+    assert settings.llm_provider.value == "vllm"
+    assert str(settings.vllm_base_url) == "https://vllm.example.com/v1"
+    assert settings.selected_provider_key() is settings.vllm_api_key
 
 
 def test_mcp_transport_defaults_to_stdio() -> None:
@@ -112,7 +128,7 @@ def test_production_rejects_debug_mode() -> None:
     with pytest.raises(ValidationError, match="APP_DEBUG=false"):
         Settings(
             app_env="prod",
-            llm_provider="runpod_serverless",
+            llm_provider="vllm",
             app_debug=True,
             database_echo=False,
         )
@@ -122,7 +138,7 @@ def test_production_rejects_database_query_logging() -> None:
     with pytest.raises(ValidationError, match="DATABASE_ECHO=false"):
         Settings(
             app_env="prod",
-            llm_provider="runpod_serverless",
+            llm_provider="vllm",
             app_debug=False,
             database_echo=True,
         )

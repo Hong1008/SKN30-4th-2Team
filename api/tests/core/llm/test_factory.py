@@ -19,6 +19,8 @@ def _settings(provider: str, **overrides: object) -> Settings:
         "runpod_api_key": "runpod-secret",
         "runpod_ollama_endpoint_id": "endpoint-id",
         "ollama_base_url": "http://ollama.internal:11434",
+        "vllm_base_url": "https://vllm.internal/v1",
+        "vllm_api_key": "vllm-secret",
     }
     values.update(overrides)
     return Settings(**values)
@@ -64,6 +66,21 @@ def test_factory_requires_runpod_serverless_configuration(
 ) -> None:
     with pytest.raises(LLMConfigurationError, match=message):
         create_chat_model(_settings("runpod_serverless", **overrides))
+
+
+@pytest.mark.parametrize(
+    ("overrides", "message"),
+    [
+        ({"vllm_api_key": None}, "VLLM_API_KEY"),
+        ({"vllm_base_url": None}, "VLLM_BASE_URL"),
+    ],
+)
+def test_factory_requires_vllm_configuration(
+    overrides: dict[str, object],
+    message: str,
+) -> None:
+    with pytest.raises(LLMConfigurationError, match=message):
+        create_chat_model(_settings("vllm", **overrides))
 
 
 def test_configuration_error_does_not_expose_secret() -> None:
