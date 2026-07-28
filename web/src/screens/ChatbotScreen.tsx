@@ -36,6 +36,7 @@ export default function ChatbotScreen({ reviewId, focusClauseId, focusClauseName
   const [input, setInput] = useState('')
   const [isSending, setIsSending] = useState(false)
   const [error, setError] = useState('')
+  const [errorRetryable, setErrorRetryable] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
@@ -52,6 +53,7 @@ export default function ChatbotScreen({ reviewId, focusClauseId, focusClauseName
     const text = input.trim()
     if (!text || isSending) return
     setError('')
+    setErrorRetryable(false)
     const history = messages.map(({ role, text }) => ({ role, content: text.slice(0, 2000) })).slice(-10)
     setMessages(previous => [...previous, { id: crypto.randomUUID(), role: 'user', text }])
     setInput(''); setIsSending(true)
@@ -72,6 +74,7 @@ export default function ChatbotScreen({ reviewId, focusClauseId, focusClauseName
       setMessages(previous => previous.slice(0, -1))
       setInput(text)
       setError(getErrorMessage(requestError, '답변 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.'))
+      setErrorRetryable(requestError?.retryable === true)
     } finally { setIsSending(false) }
   }
 
@@ -91,7 +94,7 @@ export default function ChatbotScreen({ reviewId, focusClauseId, focusClauseName
         {message.disclaimer && <p className="mt-2 text-xs text-slate-500">{message.disclaimer}</p>}
       </div></div>)}<div ref={bottomRef} />
     </div>
-    {error && <div className="mx-4 mb-2 rounded-lg bg-rose-50 p-3 text-xs text-rose-700" role="alert">{error}<button type="button" onClick={() => void send()} className="ml-2 inline-flex items-center gap-1 font-semibold underline"><RotateCcw className="size-3" />재시도</button></div>}
+    {error && <div className="mx-4 mb-2 rounded-lg bg-rose-50 p-3 text-xs text-rose-700" role="alert">{error}{errorRetryable && <button type="button" onClick={() => void send()} className="ml-2 inline-flex items-center gap-1 font-semibold underline"><RotateCcw className="size-3" />재시도</button>}</div>}
     <div className="flex gap-2 border-t border-slate-200 p-3"><input ref={inputRef} value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') void send() }} placeholder="검토 결과에 대해 질문해 주세요" className="min-h-11 min-w-0 flex-1 rounded-xl border border-slate-200 px-3 text-sm" /><button type="button" onClick={() => void send()} disabled={!input.trim() || isSending} aria-label="질문 전송" className="rounded-xl bg-blue-600 px-4 text-white disabled:bg-slate-300"><Send className="size-4" /></button></div>
   </aside>
 }

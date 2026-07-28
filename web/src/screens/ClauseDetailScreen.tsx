@@ -5,7 +5,7 @@ import type { ClauseResult, GroundingItem, SuggestionResponse } from '../types'
 import { api } from '../api/api'
 import { useMetadata } from '../contexts/MetadataContext'
 import { getMetadataLabel, getStatusPresentation } from '../utils/metadata'
-import { getErrorMessage } from '../utils/apiErrors'
+import { getErrorMessage, getSafeKoreanMessage } from '../utils/apiErrors'
 
 interface Props {
   clause: ClauseResult
@@ -37,7 +37,7 @@ export default function ClauseDetailScreen({ clause, reviewId, onBack, onChatbot
     api.getGrounding(reviewId, clause.categoryCode).then(res => {
         setLegalBasis(res.data.items)
         setGroundingStatus(res.data.grounding_status)
-        setGroundingMessage('')
+        setGroundingMessage(getSafeKoreanMessage(res.data.message) || '')
         setGroundingRetryable(res.data.retryable === true)
         setLoadingGrounding(false)
       }).catch((error) => {
@@ -324,8 +324,11 @@ export default function ClauseDetailScreen({ clause, reviewId, onBack, onChatbot
               </button>
             </div>
           )}
-          {(suggestion.standard_clause_ids.length > 0 || suggestion.grounding_source_ids.length > 0) && (
+          {(suggestion.user_clause_ids.length > 0 || suggestion.standard_clause_ids.length > 0 || suggestion.grounding_source_ids.length > 0) && (
             <div className="text-xs leading-5 text-slate-500">
+              {suggestion.user_clause_ids.length > 0 && (
+                <p>참고 사용자 조항: {suggestion.user_clause_ids.join(', ')}</p>
+              )}
               {suggestion.standard_clause_ids.length > 0 && (
                 <p>참고 표준조항: {suggestion.standard_clause_ids.join(', ')}</p>
               )}

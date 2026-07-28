@@ -17,6 +17,8 @@ export class ApiError extends Error {
   public readonly field?: string | null
   public readonly details?: unknown
   public readonly requestId?: string
+  /** 공통 API 오류 envelope에서만 받은 사용자 안내 문구 */
+  public readonly userMessage?: string
 
   constructor(status: number, payload: unknown) {
     const envelope = payload as { error?: ErrorPayload; meta?: { request_id?: string } }
@@ -31,6 +33,10 @@ export class ApiError extends Error {
     this.field = error?.field
     this.details = error?.details
     this.requestId = envelope?.meta?.request_id
+    const message = typeof error?.message === 'string' ? error.message.trim() : ''
+    this.userMessage = /[가-힣]/.test(message)
+      ? message
+      : undefined
   }
 }
 

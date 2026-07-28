@@ -97,7 +97,7 @@ export const api = {
       headers: idempotencyHeaders(idempotencyKey),
       body: JSON.stringify({
         message,
-        focus_clause_id: focusClauseId,
+        focus_clause_id: focusClauseId ?? null,
         history: history.slice(-10),
       }),
     })
