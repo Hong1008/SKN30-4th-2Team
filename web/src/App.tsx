@@ -99,6 +99,32 @@ function MainApp() {
     setIsChatOpen(false)
     requestAnimationFrame(() => chatTriggerRef.current?.focus())
   }
+  const clearChat = () => {
+    setIsChatOpen(false)
+    setChatTarget(null)
+    chatTriggerRef.current = null
+  }
+  const clearLocalReview = () => {
+    clearChat()
+    setSessionId(null)
+    setReviewId(null)
+    setSelectedClause(null)
+    setSessionExpiresAt(null)
+    localStorage.removeItem(SESSION_ID_KEY)
+    localStorage.removeItem(REVIEW_ID_KEY)
+  }
+
+  useEffect(() => {
+    if (!sessionExpiresAt) return
+    const expiresAt = new Date(sessionExpiresAt).getTime()
+    if (!Number.isFinite(expiresAt)) return
+    const timeout = window.setTimeout(() => {
+      clearLocalReview()
+      showToast('세션 보관 기간이 만료되었습니다. 새 검토를 시작해 주세요.', 'error')
+      navigate('/review', { replace: true })
+    }, Math.max(0, expiresAt - Date.now()))
+    return () => window.clearTimeout(timeout)
+  }, [sessionExpiresAt])
 
   // Recovery logic for session and review IDs
   useEffect(() => {
@@ -121,10 +147,7 @@ function MainApp() {
         }
       }).catch((err) => {
         if (err.status === 404 || err.status === 410) {
-          localStorage.removeItem(SESSION_ID_KEY)
-          localStorage.removeItem(REVIEW_ID_KEY)
-          setSessionId(null)
-          setReviewId(null)
+          clearLocalReview()
         }
         if (isRoot) navigate('/review', { replace: true })
       })
@@ -154,22 +177,12 @@ function MainApp() {
         await api.deleteReview(reviewId, key)
       }
       discardRequestKey.current = null
-      setSessionId(null)
-      setReviewId(null)
-      setSelectedClause(null)
-      setSessionExpiresAt(null)
-      localStorage.removeItem(SESSION_ID_KEY)
-      localStorage.removeItem(REVIEW_ID_KEY)
+      clearLocalReview()
       navigate('/review', { replace: true })
     } catch (error: any) {
       if (error?.status === 404 || error?.status === 410) {
         discardRequestKey.current = null
-        setSessionId(null)
-        setReviewId(null)
-        setSelectedClause(null)
-        setSessionExpiresAt(null)
-        localStorage.removeItem(SESSION_ID_KEY)
-        localStorage.removeItem(REVIEW_ID_KEY)
+        clearLocalReview()
         navigate('/review', { replace: true })
       } else {
         showToast(getErrorMessage(error, '기존 검토를 정리하지 못했습니다. 다시 시도해 주세요.'), 'error')
@@ -264,7 +277,11 @@ function MainApp() {
               <Route path="/review/:id/chatbot" element={<Navigate to="../results" replace />} />
             </Routes>
           </div>
-          {chatTarget && <ChatbotScreen reviewId={chatTarget.reviewId} focusClauseId={chatTarget.clause?.id} focusClauseName={chatTarget.clause?.article} focusClauseTitle={chatTarget.clause?.standardTitle} focusClauseStatus={chatTarget.clause?.status} focusClauseCategory={chatTarget.clause?.category} isOpen={isChatOpen} onClose={closeChat} onClearFocus={() => setChatTarget(target => target ? { reviewId: target.reviewId } : null)} />}
+          {chatTarget && <ChatbotScreen key={chatTarget.reviewId} reviewId={chatTarget.reviewId} focusClauseId={chatTarget.clause?.id} focusClauseName={chatTarget.clause?.article} focusClauseTitle={chatTarget.clause?.standardTitle} focusClauseStatus={chatTarget.clause?.status} focusClauseCategory={chatTarget.clause?.category} isOpen={isChatOpen} onClose={closeChat} onClearFocus={() => setChatTarget(target => target ? { reviewId: target.reviewId } : null)} onReviewUnavailable={() => {
+            clearLocalReview()
+            showToast('검토가 종료되었거나 보관 기간이 만료되었습니다. 새 검토를 시작해 주세요.', 'error')
+            navigate('/review', { replace: true })
+          }} />}
         </main>
         {showNewReviewConfirm && (
           <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-4" role="dialog" aria-modal="true" aria-labelledby="new-review-title">
