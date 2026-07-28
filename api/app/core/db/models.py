@@ -43,6 +43,9 @@ class ReviewSessionRow(Base):
     original_file_name: Mapped[str] = mapped_column(String(255))
     file_size_bytes: Mapped[int] = mapped_column(BigInteger)
     storage_key: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # 레거시 스키마의 `storage_path` 컬럼이 존재할 수 있으므로 매핑해 둔다.
+    # 새 레코드 생성 시 storage_key 값을 함께 전달해 NOT NULL 제약을 만족시킨다.
+    storage_path: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     expires_at: Mapped[datetime] = mapped_column(

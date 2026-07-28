@@ -152,6 +152,16 @@ async def _assess_scope(
             retryable=True,
             next_action="RETRY",
         ) from error
+    except Exception as error:
+        # 변동성 있는 외부 MCP 호출 오류를 내부 유형으로 래핑해
+        # API 레이어가 일관된 응답을 반환하도록 한다.
+        raise ExternalServiceError(
+            code="MCP_TOOL_ERROR",
+            message="검토 서비스와의 통신 중 오류가 발생했습니다.",
+            retryable=True,
+            next_action="RETRY",
+        ) from error
+
     return _tool_payload(result)
 
 

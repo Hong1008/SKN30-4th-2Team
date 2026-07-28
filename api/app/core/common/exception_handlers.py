@@ -142,13 +142,35 @@ async def unexpected_error_handler(
     request: Request,
     _error: Exception,
 ) -> JSONResponse:
-    """예상하지 못한 오류의 본문·메시지·스택 트레이스를 기록하지 않는다."""
+    """예상하지 못한 오류의 본문·메시지·스택 트레이스를 기록한다(디버깅 목적).
+
+    클라이언트에게는 기존의 일반화된 500 응답만 반환한다.
+    """
+    # 공통 이벤트 로그(요청 ID 포함)
     log_event(
         event="api.unexpected_error",
         request_id=get_request_id(request),
         state="failed",
         level=logging.ERROR,
     )
+    # 예외 상세(타입, 메시지, 스택 트레이스)를 서버 로그에 남겨 원인 분석에 활용
+    try:
+        # 공통 구조화 로거에 예외 타입과 메시지를 남긴다 (운영 로그에서 확인 가능).
+        log_event(
+            event="api.unexpected_error",
+            request_id=get_request_id(request),
+            state="failed",
+            error_type=type(_error).__name__,
+            level=logging.ERROR,
+        )
+        # 추가로 상세 스택은 디버깅 시에만 출력되도록 일반 로거에도 남긴다.
+        import traceback
+
+        tb = "".join(traceback.format_exception(type(_error), _error, _error.__traceback__))
+        logging.getLogger("uvicorn.error").error("%s", tb)
+    except Exception:
+        logging.getLogger("uvicorn.error").error("Failed to record unexpected exception")
+
     return _error_response(
         request,
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
