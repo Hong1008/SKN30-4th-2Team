@@ -72,7 +72,7 @@ export default function Header({
               text-[18px] font-bold leading-5
               tracking-[-0.035em] text-slate-950
             ">
-              Work<span className="font-semibold text-blue-600">shield</span>
+              Work<span className="font-semibold text-blue-600">Shield</span>
             </span>
           </span>
         </button>
