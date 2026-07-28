@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { AlertCircle, Check, ChevronRight, RefreshCw } from 'lucide-react'
 import { api } from '../api/api'
 import type { ReviewData, ReviewProgress } from '../types'
 import { useToast } from '../contexts/ToastContext'
 import { useMetadata } from '../contexts/MetadataContext'
+import { getMetadataLabel } from '../utils/metadata'
 
 interface Props {
   reviewId: string | null
@@ -15,7 +16,13 @@ type Mode = 'running' | 'error' | 'done'
 export default function ProcessingScreen({ reviewId, onDone }: Props) {
   const { metadata } = useMetadata()
   const { showToast } = useToast()
-  const stages = (metadata?.progress_stages ?? []).map((code) => ({ code, label: code }))
+  const stages = useMemo(
+    () => (metadata?.progress_stages ?? []).map((code) => ({
+      code,
+      label: getMetadataLabel(metadata?.progress_stage_details, code, '진행 단계'),
+    })),
+    [metadata?.progress_stage_details, metadata?.progress_stages],
+  )
   const [activeStep, setActiveStep] = useState(0)
   const [progress, setProgress] = useState<ReviewProgress | null>(null)
   const [mode, setMode] = useState<Mode>('running')

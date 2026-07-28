@@ -559,6 +559,7 @@ async def test_metadata_cache_and_etag(tmp_path: Path) -> None:
         )
 
     assert first.status_code == 200
+    assert first.json()["data"]["schema_version"] == "1.2"
     assert second.status_code == 200
     assert not_modified.status_code == 304
     assert calls["list_contract_types"] == 1
@@ -586,6 +587,22 @@ async def test_metadata_cache_and_etag(tmp_path: Path) -> None:
         {"code": "NO_MATCH", "label": "표준조항 검색 후보 없음"},
         {"code": "MISSING", "label": "표준조항 누락 가능성"},
     ]
+    assert first.json()["data"]["progress_stage_details"] == [
+        {"code": "PREPARE", "label": "검토 준비"},
+        {"code": "BATCH_SEARCH", "label": "조항 검색 및 분류"},
+        {"code": "RERANK", "label": "관련 조항 재정렬"},
+        {"code": "CLAUSE_REVIEW", "label": "조항 비교 검토"},
+        {"code": "MISSING_DETECTION", "label": "누락 조항 확인"},
+        {"code": "RESULT_ASSEMBLY", "label": "결과 정리"},
+    ]
+    contract_type_labels = {
+        item["code"]: item["label"]
+        for item in first.json()["data"]["contract_types"]
+    }
+    assert contract_type_labels["SW_FREELANCE"] == "SW 프리랜서 용역"
+    assert contract_type_labels["SI_SUBCONTRACT"] == "SI 하도급"
+    assert contract_type_labels["SM_SUBCONTRACT"] == "SM 하도급"
+    assert contract_type_labels["SW_EMPLOYMENT"] == "SW 근로계약"
     enabled = {
         item["code"]
         for item in first.json()["data"]["contract_types"]

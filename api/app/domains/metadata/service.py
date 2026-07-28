@@ -17,6 +17,7 @@ from app.domains.metadata.schemas import (
     FilePolicy,
     MetadataCode,
     MetadataResponse,
+    ProgressStageMetadata,
     ResultCodeMetadata,
     ToxicPatternMetadata,
 )
@@ -29,15 +30,17 @@ FALLBACK_CONTRACT_TYPES = {
     "SW_FREELANCE": "SW 프리랜서 용역",
     "SI_SUBCONTRACT": "SI 하도급",
     "SM_SUBCONTRACT": "SM 하도급",
+    "SW_EMPLOYMENT": "SW 근로계약",
 }
-PROGRESS_STAGES = [
-    "PREPARE",
-    "BATCH_SEARCH",
-    "RERANK",
-    "CLAUSE_REVIEW",
-    "MISSING_DETECTION",
-    "RESULT_ASSEMBLY",
-]
+PROGRESS_STAGE_LABELS = {
+    "PREPARE": "검토 준비",
+    "BATCH_SEARCH": "조항 검색 및 분류",
+    "RERANK": "관련 조항 재정렬",
+    "CLAUSE_REVIEW": "조항 비교 검토",
+    "MISSING_DETECTION": "누락 조항 확인",
+    "RESULT_ASSEMBLY": "결과 정리",
+}
+PROGRESS_STAGES = list(PROGRESS_STAGE_LABELS)
 ERROR_CODES = [
     "VALIDATION_ERROR",
     "RESOURCE_NOT_FOUND",
@@ -255,6 +258,12 @@ async def get_metadata(
         contract_types = _code_items(
             _items(contracts_payload, "contract_types", "types", "items")
         )
+        contract_types = [
+            item.model_copy(
+                update={"label": FALLBACK_CONTRACT_TYPES.get(item.code, item.label)}
+            )
+            for item in contract_types
+        ]
         known_codes = {item.code for item in contract_types}
         for code, label in FALLBACK_CONTRACT_TYPES.items():
             if code not in known_codes:
@@ -262,7 +271,7 @@ async def get_metadata(
                     MetadataCode(
                         code=code,
                         label=label,
-                        enabled_for_mvp=True,
+                        enabled_for_mvp=code in MVP_CONTRACT_TYPES,
                     )
                 )
         categories = _categories(
@@ -289,6 +298,10 @@ async def get_metadata(
                 for code, label in RESULT_CODE_LABELS.items()
             ],
             progress_stages=PROGRESS_STAGES,
+            progress_stage_details=[
+                ProgressStageMetadata(code=code, label=label)
+                for code, label in PROGRESS_STAGE_LABELS.items()
+            ],
             grounding_statuses=[
                 "OK",
                 "NO_RESULT",

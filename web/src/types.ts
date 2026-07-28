@@ -119,8 +119,8 @@ export interface ResultsData {
 export interface ContractTypeMeta {
   code: string;
   label: string;
-  description: string;
-  enabled_for_mvp: boolean;
+  description?: string | null;
+  enabled_for_mvp?: boolean | null;
 }
 
 export interface MetaCodeLabel {
@@ -141,8 +141,9 @@ export interface MetadataData {
   contract_types: ContractTypeMeta[];
   categories: MetaCodeLabel[];
   result_codes: string[];
-  result_code_details?: MetaCodeLabel[];
+  result_code_details: MetaCodeLabel[];
   progress_stages: string[];
+  progress_stage_details: MetaCodeLabel[];
   file_policy: FilePolicyMeta;
 }
 
