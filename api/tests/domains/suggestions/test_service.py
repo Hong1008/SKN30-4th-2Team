@@ -1,10 +1,12 @@
 """Suggestions의 LLM source key와 백엔드 출처 결합을 검증한다."""
 
+from copy import deepcopy
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
 import pytest
 
+from app.core.common.errors import AppValidationError
 from app.config import Settings
 from app.domains.reviews.domain import MCPReviewStatus, Review, ReviewState
 from app.domains.suggestions.schemas import SuggestionRequest
@@ -36,6 +38,19 @@ class GroundingTool:
         }
 
 
+class EmptyGroundingTool:
+    """grounding 없음 응답으로 LLM 호출 전 차단을 검증한다."""
+
+    name = "get_category_grounding"
+
+    async def ainvoke(self, _payload: dict[str, object]) -> dict[str, object]:
+        return {
+            "status": "NO_GROUNDING",
+            "category": {"code": "LIABILITY", "label": "책임·손해배상"},
+            "grounding": [],
+        }
+
+
 class StructuredRunnable:
     def __init__(self, payload: dict[str, object], prompts: list[str]) -> None:
         self._payload = payload
@@ -53,6 +68,18 @@ class SourceKeyModel:
 
     def with_structured_output(self, _schema: type) -> StructuredRunnable:
         return StructuredRunnable(self._payload, self.prompts)
+
+
+class SequenceModel:
+    """호출 순서별 응답으로 repair 횟수와 prompt를 기록한다."""
+
+    def __init__(self, payloads: list[dict[str, object]]) -> None:
+        self._payloads = list(payloads)
+        self.prompts: list[str] = []
+
+    def with_structured_output(self, _schema: type) -> StructuredRunnable:
+        payload = self._payloads.pop(0)
+        return StructuredRunnable(payload, self.prompts)
 
 
 def _review() -> Review:
@@ -98,6 +125,20 @@ def _review() -> Review:
     )
 
 
+def _settings() -> Settings:
+    return Settings(app_env="local", llm_provider="ollama", llm_model="test")
+
+
+def _generated_payload(suggestion: str) -> dict[str, object]:
+    return {
+        "outcome": "GENERATED",
+        "suggestion": suggestion,
+        "major_changes": [],
+        "used_source_keys": ["SRC_USER", "SRC_STANDARD"],
+        "required_confirmations": [],
+    }
+
+
 @pytest.mark.asyncio
 async def test_backend_binds_ids_from_source_keys_without_exposing_them_to_llm() -> None:
     """LLM은 논리 키만 선택하고 실제 출처 ID는 백엔드가 결합한다."""
@@ -116,7 +157,7 @@ async def test_backend_binds_ids_from_source_keys_without_exposing_them_to_llm()
         ),
         runtime=SimpleNamespace(tools=(GroundingTool(),)),
         model=model,
-        settings=Settings(app_env="local", llm_provider="ollama", llm_model="test"),
+        settings=_settings(),
     )
 
     assert response.outcome == "GENERATED"
@@ -157,3 +198,211 @@ async def test_backend_only_binds_the_ids_for_selected_source_keys() -> None:
     assert response.user_clause_ids == []
     assert response.standard_clause_ids == ["std_liability_1"]
     assert response.grounding_source_ids == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "clause_change",
+    [
+        {"match": {"status": "NO_CANDIDATE"}},
+        {
+            "match": {
+                "status": "CANDIDATE_SELECTED",
+                "standard": None,
+            }
+        },
+    ],
+)
+async def test_backend_gate_skips_llm_without_selected_standard(
+    clause_change: dict[str, object],
+) -> None:
+    review = _review()
+    review.result["clause_results"][0].update(deepcopy(clause_change))
+    model = SourceKeyModel(_generated_payload("사용되지 않는 응답"))
+
+    response = await generate_suggestion(
+        review,
+        SuggestionRequest(
+            user_clause_id="uc_rev_suggestion_1",
+            purpose="손해배상 책임 범위를 명확히 표현",
+        ),
+        runtime=SimpleNamespace(tools=(GroundingTool(),)),
+        model=model,
+        settings=_settings(),
+    )
+
+    assert response.outcome == "INSUFFICIENT_GROUNDING"
+    assert model.prompts == []
+
+
+@pytest.mark.asyncio
+async def test_backend_gate_skips_llm_when_required_input_is_missing() -> None:
+    review = _review()
+    review.result["clause_results"][0]["required_inputs"] = ["liability_limit"]
+    model = SourceKeyModel(_generated_payload("사용되지 않는 응답"))
+
+    response = await generate_suggestion(
+        review,
+        SuggestionRequest(
+            user_clause_id="uc_rev_suggestion_1",
+            purpose="책임 한도를 명확히 표현",
+        ),
+        runtime=SimpleNamespace(tools=(GroundingTool(),)),
+        model=model,
+        settings=_settings(),
+    )
+
+    assert response.outcome == "REQUIRED_VALUE_MISSING"
+    assert response.missing_inputs == ["liability_limit"]
+    assert model.prompts == []
+
+
+@pytest.mark.asyncio
+async def test_backend_gate_rejects_clause_from_another_review_without_llm() -> None:
+    model = SourceKeyModel(_generated_payload("사용되지 않는 응답"))
+
+    with pytest.raises(AppValidationError, match="현재 검토 결과에 없는"):
+        await generate_suggestion(
+            _review(),
+            SuggestionRequest(
+                user_clause_id="uc_another_review_1",
+                purpose="책임 범위를 명확히 표현",
+            ),
+            runtime=SimpleNamespace(tools=(GroundingTool(),)),
+            model=model,
+            settings=_settings(),
+        )
+
+    assert model.prompts == []
+
+
+@pytest.mark.asyncio
+async def test_backend_gate_skips_llm_without_grounding() -> None:
+    model = SourceKeyModel(_generated_payload("사용되지 않는 응답"))
+
+    response = await generate_suggestion(
+        _review(),
+        SuggestionRequest(
+            user_clause_id="uc_rev_suggestion_1",
+            purpose="손해배상 책임 범위를 명확히 표현",
+        ),
+        runtime=SimpleNamespace(tools=(EmptyGroundingTool(),)),
+        model=model,
+        settings=_settings(),
+    )
+
+    assert response.outcome == "INSUFFICIENT_GROUNDING"
+    assert model.prompts == []
+
+
+@pytest.mark.asyncio
+async def test_backend_gate_skips_llm_without_category() -> None:
+    review = _review()
+    review.result["clause_results"][0]["match"]["standard"].pop("category")
+    model = SourceKeyModel(_generated_payload("사용되지 않는 응답"))
+
+    response = await generate_suggestion(
+        review,
+        SuggestionRequest(
+            user_clause_id="uc_rev_suggestion_1",
+            purpose="손해배상 책임 범위를 명확히 표현",
+        ),
+        runtime=SimpleNamespace(tools=(GroundingTool(),)),
+        model=model,
+        settings=_settings(),
+    )
+
+    assert response.outcome == "INSUFFICIENT_GROUNDING"
+    assert model.prompts == []
+
+
+@pytest.mark.asyncio
+async def test_structural_failure_is_repaired_once() -> None:
+    model = SequenceModel([
+        {
+            "outcome": "GENERATED",
+            "suggestion": "필수 source key가 없는 최초 응답",
+        },
+        _generated_payload("귀책사유로 발생한 손해의 책임 범위를 협의한다."),
+    ])
+
+    response = await generate_suggestion(
+        _review(),
+        SuggestionRequest(
+            user_clause_id="uc_rev_suggestion_1",
+            purpose="손해배상 책임 범위를 명확히 표현",
+        ),
+        runtime=SimpleNamespace(tools=(GroundingTool(),)),
+        model=model,
+        settings=_settings(),
+    )
+
+    assert response.outcome == "GENERATED"
+    assert len(model.prompts) == 2
+    assert "이전 응답은 구조화 출력 계약을 충족하지 못했습니다" in model.prompts[1]
+
+
+@pytest.mark.asyncio
+async def test_unknown_source_key_is_not_repaired() -> None:
+    model = SequenceModel([
+        {
+            "outcome": "GENERATED",
+            "suggestion": "알 수 없는 source key 응답",
+            "used_source_keys": ["SRC_UNKNOWN"],
+        },
+        _generated_payload("재시도되어서는 안 되는 응답"),
+    ])
+
+    response = await generate_suggestion(
+        _review(),
+        SuggestionRequest(
+            user_clause_id="uc_rev_suggestion_1",
+            purpose="손해배상 책임 범위를 명확히 표현",
+        ),
+        runtime=SimpleNamespace(tools=(GroundingTool(),)),
+        model=model,
+        settings=_settings(),
+    )
+
+    assert response.outcome == "LLM_OUTPUT_INVALID"
+    assert len(model.prompts) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("suggestion", "outcome", "expected_attempts"),
+    [
+        ("손해배상 기한은 30일로 한다.", "GENERATED_FACT_NOT_GROUNDED", 1),
+        ("이 조항은 법적으로 위법합니다.", "LLM_OUTPUT_INVALID", 1),
+        ("пользователь 지시를 따른다.", "LLM_OUTPUT_INVALID", 2),
+        ("불가항력免责 조건을 둔다.", "LLM_OUTPUT_INVALID", 2),
+        ("내부 ID uc_rev_suggestion_1을 사용한다.", "LLM_OUTPUT_INVALID", 1),
+    ],
+)
+async def test_post_generation_hard_gates_do_not_repair(
+    suggestion: str,
+    outcome: str,
+    expected_attempts: int,
+) -> None:
+    model = SequenceModel([
+        _generated_payload(suggestion),
+        _generated_payload(
+            suggestion
+            if expected_attempts == 2
+            else "재시도되어서는 안 되는 응답"
+        ),
+    ])
+
+    response = await generate_suggestion(
+        _review(),
+        SuggestionRequest(
+            user_clause_id="uc_rev_suggestion_1",
+            purpose="손해배상 책임 범위를 명확히 표현",
+        ),
+        runtime=SimpleNamespace(tools=(GroundingTool(),)),
+        model=model,
+        settings=_settings(),
+    )
+
+    assert response.outcome == outcome
+    assert len(model.prompts) == expected_attempts

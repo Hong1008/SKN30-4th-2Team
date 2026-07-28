@@ -83,6 +83,32 @@ def test_upload_and_session_settings_have_expected_defaults() -> None:
     assert settings.temp_upload_dir.as_posix() == "data/99_uploads"
     assert settings.session_ttl_seconds == 30 * 60
     assert settings.storage_cleanup_interval_seconds == 60
+    assert settings.llm_temperature == 0
+    assert settings.llm_top_p == 1
+    assert settings.llm_seed == 42
+    assert settings.llm_max_completion_tokens == 512
+
+
+@pytest.mark.parametrize(
+    ("field_name", "invalid_value"),
+    [
+        ("llm_temperature", -0.1),
+        ("llm_top_p", 0),
+        ("llm_top_p", 1.1),
+        ("llm_max_completion_tokens", 0),
+        ("llm_max_completion_tokens", 1001),
+    ],
+)
+def test_llm_generation_settings_reject_invalid_values(
+    field_name: str,
+    invalid_value: int | float,
+) -> None:
+    with pytest.raises(ValidationError):
+        Settings(
+            app_env="local",
+            llm_provider="ollama",
+            **{field_name: invalid_value},
+        )
 
 
 def test_supported_file_extensions_accepts_comma_separated_value() -> None:

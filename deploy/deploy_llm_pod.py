@@ -10,18 +10,27 @@ import time
 from pathlib import Path
 
 # 모든 모델 공통 기본 옵션
-COMMON_ARGS = "--host 0.0.0.0 --port 8000 --enforce-eager --gpu-memory-utilization 0.90 --max-model-len 8128 --language-model-only --reasoning-parser qwen3"
+COMMON_ARGS = "--host 0.0.0.0 --port 8000 --enforce-eager --gpu-memory-utilization 0.90 --max-model-len 8128 "
 
 # 모델 프리셋 정의
 MODEL_PRESETS = {
     "qwen3.5-9B-FP8-dynamic": (
         "RedHatAI/Qwen3.5-9B-FP8-dynamic "
+        "--language-model-only "
+        "--reasoning-parser qwen3 "
         f"{COMMON_ARGS}"
     ),
-    "qwen3.5-4B-FP8-dynamic": (
-        "RedHatAI/Qwen3.5-4B-FP8-dynamic "
+    "gemma-4-12B-it-FP8-Dynamic": (
+        "RedHatAI/gemma-4-12B-it-FP8-Dynamic "
+        "--reasoning-parser gemma4 "
         f"{COMMON_ARGS}"
     ),
+    "EXAONE-3.5-7.8B-Instruct": (
+        "LGAI-EXAONE/EXAONE-3.5-7.8B-Instruct "
+        "--dtype bfloat16 "
+        "--trust-remote-code "
+        f"{COMMON_ARGS}"
+    )
 }
 
 def generate_api_key() -> str:

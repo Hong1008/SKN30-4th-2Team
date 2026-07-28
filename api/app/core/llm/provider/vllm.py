@@ -46,6 +46,10 @@ def build_vllm_model(
         api_key=settings.vllm_api_key,
         base_url=_api_base_url(settings.vllm_base_url),
         timeout=settings.llm_timeout_seconds,
+        temperature=settings.llm_temperature,
+        top_p=settings.llm_top_p,
+        seed=settings.llm_seed,
+        max_completion_tokens=settings.llm_max_completion_tokens,
         use_responses_api=False,
         extra_body={
             "chat_template_kwargs": {

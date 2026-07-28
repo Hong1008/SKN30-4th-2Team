@@ -32,6 +32,10 @@ def _settings() -> Settings:
         vllm_base_url="https://vllm.example.com/v1",
         vllm_api_key="vllm-secret",
         llm_timeout_seconds=123,
+        llm_temperature=0,
+        llm_top_p=1,
+        llm_seed=42,
+        llm_max_completion_tokens=512,
     )
 
 
@@ -75,6 +79,10 @@ def test_vllm_passes_openai_compatible_connection_settings(
     assert call["api_key"].get_secret_value() == "vllm-secret"
     assert call["timeout"] == 123
     assert call["use_responses_api"] is False
+    assert call["temperature"] == 0
+    assert call["top_p"] == 1
+    assert call["seed"] == 42
+    assert call["max_completion_tokens"] == 512
     assert "vllm-secret" not in repr(call["api_key"])
 
 

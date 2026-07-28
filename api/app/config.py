@@ -96,6 +96,10 @@ class Settings(BaseSettings):
     storage_cleanup_interval_seconds: int = Field(default=60, gt=0)
     metadata_cache_ttl_seconds: int = Field(default=5 * 60, gt=0)
     llm_timeout_seconds: float = Field(default=60.0, gt=0)
+    llm_temperature: float = Field(default=0.0, ge=0, le=2)
+    llm_top_p: float = Field(default=1.0, gt=0, le=1)
+    llm_seed: int = 42
+    llm_max_completion_tokens: int = Field(default=512, gt=0, le=1000)
 
     @field_validator("cors_origins", mode="before")
     @classmethod
