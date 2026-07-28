@@ -2,17 +2,29 @@
 
 import asyncio
 import json
+import logging
 
 from langchain_core.language_models.chat_models import BaseChatModel
 
 from app.domains.chat.schemas import (
+    ChatSource,
     ChatRequest,
     ChatResponse,
     ChatStructuredOutput,
 )
-from app.core.common.errors import AppValidationError, ConflictError, ExternalServiceTimeoutError
+from app.core.common.errors import (
+    AppValidationError,
+    ConflictError,
+    ExternalServiceTimeoutError,
+)
+from app.core.common.logging import log_event
 from app.config import Settings
 from app.domains.grounding.service import get_review_grounding
+from app.domains.grounding.schemas import (
+    GROUNDING_STATUS_GUIDANCE,
+    GroundingResponse,
+    GroundingStatus,
+)
 from app.core.llm.mcp.types import WorkShieldMCPRuntime
 from app.domains.reviews.context import (
     clause_category,
@@ -25,25 +37,26 @@ from app.domains.reviews.domain import Review, ReviewState
 
 
 DISCLAIMER = "현재 검토 결과와 확인된 근거에 한정한 참고 설명이며 법률 자문이 아닙니다."
-LAW_GROUNDING_KEYWORDS = ("법령", "법률", "법적", "조문", "법 근거")
-MAX_GROUNDING_CATEGORIES = 3
-
-
-def _requests_law_grounding(question: str) -> bool:
-    """전체 검토 질문에서 법령 원문을 명시적으로 요청했는지 판별한다."""
-    normalized = question.replace(" ", "")
-    return any(keyword.replace(" ", "") in normalized for keyword in LAW_GROUNDING_KEYWORDS)
+GROUNDING_STATUS_PRIORITY = {
+    GroundingStatus.OK: 0,
+    GroundingStatus.UNMAPPED_CATEGORY: 1,
+    GroundingStatus.NO_RESULT: 2,
+    GroundingStatus.TIMEOUT: 3,
+    GroundingStatus.UPSTREAM_ERROR: 4,
+}
 
 
 def _review_categories(result: dict[str, object]) -> list[str]:
-    """현재 검토 결과에 실제 존재하는 category를 순서대로 제한해 반환한다."""
+    """현재 검토 결과와 누락 후보의 모든 category를 중복 없이 반환한다."""
     categories: list[str] = []
-    for clause in clause_results(result):
+    candidates = clause_results(result)
+    missing = result.get("missing_standard_clauses")
+    if isinstance(missing, list):
+        candidates.extend(item for item in missing if isinstance(item, dict))
+    for clause in candidates:
         category = clause_category(clause)
         if category and category not in categories:
             categories.append(category)
-        if len(categories) >= MAX_GROUNDING_CATEGORIES:
-            break
     return categories
 
 
@@ -57,6 +70,24 @@ def _invalid_response() -> ChatResponse:
         tool_status="LLM_OUTPUT_INVALID",
         disclaimer=DISCLAIMER,
     )
+
+
+def _grounding_outcome(groundings: list[GroundingResponse]) -> tuple[str, list[str]]:
+    """여러 category 조회 상태를 보수적으로 집계하고 사용자 안내를 반환한다."""
+    statuses = {grounding.grounding_status for grounding in groundings}
+    messages = [
+        GROUNDING_STATUS_GUIDANCE[status].message
+        for status in sorted(
+            statuses - {GroundingStatus.OK},
+            key=GROUNDING_STATUS_PRIORITY.get,
+        )
+    ]
+    status = (
+        max(statuses, key=GROUNDING_STATUS_PRIORITY.get).value
+        if statuses
+        else GroundingStatus.NO_RESULT.value
+    )
+    return status, messages
 
 
 async def answer_review_question(
@@ -86,7 +117,7 @@ async def answer_review_question(
     category = clause_category(focused) if focused else None
     if category:
         grounding_categories = [category]
-    elif _requests_law_grounding(payload.message):
+    else:
         grounding_categories = _review_categories(review.result)
     groundings = await asyncio.gather(
         *(
@@ -101,16 +132,18 @@ async def answer_review_question(
         if grounding.grounding_status == "OK"
         for item in grounding.items
     }
+    tool_status, grounding_limitations = _grounding_outcome(groundings)
     if not registry["USER_CLAUSE"] and not registry["STANDARD_CLAUSE"]:
         return ChatResponse(
             outcome="INSUFFICIENT_GROUNDING",
             answer=None,
             refused=True,
             sources=[],
-            limitations=["현재 검토 결과에서 질문에 사용할 근거를 찾지 못했습니다."],
-            tool_status=(
-                str(groundings[0].grounding_status) if groundings else "NO_RESULT"
-            ),
+            limitations=[
+                "현재 검토 결과에서 질문에 사용할 근거를 찾지 못했습니다.",
+                *grounding_limitations,
+            ],
+            tool_status=tool_status,
             disclaimer=DISCLAIMER,
         )
 
@@ -124,9 +157,7 @@ async def answer_review_question(
         "contract_type": review.contract_type,
         "review_result": safe_review_result,
         "focused_clause": safe_focused,
-        "grounding": [
-            grounding.model_dump(mode="json") for grounding in groundings
-        ],
+        "grounding": [grounding.model_dump(mode="json") for grounding in groundings],
         "history": [item.model_dump() for item in payload.history],
         "question": payload.message,
     }
@@ -168,7 +199,14 @@ async def answer_review_question(
             retryable=True,
             next_action="RETRY",
         ) from error
-    except Exception:
+    except Exception as error:
+        log_event(
+            event="llm.chat.invalid_output",
+            review_id=review.id,
+            state="LLM_OUTPUT_INVALID",
+            error_type=type(error).__name__,
+            level=logging.ERROR,
+        )
         return _invalid_response()
 
     for source in output.sources:
@@ -177,16 +215,28 @@ async def answer_review_question(
                 return _invalid_response()
         elif not source.id or source.id not in registry[source.type]:
             return _invalid_response()
-    if output.outcome == "ANSWERED" and (
-        not output.answer or not output.sources
-    ):
+    cited_ids = {source.id for source in output.sources if source.id}
+    for grounding in groundings:
+        if grounding.grounding_status != "OK":
+            continue
+        for item in grounding.items:
+            if item.source_id in cited_ids:
+                continue
+            output.sources.append(
+                ChatSource(
+                    type="LAW",
+                    id=item.source_id,
+                    law_name=item.law_name,
+                    article=item.article,
+                )
+            )
+            cited_ids.add(item.source_id)
+    if output.outcome == "ANSWERED" and (not output.answer or not output.sources):
         return _invalid_response()
     refused = output.outcome != "ANSWERED"
-    tool_status = "OK"
-    if groundings and not any(
-        grounding.grounding_status == "OK" for grounding in groundings
-    ):
-        tool_status = str(groundings[0].grounding_status)
+    for message in grounding_limitations:
+        if message not in output.limitations:
+            output.limitations.append(message)
     return ChatResponse(
         outcome=output.outcome,
         answer=output.answer if not refused else None,

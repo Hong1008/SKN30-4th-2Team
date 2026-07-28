@@ -2,13 +2,19 @@
 
 import asyncio
 import json
+import logging
 import re
 from copy import deepcopy
 from typing import Any
 
 from langchain_core.language_models.chat_models import BaseChatModel
 
-from app.core.common.errors import AppValidationError, ConflictError, ExternalServiceTimeoutError
+from app.core.common.errors import (
+    AppValidationError,
+    ConflictError,
+    ExternalServiceTimeoutError,
+)
+from app.core.common.logging import log_event
 from app.config import Settings
 from app.domains.grounding.service import get_review_grounding
 from app.core.llm.mcp.types import WorkShieldMCPRuntime
@@ -135,7 +141,9 @@ async def generate_suggestion(
     if standard is None or expected_standard_id is None:
         return _response("INSUFFICIENT_GROUNDING", payload=payload)
     required_inputs = _required_input_names(clause)
-    missing = [name for name in required_inputs if payload.inputs.get(name) in {None, ""}]
+    missing = [
+        name for name in required_inputs if payload.inputs.get(name) in {None, ""}
+    ]
     if missing:
         return _response(
             "REQUIRED_VALUE_MISSING",
@@ -146,13 +154,9 @@ async def generate_suggestion(
     if not category:
         return _response("INSUFFICIENT_GROUNDING", payload=payload)
     grounding = await get_review_grounding(review, category, runtime, settings)
-    has_law_grounding = (
-        grounding.grounding_status == "OK" and bool(grounding.items)
-    )
+    has_law_grounding = grounding.grounding_status == "OK" and bool(grounding.items)
     grounding_source_ids = (
-        [item.source_id for item in grounding.items]
-        if has_law_grounding
-        else []
+        [item.source_id for item in grounding.items] if has_law_grounding else []
     )
     context = _model_context(
         review=review,
@@ -194,7 +198,14 @@ async def generate_suggestion(
             retryable=True,
             next_action="RETRY",
         ) from error
-    except Exception:
+    except Exception as error:
+        log_event(
+            event="llm.suggestion.invalid_output",
+            review_id=review.id,
+            state="LLM_OUTPUT_INVALID",
+            error_type=type(error).__name__,
+            level=logging.ERROR,
+        )
         return _response("LLM_OUTPUT_INVALID", payload=payload)
 
     output = structured_output.root
@@ -206,10 +217,7 @@ async def generate_suggestion(
     if not generated_numbers.issubset(allowed_numbers):
         return _response("GENERATED_FACT_NOT_GROUNDED", payload=payload)
     used_source_keys = set(output.used_source_keys)
-    if (
-        SuggestionSourceKey.GROUNDING in used_source_keys
-        and not has_law_grounding
-    ):
+    if SuggestionSourceKey.GROUNDING in used_source_keys and not has_law_grounding:
         return _response("LLM_OUTPUT_INVALID", payload=payload)
     required_confirmations = list(output.required_confirmations)
     if not has_law_grounding:

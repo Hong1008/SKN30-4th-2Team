@@ -21,7 +21,12 @@ from app.domains.metadata.schemas import (
     ResultCodeMetadata,
     ToxicPatternMetadata,
 )
-from app.domains.review_sessions.domain import ReviewSessionState, ScopeStatus, SelectionSource
+from app.domains.grounding.schemas import GROUNDING_STATUS_GUIDANCE
+from app.domains.review_sessions.domain import (
+    ReviewSessionState,
+    ScopeStatus,
+    SelectionSource,
+)
 from app.domains.review_sessions.service import MVP_CONTRACT_TYPES, _tool_payload
 from app.domains.reviews.domain import ReviewState
 
@@ -86,9 +91,7 @@ def _code_items(values: list[Any]) -> list[MetadataCode]:
             code = raw_code.strip()
             label = str(value.get("label") or value.get("name") or code)
             raw_description = value.get("description")
-            description = (
-                str(raw_description) if raw_description is not None else None
-            )
+            description = str(raw_description) if raw_description is not None else None
         else:
             continue
         if code in seen:
@@ -125,9 +128,7 @@ def _categories(values: list[Any]) -> list[CategoryMetadata]:
             anchors: list[str] = []
         elif isinstance(value, dict):
             code = _optional_text(
-                value.get("code")
-                or value.get("id")
-                or value.get("value")
+                value.get("code") or value.get("id") or value.get("value")
             )
             if code is None:
                 continue
@@ -274,9 +275,7 @@ async def get_metadata(
                         enabled_for_mvp=code in MVP_CONTRACT_TYPES,
                     )
                 )
-        categories = _categories(
-            _items(categories_payload, "categories", "items")
-        )
+        categories = _categories(_items(categories_payload, "categories", "items"))
         toxic_patterns = _toxic_patterns(
             _items(toxic_payload, "toxic_patterns", "patterns", "items")
         )
@@ -309,6 +308,7 @@ async def get_metadata(
                 "UPSTREAM_ERROR",
                 "TIMEOUT",
             ],
+            grounding_status_details=list(GROUNDING_STATUS_GUIDANCE.values()),
             chat_outcomes=[
                 "ANSWERED",
                 "REFUSED",
@@ -329,6 +329,7 @@ async def get_metadata(
                 "SELECT_CONTRACT_TYPE",
                 "CONFIRM_OUT_OF_SCOPE",
                 "RETRY_REVIEW",
+                "RELOAD_GROUNDING",
                 "START_NEW_REVIEW",
                 "CONTACT_SUPPORT",
             ],
@@ -342,8 +343,7 @@ async def get_metadata(
         request.app.state.metadata_cache = {
             "payload": payload,
             "etag": etag,
-            "expires_at": now
-            + timedelta(seconds=settings.metadata_cache_ttl_seconds),
+            "expires_at": now + timedelta(seconds=settings.metadata_cache_ttl_seconds),
         }
         return payload, etag, False
     except Exception as error:

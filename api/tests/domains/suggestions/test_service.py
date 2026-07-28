@@ -1,5 +1,6 @@
 """Suggestions의 LLM source key와 백엔드 출처 결합을 검증한다."""
 
+import logging
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
@@ -72,6 +73,11 @@ class SourceKeyModel:
         return StructuredRunnable(self._payload, self.prompts)
 
 
+class FailingModel:
+    def with_structured_output(self, _schema: type) -> None:
+        raise ValueError("계약서 원문이나 비밀값이 포함될 수 있는 내부 메시지")
+
+
 def _review() -> Review:
     now = datetime.now(UTC)
     return Review.restore(
@@ -116,15 +122,19 @@ def _review() -> Review:
 
 
 @pytest.mark.asyncio
-async def test_backend_binds_ids_from_source_keys_without_exposing_them_to_llm() -> None:
+async def test_backend_binds_ids_from_source_keys_without_exposing_them_to_llm() -> (
+    None
+):
     """LLM은 논리 키만 선택하고 실제 출처 ID는 백엔드가 결합한다."""
-    model = SourceKeyModel({
-        "outcome": "GENERATED",
-        "suggestion": "귀책사유로 직접 발생한 손해를 배상한다.",
-        "major_changes": ["책임 범위를 귀책사유 기준으로 명확화"],
-        "used_source_keys": ["SRC_USER", "SRC_STANDARD", "SRC_GROUNDING"],
-        "required_confirmations": [],
-    })
+    model = SourceKeyModel(
+        {
+            "outcome": "GENERATED",
+            "suggestion": "귀책사유로 직접 발생한 손해를 배상한다.",
+            "major_changes": ["책임 범위를 귀책사유 기준으로 명확화"],
+            "used_source_keys": ["SRC_USER", "SRC_STANDARD", "SRC_GROUNDING"],
+            "required_confirmations": [],
+        }
+    )
     response = await generate_suggestion(
         _review(),
         SuggestionRequest(
@@ -153,13 +163,15 @@ async def test_backend_binds_ids_from_source_keys_without_exposing_them_to_llm()
 @pytest.mark.asyncio
 async def test_backend_only_binds_the_ids_for_selected_source_keys() -> None:
     """선택하지 않은 근거의 ID는 응답에 결합하지 않는다."""
-    model = SourceKeyModel({
-        "outcome": "GENERATED",
-        "suggestion": "귀책사유가 있는 당사자는 발생한 손해를 배상한다.",
-        "major_changes": [],
-        "used_source_keys": ["SRC_STANDARD"],
-        "required_confirmations": [],
-    })
+    model = SourceKeyModel(
+        {
+            "outcome": "GENERATED",
+            "suggestion": "귀책사유가 있는 당사자는 발생한 손해를 배상한다.",
+            "major_changes": [],
+            "used_source_keys": ["SRC_STANDARD"],
+            "required_confirmations": [],
+        }
+    )
     response = await generate_suggestion(
         _review(),
         SuggestionRequest(
@@ -179,13 +191,15 @@ async def test_backend_only_binds_the_ids_for_selected_source_keys() -> None:
 @pytest.mark.asyncio
 async def test_generates_from_user_and_standard_when_law_is_unavailable() -> None:
     """법령 NO_RESULT여도 사용자·표준조항 기반 협의 문구를 생성한다."""
-    model = SourceKeyModel({
-        "outcome": "GENERATED",
-        "suggestion": "책임 범위와 변경 절차는 당사자가 서면으로 협의한다.",
-        "major_changes": ["서면 협의 절차 명시"],
-        "used_source_keys": ["SRC_USER", "SRC_STANDARD"],
-        "required_confirmations": [],
-    })
+    model = SourceKeyModel(
+        {
+            "outcome": "GENERATED",
+            "suggestion": "책임 범위와 변경 절차는 당사자가 서면으로 협의한다.",
+            "major_changes": ["서면 협의 절차 명시"],
+            "used_source_keys": ["SRC_USER", "SRC_STANDARD"],
+            "required_confirmations": [],
+        }
+    )
 
     response = await generate_suggestion(
         _review(),
@@ -209,13 +223,15 @@ async def test_generates_from_user_and_standard_when_law_is_unavailable() -> Non
 @pytest.mark.asyncio
 async def test_rejects_grounding_source_key_when_law_is_unavailable() -> None:
     """조회되지 않은 법령 근거를 사용했다고 주장하는 출력을 차단한다."""
-    model = SourceKeyModel({
-        "outcome": "GENERATED",
-        "suggestion": "책임 범위는 당사자가 협의한다.",
-        "major_changes": [],
-        "used_source_keys": ["SRC_USER", "SRC_STANDARD", "SRC_GROUNDING"],
-        "required_confirmations": [],
-    })
+    model = SourceKeyModel(
+        {
+            "outcome": "GENERATED",
+            "suggestion": "책임 범위는 당사자가 협의한다.",
+            "major_changes": [],
+            "used_source_keys": ["SRC_USER", "SRC_STANDARD", "SRC_GROUNDING"],
+            "required_confirmations": [],
+        }
+    )
 
     response = await generate_suggestion(
         _review(),
@@ -229,3 +245,27 @@ async def test_rejects_grounding_source_key_when_law_is_unavailable() -> None:
     )
 
     assert response.outcome == "LLM_OUTPUT_INVALID"
+
+
+@pytest.mark.asyncio
+async def test_logs_suggestion_generation_exception_without_message(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.ERROR, logger="uvicorn.error")
+
+    response = await generate_suggestion(
+        _review(),
+        SuggestionRequest(
+            user_clause_id="uc_rev_suggestion_1",
+            purpose="책임 범위를 명확히 표현",
+        ),
+        runtime=SimpleNamespace(tools=(GroundingTool(),)),
+        model=FailingModel(),
+        settings=Settings(app_env="local", llm_provider="ollama", llm_model="test"),
+    )
+
+    assert response.outcome == "LLM_OUTPUT_INVALID"
+    assert "event=llm.suggestion.invalid_output" in caplog.text
+    assert "review_id=rev_suggestion" in caplog.text
+    assert "error_type=ValueError" in caplog.text
+    assert "계약서 원문" not in caplog.text
