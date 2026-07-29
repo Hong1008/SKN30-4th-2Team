@@ -22,11 +22,13 @@ from app.core.llm.policy import DEFAULT_LLM_POLICY, LLMPolicy
 from app.domains.grounding.service import get_review_grounding
 from app.core.llm.mcp.types import WorkShieldMCPRuntime
 from app.domains.reviews.context import (
+    clause_display_label,
     clause_category,
     find_user_clause,
     match_data,
     standard_clause,
     standard_clause_id,
+    standard_contract_label,
 )
 from app.domains.reviews.domain import Review, ReviewState
 from app.domains.suggestions.schemas import (
@@ -34,6 +36,7 @@ from app.domains.suggestions.schemas import (
     SuggestionGeneratedOutput,
     SuggestionRequest,
     SuggestionResponse,
+    SuggestionSource,
     SuggestionSourceKey,
     SuggestionStructuredOutput,
 )
@@ -96,6 +99,57 @@ def _required_input_names(clause: dict[str, Any]) -> list[str]:
         for item in raw
         if item
     ]
+
+
+def _response_sources(
+    *,
+    clause: dict[str, Any],
+    user_clause_id: str,
+    standard: dict[str, Any],
+    standard_clause_id: str,
+    grounding: Any,
+    used_source_keys: set[SuggestionSourceKey],
+) -> list[SuggestionSource]:
+    """LLM 출력이 아닌 현재 review와 grounding에서 표시용 출처를 조립한다."""
+    sources: list[SuggestionSource] = []
+    if SuggestionSourceKey.USER in used_source_keys:
+        sources.append(
+            SuggestionSource(
+                type="USER_CLAUSE",
+                id=user_clause_id,
+                display_label=clause_display_label(clause.get("user_clause")),
+            )
+        )
+    if SuggestionSourceKey.STANDARD in used_source_keys:
+        sources.append(
+            SuggestionSource(
+                type="STANDARD_CLAUSE",
+                id=standard_clause_id,
+                display_label=clause_display_label(
+                    standard.get("text"),
+                    standard.get("title"),
+                ),
+                standard_contract_label=standard_contract_label(
+                    standard.get("contract_type")
+                ),
+            )
+        )
+    if SuggestionSourceKey.GROUNDING in used_source_keys:
+        for item in grounding.items:
+            display_label = " ".join(
+                part for part in (item.law_name, item.article) if part
+            )
+            sources.append(
+                SuggestionSource(
+                    type="LAW",
+                    id=item.source_id,
+                    display_label=display_label or None,
+                    law_name=item.law_name,
+                    article=item.article,
+                    source_url=item.source_url,
+                )
+            )
+    return sources
 
 
 def _model_context(
@@ -323,6 +377,14 @@ async def generate_suggestion(
             grounding_source_ids
             if SuggestionSourceKey.GROUNDING in used_source_keys
             else []
+        ),
+        sources=_response_sources(
+            clause=clause,
+            user_clause_id=payload.user_clause_id,
+            standard=standard,
+            standard_clause_id=expected_standard_id,
+            grounding=grounding,
+            used_source_keys=used_source_keys,
         ),
         required_confirmations=required_confirmations,
         disclaimer=DISCLAIMER,

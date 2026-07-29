@@ -9,11 +9,19 @@ from datetime import UTC, datetime
 from fastapi import FastAPI
 
 from app.config import API_ROOT, get_settings
+from app.core.admission.gate import BoundedFifoGate, ImmediateConcurrencyLimiter
+from app.core.admission.policy import (
+    REVIEW_POLICY,
+    SUGGESTION_POLICY,
+    UPLOAD_POLICY,
+)
 from app.core.common.logging import log_event
 from app.core.db.database import Database
 from app.core.llm.mcp import open_workshield_mcp
 from app.domains.review_sessions.activity import resume_ttl_after_review
 from app.domains.reviews.repository import SqlAlchemyReviewRepository
+from app.domains.reviews.runner import execute_review
+from app.domains.reviews.scheduler import ReviewScheduler
 from app.core.storage.cleanup import SessionFileLifecycle
 from app.core.storage.local import LocalFileStorage
 from app.core.storage.policy import DEFAULT_STORAGE_POLICY, StoragePolicy
@@ -52,7 +60,7 @@ async def _periodic_storage_cleanup(
             )
 
 
-def _recover_interrupted_reviews(
+def _recover_reviewing(
     database: Database,
     *,
     ttl_seconds: int = 30 * 60,
@@ -61,7 +69,7 @@ def _recover_interrupted_reviews(
     with database.session() as db_session:
         repository = SqlAlchemyReviewRepository(db_session)
         recovered_at = datetime.now(UTC)
-        for review in repository.list_active():
+        for review in repository.list_reviewing():
             review.mark_interrupted(at=recovered_at)
             repository.save(review)
             resume_ttl_after_review(
@@ -71,6 +79,35 @@ def _recover_interrupted_reviews(
                 now=recovered_at,
             )
         db_session.commit()
+
+
+# 이전 내부 이름을 사용하는 테스트·호출자의 호환성을 유지한다.
+_recover_interrupted_reviews = _recover_reviewing
+
+
+def _fail_queue_recovery_overflow(
+    database: Database,
+    *,
+    capacity: int,
+) -> int:
+    """복구 용량을 넘은 최신 QUEUED를 재시도 가능한 실패로 전환한다."""
+    with database.session() as db_session:
+        repository = SqlAlchemyReviewRepository(db_session)
+        queued = repository.list_queued()
+        overflow = queued[capacity:]
+        failed_at = datetime.now(UTC)
+        for review in overflow:
+            review.fail(
+                {
+                    "code": "REVIEW_QUEUE_RECOVERY_OVERFLOW",
+                    "retryable": True,
+                    "next_action": "RETRY_REVIEW",
+                },
+                at=failed_at,
+            )
+            repository.save(review)
+        db_session.commit()
+    return len(overflow)
 
 
 @asynccontextmanager
@@ -91,11 +128,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         raise TypeError("review_session_policy는 ReviewSessionPolicy여야 합니다.")
     if not isinstance(storage_policy, StoragePolicy):
         raise TypeError("storage_policy는 StoragePolicy여야 합니다.")
-    database = Database(settings.database_url, echo=settings.database_echo)
+    database = Database(
+        settings.database_url,
+        echo=settings.database_echo,
+        busy_timeout_ms=getattr(settings, "sqlite_busy_timeout_ms", 5000),
+    )
     database.create_schema()
-    _recover_interrupted_reviews(
+    _recover_reviewing(
         database,
         ttl_seconds=review_session_policy.session_ttl_seconds,
+    )
+    _fail_queue_recovery_overflow(
+        database,
+        capacity=REVIEW_POLICY.queue_capacity,
     )
     database.ensure_review_active_index()
     storage_root = review_session_policy.temp_upload_dir
@@ -109,7 +154,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     ).cleanup_expired_and_orphaned()
     app.state.database = database
     app.state.file_storage = file_storage
-    app.state.review_tasks = {}
+    app.state.suggestion_gate = BoundedFifoGate(
+        SUGGESTION_POLICY,
+        error_code="SUGGESTION_QUEUE_FULL",
+        error_message="현재 제안 생성 요청이 많습니다. 잠시 후 다시 시도해 주세요.",
+    )
+    app.state.upload_limiter = ImmediateConcurrencyLimiter(
+        UPLOAD_POLICY,
+        error_code="UPLOAD_CAPACITY_EXCEEDED",
+        error_message="현재 업로드 요청이 많습니다. 잠시 후 다시 시도해 주세요.",
+    )
     cleanup_task = asyncio.create_task(
         _periodic_storage_cleanup(
             database,
@@ -121,19 +175,36 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         async with open_workshield_mcp(settings) as runtime:
             app.state.workshield_mcp = runtime
+            scheduler = ReviewScheduler(
+                database,
+                lambda review_id: execute_review(
+                    database=database,
+                    storage=file_storage,
+                    runtime=runtime,
+                    settings=settings,
+                    review_id=review_id,
+                    policy=review_session_policy,
+                ),
+                REVIEW_POLICY,
+            )
+            app.state.review_scheduler = scheduler
+            await scheduler.reconcile()
+            await scheduler.start()
             try:
                 yield
             finally:
-                review_tasks = list(
-                    getattr(app.state, "review_tasks", {}).values()
+                await scheduler.stop()
+                _recover_reviewing(
+                    database,
+                    ttl_seconds=review_session_policy.session_ttl_seconds,
                 )
-                for task in review_tasks:
-                    task.cancel()
-                await asyncio.gather(*review_tasks, return_exceptions=True)
+                del app.state.review_scheduler
                 del app.state.workshield_mcp
     finally:
-        if hasattr(app.state, "review_tasks"):
-            del app.state.review_tasks
+        if hasattr(app.state, "suggestion_gate"):
+            del app.state.suggestion_gate
+        if hasattr(app.state, "upload_limiter"):
+            del app.state.upload_limiter
         cleanup_task.cancel()
         await asyncio.gather(cleanup_task, return_exceptions=True)
         if hasattr(app.state, "file_storage"):

@@ -1,6 +1,6 @@
 """배포 상태 확인을 위한 시스템 API."""
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 
 from app.core.common.errors import ExternalServiceError
 from app.core.db.dependencies import DatabaseDep
@@ -18,6 +18,7 @@ async def liveness() -> dict[str, str]:
 
 @router.get("/ready")
 async def readiness(
+    request: Request,
     database: DatabaseDep,
     _mcp_runtime: MCPRuntimeDep,
 ) -> dict[str, str]:
@@ -26,6 +27,13 @@ async def readiness(
         raise ExternalServiceError(
             code="DATABASE_UNAVAILABLE",
             message="데이터베이스가 준비되지 않았습니다.",
+            retryable=True,
+        )
+    scheduler = getattr(request.app.state, "review_scheduler", None)
+    if scheduler is not None and not scheduler.is_alive:
+        raise ExternalServiceError(
+            code="REVIEW_SCHEDULER_UNAVAILABLE",
+            message="검토 작업 처리기가 준비되지 않았습니다.",
             retryable=True,
         )
 

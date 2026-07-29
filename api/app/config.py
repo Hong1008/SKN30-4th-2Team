@@ -62,6 +62,8 @@ class Settings(BaseSettings):
         f"sqlite+pysqlite:///{API_ROOT / 'data' / 'workshield.db'}"
     )
     database_echo: bool = False
+    api_worker_count: int = Field(default=1, ge=1)
+    sqlite_busy_timeout_ms: int = Field(default=5000, ge=1)
     app_debug: bool = False
     api_docs_enabled: bool = True
     cors_origins: list[str] = ["http://localhost:5173"]
@@ -102,6 +104,10 @@ class Settings(BaseSettings):
             raise ValueError("운영 환경에서는 APP_DEBUG=false여야 합니다.")
         if self.app_env == "prod" and self.database_echo:
             raise ValueError("운영 환경에서는 DATABASE_ECHO=false여야 합니다.")
+        if self.api_worker_count != 1:
+            raise ValueError(
+                "SQLite와 프로세스 내부 큐를 사용할 때 API_WORKER_COUNT=1이어야 합니다."
+            )
         return self
 
     def selected_provider_key(self) -> SecretStr | None:

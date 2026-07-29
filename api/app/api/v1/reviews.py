@@ -8,7 +8,6 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, Header, Request
 from sse_starlette.sse import EventSourceResponse
 
-from app.config import SettingsDep
 from app.core.access_control.dependencies import (
     OwnedReviewDep,
     SessionCookie,
@@ -23,7 +22,6 @@ from app.core.common.responses import (
     success_response,
 )
 from app.core.db.dependencies import DatabaseDep, DbSessionDep
-from app.core.idempotency import IdempotencyContextDep, idempotent
 from app.core.idempotency.service import (
     find_replay,
     idempotency_guard,
@@ -32,7 +30,6 @@ from app.core.idempotency.service import (
     require_idempotency_key,
     save_response,
 )
-from app.core.llm.mcp.dependencies import WorkShieldMCPRuntimeDep
 from app.core.storage.dependencies import FileStorageDep
 from app.domains.review_sessions.repository import SqlAlchemyReviewSessionRepository
 from app.domains.review_sessions.dependencies import ReviewSessionPolicyDep
@@ -40,7 +37,7 @@ from app.domains.reviews.domain import ReviewState
 from app.domains.reviews.presentation import present_review_results
 from app.domains.reviews.repository import SqlAlchemyReviewRepository
 from app.domains.reviews.repository import ConcurrentReviewUpdateError
-from app.domains.reviews.runner import execute_review
+from app.domains.reviews.dependencies import ReviewSchedulerDep
 from app.domains.reviews.schemas import (
     ReviewCancelResponse,
     ReviewCreateRequest,
@@ -56,33 +53,6 @@ router = APIRouter(
     tags=["reviews"],
     responses=COMMON_ERROR_RESPONSES,
 )
-
-
-def _schedule_review(
-    request: Request,
-    *,
-    database,
-    review_id: str,
-    storage,
-    runtime,
-    settings,
-    policy,
-) -> None:
-    """검토를 앱 수명주기와 함께 추적하는 백그라운드 작업으로 예약한다."""
-    task = asyncio.create_task(
-        execute_review(
-            database=database,
-            storage=storage,
-            runtime=runtime,
-            settings=settings,
-            review_id=review_id,
-            policy=policy,
-        )
-    )
-    tasks = getattr(request.app.state, "review_tasks", {})
-    tasks[review_id] = task
-    request.app.state.review_tasks = tasks
-    task.add_done_callback(lambda _task: tasks.pop(review_id, None))
 
 
 def _response(entity: object) -> ReviewResponse:
@@ -109,12 +79,9 @@ async def start_review(
     request: Request,
     payload: ReviewCreateRequest,
     db_session: DbSessionDep,
-    database: DatabaseDep,
-    settings: SettingsDep,
     policy: ReviewSessionPolicyDep,
+    scheduler: ReviewSchedulerDep,
     access_token: SessionCookie = None,
-    runtime: WorkShieldMCPRuntimeDep = None,
-    storage: FileStorageDep = None,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
     """Cookie 소유 세션의 검토를 fingerprint 기준으로 멱등 접수한다."""
@@ -142,41 +109,34 @@ async def start_review(
                 request,
                 ReviewCreateResponse.model_validate(replay),
             )
-        entity = create_review(
-            db_session,
-            review_session,
-            idempotency_key=internal_operation_key("reviews.create", key),
-            policy=policy,
-        )
-        response_data = ReviewCreateResponse(
-            review_id=entity.id,
-            review_state=entity.state.value,
-            session_id=entity.session_id,
-        )
-        raced_replay = save_response(
-            db_session,
-            scope="reviews.create",
-            session_id=review_session.id,
-            idempotency_key=key,
-            fingerprint=fingerprint,
-            response_snapshot=response_data.model_dump(mode="json"),
-            ttl_seconds=policy.session_ttl_seconds,
-        )
-        if raced_replay is not None:
-            return success_response(
-                request,
-                ReviewCreateResponse.model_validate(raced_replay),
+        async with scheduler.admission():
+            entity = create_review(
+                db_session,
+                review_session,
+                idempotency_key=internal_operation_key("reviews.create", key),
+                policy=policy,
             )
-        db_session.commit()
-        _schedule_review(
-            request,
-            database=database,
-            review_id=entity.id,
-            storage=storage,
-            runtime=runtime,
-            settings=settings,
-            policy=policy,
-        )
+            response_data = ReviewCreateResponse(
+                review_id=entity.id,
+                review_state=entity.state.value,
+                session_id=entity.session_id,
+            )
+            raced_replay = save_response(
+                db_session,
+                scope="reviews.create",
+                session_id=review_session.id,
+                idempotency_key=key,
+                fingerprint=fingerprint,
+                response_snapshot=response_data.model_dump(mode="json"),
+                ttl_seconds=policy.session_ttl_seconds,
+            )
+            if raced_replay is not None:
+                return success_response(
+                    request,
+                    ReviewCreateResponse.model_validate(raced_replay),
+                )
+            db_session.commit()
+            await scheduler.enqueue(entity.id)
         return success_response(request, response_data)
 
 
@@ -310,42 +270,58 @@ def get_review(request: Request, owned: OwnedReviewDep):
     status_code=202,
     response_model=ApiResponse[ReviewCreateResponse],
 )
-@idempotent(
-    scope="reviews.retry",
-    response_model=ReviewCreateResponse,
-    get_session_id=lambda *, owned, **kw: owned.session_id,
-    get_fingerprint_payload=lambda *, owned, **kw: {"review_id": owned.id},
-    post_commit=lambda *, database, response_data, storage, runtime, idem_ctx, **kw: _schedule_review(
-        idem_ctx.request,
-        database=database,
-        review_id=response_data.review_id,
-        storage=storage,
-        runtime=runtime,
-        settings=idem_ctx.settings,
-        policy=idem_ctx.review_session_policy,
-    ),
-)
 async def retry(
+    request: Request,
     owned: OwnedReviewDep,
-    database: DatabaseDep,
-    idem_ctx: IdempotencyContextDep,
-    runtime: WorkShieldMCPRuntimeDep = None,
-    storage: FileStorageDep = None,
+    db_session: DbSessionDep,
+    policy: ReviewSessionPolicyDep,
+    scheduler: ReviewSchedulerDep,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
-    entity = retry_review(
-        idem_ctx.db_session,
-        owned,
-        idempotency_key=internal_operation_key(
-            "reviews.retry", idem_ctx.request.state.idempotency_key
-        ),
-        policy=idem_ctx.review_session_policy,
-    )
-    return ReviewCreateResponse(
-        review_id=entity.id,
-        review_state=entity.state.value,
-        session_id=entity.session_id,
-        retry_of=entity.retry_of_review_id,
-    )
+    key = require_idempotency_key(idempotency_key)
+    fingerprint = request_fingerprint({"review_id": owned.id})
+    async with idempotency_guard(
+        scope="reviews.retry",
+        session_id=owned.session_id,
+        idempotency_key=key,
+    ):
+        replay = find_replay(
+            db_session,
+            scope="reviews.retry",
+            session_id=owned.session_id,
+            idempotency_key=key,
+            fingerprint=fingerprint,
+        )
+        if replay is not None:
+            return success_response(
+                request,
+                ReviewCreateResponse.model_validate(replay),
+            )
+        async with scheduler.admission():
+            entity = retry_review(
+                db_session,
+                owned,
+                idempotency_key=internal_operation_key("reviews.retry", key),
+                policy=policy,
+            )
+            response_data = ReviewCreateResponse(
+                review_id=entity.id,
+                review_state=entity.state.value,
+                session_id=entity.session_id,
+                retry_of=entity.retry_of_review_id,
+            )
+            save_response(
+                db_session,
+                scope="reviews.retry",
+                session_id=owned.session_id,
+                idempotency_key=key,
+                fingerprint=fingerprint,
+                response_snapshot=response_data.model_dump(mode="json"),
+                ttl_seconds=policy.session_ttl_seconds,
+            )
+            db_session.commit()
+            await scheduler.enqueue(entity.id)
+        return success_response(request, response_data)
 
 
 
@@ -358,12 +334,10 @@ async def cancel_review(
     owned: OwnedReviewDep,
     db_session: DbSessionDep,
     storage: FileStorageDep,
+    scheduler: ReviewSchedulerDep,
 ):
     """작업을 취소 표시하고 결과·원본 파일을 멱등하게 폐기한다."""
-    task = getattr(request.app.state, "review_tasks", {}).pop(owned.id, None)
-    if task is not None:
-        task.cancel()
-        await asyncio.gather(task, return_exceptions=True)
+    await scheduler.remove(owned.id)
     repository = SqlAlchemyReviewRepository(db_session)
     current = owned
     for _attempt in range(3):

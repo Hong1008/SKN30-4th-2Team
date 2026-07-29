@@ -50,6 +50,20 @@ def test_sqlite_foreign_keys_are_enabled(database: Database) -> None:
     assert enabled == 1
 
 
+def test_sqlite_wal_and_busy_timeout_are_enabled(tmp_path: Path) -> None:
+    database = Database(
+        f"sqlite+pysqlite:///{tmp_path / 'wal.db'}",
+        busy_timeout_ms=3210,
+    )
+    with database.engine.connect() as connection:
+        journal_mode = connection.scalar(text("PRAGMA journal_mode"))
+        busy_timeout = connection.scalar(text("PRAGMA busy_timeout"))
+    database.dispose()
+
+    assert journal_mode == "wal"
+    assert busy_timeout == 3210
+
+
 def test_database_readiness_executes_connection_check(database: Database) -> None:
     assert database.is_ready() is True
 
@@ -154,11 +168,11 @@ def test_legacy_duplicate_active_reviews_use_normal_recovery_before_index(
         ).all()
     database.dispose()
     assert [review.state for review in reviews] == [
-        ReviewState.FAILED,
+        ReviewState.QUEUED,
         ReviewState.FAILED,
     ]
-    assert all(review.error["retryable"] is True for review in reviews)
-    assert all(review.result is None for review in reviews)
+    assert reviews[1].error["retryable"] is True
+    assert reviews[1].result is None
     assert restored_parent is not None
     assert restored_parent.expires_at >= recovered_at + timedelta(seconds=599)
     assert any(

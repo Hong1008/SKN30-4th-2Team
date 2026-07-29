@@ -95,6 +95,16 @@
               }
             }
           },
+          "429": {
+            "description": "작업 처리 또는 대기 용량 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
           "404": {
             "description": "리소스가 없거나 현재 익명 세션에서 접근할 수 없음",
             "content": {
@@ -183,6 +193,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiResponse_ReviewSessionResponse_"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "동시 업로드 처리 용량 초과 (UPLOAD_CAPACITY_EXCEEDED)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
                 }
               }
             }
@@ -305,6 +325,16 @@
               }
             }
           },
+          "429": {
+            "description": "작업 처리 또는 대기 용량 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
           "404": {
             "description": "리소스가 없거나 현재 익명 세션에서 접근할 수 없음",
             "content": {
@@ -413,6 +443,16 @@
               }
             }
           },
+          "429": {
+            "description": "작업 처리 또는 대기 용량 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
           "404": {
             "description": "리소스가 없거나 현재 익명 세션에서 접근할 수 없음",
             "content": {
@@ -517,6 +557,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiResponse_ReviewSessionResponse_"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "작업 처리 또는 대기 용량 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
                 }
               }
             }
@@ -638,6 +688,16 @@
               }
             }
           },
+          "429": {
+            "description": "작업 처리 또는 대기 용량 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
           "404": {
             "description": "리소스가 없거나 현재 익명 세션에서 접근할 수 없음",
             "content": {
@@ -731,6 +791,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiResponse_ReviewResultsResponse_"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "작업 처리 또는 대기 용량 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
                 }
               }
             }
@@ -833,6 +903,16 @@
               }
             }
           },
+          "429": {
+            "description": "작업 처리 또는 대기 용량 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
           "404": {
             "description": "리소스가 없거나 현재 익명 세션에서 접근할 수 없음",
             "content": {
@@ -930,6 +1010,16 @@
               }
             }
           },
+          "429": {
+            "description": "작업 처리 또는 대기 용량 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
           "404": {
             "description": "리소스가 없거나 현재 익명 세션에서 접근할 수 없음",
             "content": {
@@ -1022,6 +1112,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiResponse_ReviewCancelResponse_"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "작업 처리 또는 대기 용량 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
                 }
               }
             }
@@ -1141,6 +1241,16 @@
               }
             }
           },
+          "429": {
+            "description": "작업 처리 또는 대기 용량 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
           "404": {
             "description": "리소스가 없거나 현재 익명 세션에서 접근할 수 없음",
             "content": {
@@ -1244,6 +1354,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiResponse_GroundingResponse_"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "작업 처리 또는 대기 용량 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
                 }
               }
             }
@@ -1374,6 +1494,16 @@
               }
             }
           },
+          "429": {
+            "description": "작업 처리 또는 대기 용량 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
           "404": {
             "description": "리소스가 없거나 현재 익명 세션에서 접근할 수 없음",
             "content": {
@@ -1496,6 +1626,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiResponse_SuggestionResponse_"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "작업 처리 또는 대기 용량 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
                 }
               }
             }
@@ -2036,6 +2176,30 @@
             "title": "Id",
             "description": "참조 조항 또는 근거 식별자"
           },
+          "display_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Label",
+            "description": "내부 식별자를 노출하지 않는 사용자용 출처 명칭"
+          },
+          "standard_contract_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Standard Contract Label",
+            "description": "표준조항 출처의 사용자용 표준계약서 명칭"
+          },
           "law_name": {
             "anyOf": [
               {
@@ -2059,6 +2223,18 @@
             ],
             "title": "Article",
             "description": "법령 조항 번호"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url",
+            "description": "검증된 법령 원문 출처 URL"
           }
         },
         "type": "object",
@@ -3457,15 +3633,10 @@
       },
       "ReviewResultStandardClause": {
         "properties": {
-          "clause_id": {
+          "standard_contract_label": {
             "type": "string",
-            "title": "Clause Id",
-            "description": "표준조항 식별자"
-          },
-          "contract_type": {
-            "type": "string",
-            "title": "Contract Type",
-            "description": "계약 유형 코드"
+            "title": "Standard Contract Label",
+            "description": "사용자용 표준계약서 명칭"
           },
           "category": {
             "$ref": "#/components/schemas/CodeLabel",
@@ -3480,30 +3651,17 @@
             "type": "string",
             "title": "Text",
             "description": "표준조항 본문"
-          },
-          "source": {
-            "type": "string",
-            "title": "Source",
-            "description": "표준조항 출처"
-          },
-          "version": {
-            "type": "string",
-            "title": "Version",
-            "description": "표준조항 버전"
           }
         },
         "type": "object",
         "required": [
-          "clause_id",
-          "contract_type",
+          "standard_contract_label",
           "category",
           "title",
-          "text",
-          "source",
-          "version"
+          "text"
         ],
         "title": "ReviewResultStandardClause",
-        "description": "결과 화면에 노출하는 표준조항과 출처."
+        "description": "내부 출처 메타데이터를 제외한 사용자용 표준조항."
       },
       "ReviewResultsResponse": {
         "properties": {
@@ -3996,6 +4154,14 @@
             "title": "Grounding Source Ids",
             "description": "SRC_GROUNDING에 대응해 백엔드가 결합한 법령 근거 ID 목록"
           },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/SuggestionSource"
+            },
+            "type": "array",
+            "title": "Sources",
+            "description": "백엔드가 검증된 ID에서 조립한 사용자 표시용 출처 목록"
+          },
           "required_confirmations": {
             "items": {
               "$ref": "#/components/schemas/RequiredConfirmation"
@@ -4025,6 +4191,86 @@
         ],
         "title": "SuggestionResponse"
       },
+      "SuggestionSource": {
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/SuggestionSourceType",
+            "description": "출처 유형"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "검증에 사용하는 내부 출처 식별자"
+          },
+          "display_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Label",
+            "description": "사용자용 출처 명칭"
+          },
+          "standard_contract_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Standard Contract Label",
+            "description": "표준조항 출처의 사용자용 표준계약서 명칭"
+          },
+          "law_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Law Name",
+            "description": "법령 명칭"
+          },
+          "article": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Article",
+            "description": "법령 조항 번호"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url",
+            "description": "검증된 법령 원문 URL"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "id"
+        ],
+        "title": "SuggestionSource",
+        "description": "내부 ID와 사용자 표시 정보를 함께 보존하는 협의문구 출처."
+      },
       "SuggestionSourceKey": {
         "type": "string",
         "enum": [
@@ -4034,6 +4280,16 @@
         ],
         "title": "SuggestionSourceKey",
         "description": "LLM이 선택하는 검증된 입력 근거의 논리 키."
+      },
+      "SuggestionSourceType": {
+        "type": "string",
+        "enum": [
+          "USER_CLAUSE",
+          "STANDARD_CLAUSE",
+          "LAW"
+        ],
+        "title": "SuggestionSourceType",
+        "description": "협의문구 응답에 표시하는 검증된 근거 유형."
       },
       "ToxicPatternMetadata": {
         "properties": {

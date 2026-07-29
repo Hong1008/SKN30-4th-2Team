@@ -51,6 +51,11 @@ cp .env.example .env
 uv run uvicorn main:app --reload
 ```
 
+SQLite WAL과 프로세스 내부 제한 큐를 공유하므로 API는 반드시 worker 1개로
+실행합니다. 운영에서는 `API_WORKER_COUNT=1`을 유지하고 `python main.py`를
+사용하거나 Uvicorn/Gunicorn의 worker 옵션을 명시적으로 `1`로 설정합니다.
+SQLite 잠금 대기는 `SQLITE_BUSY_TIMEOUT_MS`(기본 5000ms)로 제한됩니다.
+
 ---
 
 ## 프로젝트 구조

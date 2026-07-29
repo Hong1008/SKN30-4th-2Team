@@ -16,6 +16,7 @@ from app.core.common.errors import (
     ExternalServiceError,
     ExternalServiceTimeoutError,
     NotFoundError,
+    OverCapacityError,
     PayloadTooLargeError,
     UnsupportedMediaTypeError,
 )
@@ -27,6 +28,7 @@ from app.config import get_settings
 
 
 APP_ERROR_STATUS: tuple[tuple[type[AppError], int], ...] = (
+    (OverCapacityError, status.HTTP_429_TOO_MANY_REQUESTS),
     (AppValidationError, status.HTTP_422_UNPROCESSABLE_CONTENT),
     (UnsupportedMediaTypeError, status.HTTP_415_UNSUPPORTED_MEDIA_TYPE),
     (PayloadTooLargeError, status.HTTP_413_CONTENT_TOO_LARGE),
@@ -56,6 +58,7 @@ def _error_response(
     retryable: bool = False,
     next_action: str | None = None,
     details: dict[str, Any] | None = None,
+    headers: dict[str, str] | None = None,
 ) -> JSONResponse:
     """공통 오류 계약과 요청 ID 헤더를 갖는 JSON 응답을 만든다."""
     payload = ApiErrorResponse(
@@ -73,12 +76,18 @@ def _error_response(
     return JSONResponse(
         status_code=status_code,
         content=payload.model_dump(mode="json"),
-        headers={REQUEST_ID_HEADER: request_id},
+        headers={REQUEST_ID_HEADER: request_id, **(headers or {})},
     )
 
 
 async def app_error_handler(request: Request, error: AppError) -> JSONResponse:
     """알려진 애플리케이션 오류를 안전한 공통 응답으로 변환한다."""
+    headers = None
+    if isinstance(error, OverCapacityError):
+        headers = {
+            "Retry-After": str(error.retry_after_seconds),
+            "Cache-Control": "no-store",
+        }
     return _error_response(
         request,
         status_code=_status_for(error),
@@ -88,6 +97,7 @@ async def app_error_handler(request: Request, error: AppError) -> JSONResponse:
         retryable=error.retryable,
         next_action=error.next_action,
         details=error.details,
+        headers=headers,
     )
 
 

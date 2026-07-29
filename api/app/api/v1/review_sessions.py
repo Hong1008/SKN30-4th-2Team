@@ -3,6 +3,7 @@
 from fastapi import APIRouter, File, Request, Response, UploadFile
 
 from app.config import SettingsDep
+from app.core.admission.dependencies import UploadLimiterDep
 from app.core.access_control.dependencies import OwnedReviewSessionDep
 from app.core.common.responses import (
     ApiResponse,
@@ -100,18 +101,20 @@ async def create_session(
     runtime: WorkShieldMCPRuntimeDep = None,
     settings: SettingsDep = None,
     policy: ReviewSessionPolicyDep = None,
+    upload_limiter: UploadLimiterDep = None,
 ):
     """계약서 파일을 저장하고 익명 검토 세션을 생성한다."""
-    content = await file.read(policy.max_upload_size_bytes + 1)
-    entity, access_token = await create_review_session(
-        db_session=db_session,
-        storage=storage,
-        runtime=runtime,
-        settings=settings,
-        policy=policy,
-        file_name=file.filename,
-        content=content,
-    )
+    async with upload_limiter.slot():
+        content = await file.read(policy.max_upload_size_bytes + 1)
+        entity, access_token = await create_review_session(
+            db_session=db_session,
+            storage=storage,
+            runtime=runtime,
+            settings=settings,
+            policy=policy,
+            file_name=file.filename,
+            content=content,
+        )
     set_session_access_cookie(
         response,
         token=access_token,

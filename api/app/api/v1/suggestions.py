@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter
 
+from app.core.admission.dependencies import SuggestionGateDep
 from app.core.access_control.dependencies import OwnedReviewDep
 from app.core.common.responses import (
     ApiResponse,
@@ -40,12 +41,14 @@ async def create_suggestion(
     runtime: WorkShieldMCPRuntimeDep,
     model: ChatModelDep,
     idem_ctx: IdempotencyContextDep,
+    suggestion_gate: SuggestionGateDep,
 ):
     """검증된 단일 사용자·표준조항과 grounding으로 협의 초안을 생성한다."""
-    return await generate_suggestion(
-        owned,
-        payload,
-        runtime=runtime,
-        model=model,
-        settings=idem_ctx.settings,
-    )
+    async with suggestion_gate.slot():
+        return await generate_suggestion(
+            owned,
+            payload,
+            runtime=runtime,
+            model=model,
+            settings=idem_ctx.settings,
+        )

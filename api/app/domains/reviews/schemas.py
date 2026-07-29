@@ -171,15 +171,12 @@ class CodeLabel(BaseModel):
 
 
 class ReviewResultStandardClause(BaseModel):
-    """결과 화면에 노출하는 표준조항과 출처."""
+    """내부 출처 메타데이터를 제외한 사용자용 표준조항."""
 
-    clause_id: str = Field(description="표준조항 식별자")
-    contract_type: str = Field(description="계약 유형 코드")
+    standard_contract_label: str = Field(description="사용자용 표준계약서 명칭")
     category: CodeLabel = Field(description="카테고리 코드 및 표시명")
     title: str = Field(description="표준조항 제목")
     text: str = Field(description="표준조항 본문")
-    source: str = Field(description="표준조항 출처")
-    version: str = Field(description="표준조항 버전")
 
 
 class ReviewResultMatch(BaseModel):

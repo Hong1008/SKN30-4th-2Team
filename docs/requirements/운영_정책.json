@@ -57,7 +57,7 @@
         },
         {
           "id": "file_mcp.progress",
-          "behavior": "상태 조회 API를 2~3초 간격으로 호출하는 방식을 기본으로 사용하고, 실제 progress 이벤트는 review_id와 연결해 SSE로 보조 전달한다.",
+          "behavior": "실제 progress 이벤트를 review_id와 연결해 SSE로 우선 전달한다. SSE 연결 오류가 확인된 동안에만 상태 조회 API를 2~3초 간격으로 하나만 실행하고, SSE가 복구되면 예약된 폴링과 실행 중 응답을 취소하거나 무효화한다.",
           "fallback": "QUEUED·REVIEWING에서만 조회하며 COMPLETED·FAILED·EXPIRED면 종료"
         },
         {
@@ -67,6 +67,17 @@
             "법률 자문이 아님", 
             "MISSING 결과는 일반 조항 결과와 분리된 별도 체크리스트 배열과 집계 필드로 반환한다."
           ]
+        },
+        {
+          "id": "file_mcp.standard_source_display",
+          "behavior": "표준조항 출처는 계약 유형에 대응하는 사용자용 표준계약서 명칭으로 표시한다.",
+          "display_labels": {
+            "SW_FREELANCE": "SW 프리랜서 용역 표준계약서",
+            "SI_SUBCONTRACT": "SI 하도급 표준계약서",
+            "SM_SUBCONTRACT": "SM 하도급 표준계약서"
+          },
+          "prohibitions": ["내부 표준조항 ID 화면 노출", "버전 화면 노출", "원본 파일명·경로·확장자 화면 노출"],
+          "notes": "내부 식별자와 원본 source 값은 백엔드 검증·추적용으로만 유지"
         }
       ]
     },
@@ -78,7 +89,7 @@
           "id": "chat.grounding",
           "behavior": "현재 계약서, 검토 결과, 법령 근거 안에서만 답변한다.",
           "prohibitions": ["추측 답변 금지"],
-          "requirements": ["출처 표시"]
+          "requirements": ["사용자 조항 번호·제목·카테고리, 표준조항 번호·제목, 법령명·조번호와 제공 가능한 원문 링크 표시", "내부 조항·근거 ID 화면 비노출"]
         },
         {
           "id": "chat.llm_safety",
@@ -88,7 +99,8 @@
         {
           "id": "draft.generation",
           "behavior": "선택한 조항과 표준 조항 근거가 모두 있을 때만 수정·협의 문구를 생성한다.",
-          "prohibitions": ["자동 반영 금지", "원본에 없는 금액·기간 임의 생성 금지"]
+          "prohibitions": ["자동 반영 금지", "원본에 없는 금액·기간 임의 생성 금지", "내부 조항·근거 ID 화면 노출 금지"],
+          "requirements": ["작성 근거를 사용자용 조항·법령 정보로 표시"]
         },
         {
           "id": "draft.failure",
@@ -119,6 +131,11 @@
           "id": "security.secrets_and_input",
           "behavior": "API 키와 접속정보는 Secret으로 관리하고 파일명은 저장 경로에 직접 사용하지 않는다.",
           "notes": "경로 순회 방지"
+        },
+        {
+          "id": "security.privacy_notice",
+          "behavior": "서비스가 업로드 문서의 개인정보를 자동으로 마스킹하지 않는다는 사실과 업로드 전 불필요한 개인정보를 삭제하거나 가려야 한다는 안내를 표시한다. 사용자가 필수 체크박스로 안내를 확인한 경우에만 업로드를 허용하며, 백엔드는 확인값을 요청마다 검증한다.",
+          "notes": "확인값은 별도 이력으로 저장하지 않으며 개인정보 포함 여부 검사나 개인정보 처리 동의를 대신하지 않음"
         }
       ]
     },
@@ -128,7 +145,7 @@
       "rules": [
         {
           "id": "llm.default_model",
-          "behavior": "자체 호스팅 로컬 LLM을 기본으로 사용한다.",
+          "behavior": "RunPod Pod에서 자체 호스팅하는 vLLM과 RedHatAI/Qwen3.5-9B-FP8-dynamic 모델을 기본으로 사용한다.",
           "prohibitions": ["외부 LLM 자동 폴백 금지"]
         },
         {
@@ -138,7 +155,7 @@
         },
         {
           "id": "service.resource_limit",
-          "behavior": "파일 크기 10MB, 동시 검토 수 2건, 세션 TTL은 마지막 사용자 액션 후 30분으로 적용한다."
+          "behavior": "파일 크기는 10MB, 업로드 동시성은 2로 제한한다. 검토는 단일 worker가 처리하고 대기열은 5건으로 제한하며, LLM 생성 동시성은 1, 대기열은 5건으로 제한한다. 용량 초과 요청에는 429와 Retry-After를 반환한다. 세션 TTL은 마지막 사용자 액션 후 30분으로 적용한다."
         },
         {
           "id": "service.cancellation",
