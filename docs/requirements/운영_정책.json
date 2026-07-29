@@ -67,6 +67,17 @@
             "법률 자문이 아님", 
             "MISSING 결과는 일반 조항 결과와 분리된 별도 체크리스트 배열과 집계 필드로 반환한다."
           ]
+        },
+        {
+          "id": "file_mcp.standard_source_display",
+          "behavior": "표준조항 출처는 계약 유형에 대응하는 사용자용 표준계약서 명칭으로 표시한다.",
+          "display_labels": {
+            "SW_FREELANCE": "SW 프리랜서 용역 표준계약서",
+            "SI_SUBCONTRACT": "SI 하도급 표준계약서",
+            "SM_SUBCONTRACT": "SM 하도급 표준계약서"
+          },
+          "prohibitions": ["내부 표준조항 ID 화면 노출", "버전 화면 노출", "원본 파일명·경로·확장자 화면 노출"],
+          "notes": "내부 식별자와 원본 source 값은 백엔드 검증·추적용으로만 유지"
         }
       ]
     },

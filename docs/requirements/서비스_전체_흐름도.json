@@ -237,6 +237,15 @@
       "description": "결과 상태와 별도로 표시하며, 법적 결론으로 표현하지 않습니다."
     }
   ],
+  "standard_source_display_policy": {
+    "labels": {
+      "SW_FREELANCE": "SW 프리랜서 용역 표준계약서",
+      "SI_SUBCONTRACT": "SI 하도급 표준계약서",
+      "SM_SUBCONTRACT": "SM 하도급 표준계약서"
+    },
+    "hidden_fields": ["표준조항 내부 ID", "버전", "파일명", "경로", "확장자"],
+    "scope": ["조항 상세", "MISSING 체크리스트", "챗봇 출처", "협의 문구 작성 근거"]
+  },
   "chat_state_machine": {
     "initial_state": "DISABLED",
     "states": [
