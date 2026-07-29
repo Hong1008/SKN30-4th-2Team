@@ -7,7 +7,9 @@ import re
 from copy import deepcopy
 from typing import Any
 
+from langchain_core.exceptions import OutputParserException
 from langchain_core.language_models.chat_models import BaseChatModel
+from pydantic import ValidationError
 
 from app.core.common.errors import (
     AppValidationError,
@@ -38,6 +40,19 @@ from app.domains.suggestions.schemas import (
 
 DISCLAIMER = "자동 반영되지 않는 협의용 참고 초안이며 법률 자문이 아닙니다."
 NUMBER_PATTERN = re.compile(r"\d+(?:[.,]\d+)*(?:%|년|개월|일|원)?")
+LEGAL_ASSERTION_PATTERN = re.compile(r"(?:법적으로\s*)?(?:위법|불법|합법)")
+CYRILLIC_PATTERN = re.compile(r"[\u0400-\u04ff]")
+CJK_IDEOGRAPH_PATTERN = re.compile(r"[\u4e00-\u9fff]")
+REPAIR_INSTRUCTION = (
+    "\n이전 응답은 구조화 출력 계약을 충족하지 못했습니다. 새로운 사실이나 "
+    "수치·근거를 추가하지 말고, 같은 입력만 사용하여 JSON Schema의 필수 필드와 "
+    "허용된 enum 값을 정확히 지킨 응답을 한 번만 다시 작성하세요."
+)
+LANGUAGE_REPAIR_INSTRUCTION = (
+    "\n이전 응답에 한국어가 아닌 문자가 포함되었습니다. 내용과 근거는 바꾸지 "
+    "말고 중국어 한자와 러시아어 키릴 문자를 모두 제거해 자연스러운 한글 "
+    "표현으로 한 번만 다시 작성하세요."
+)
 
 
 def _grounding_confirmation(status: str) -> RequiredConfirmation:
@@ -113,6 +128,54 @@ def _model_context(
     }
 
 
+def _has_unknown_source_key(error: ValidationError) -> bool:
+    """닫힌 source key 집합 위반은 repair로 숨기지 않는다."""
+    return any(
+        "used_source_keys" in {str(part) for part in item["loc"]}
+        and item["type"] == "enum"
+        for item in error.errors()
+    )
+
+
+async def _invoke_structured_with_repair(
+    model: BaseChatModel,
+    prompt: str,
+    *,
+    timeout_seconds: float,
+) -> SuggestionStructuredOutput:
+    """구조 오류에 한해 동일 입력으로 한 번만 repair한다."""
+    current_prompt = prompt
+    for attempt in range(2):
+        try:
+            structured = model.with_structured_output(SuggestionStructuredOutput)
+            raw = await asyncio.wait_for(
+                structured.ainvoke(current_prompt),
+                timeout=timeout_seconds,
+            )
+            validated = (
+                raw
+                if isinstance(raw, SuggestionStructuredOutput)
+                else SuggestionStructuredOutput.model_validate(raw)
+            )
+            serialized = validated.model_dump_json()
+            if attempt == 0 and (
+                CYRILLIC_PATTERN.search(serialized)
+                or CJK_IDEOGRAPH_PATTERN.search(serialized)
+            ):
+                current_prompt = prompt + LANGUAGE_REPAIR_INSTRUCTION
+                continue
+            return validated
+        except ValidationError as error:
+            if attempt > 0 or _has_unknown_source_key(error):
+                raise
+            current_prompt = prompt + REPAIR_INSTRUCTION
+        except (OutputParserException, json.JSONDecodeError):
+            if attempt > 0:
+                raise
+            current_prompt = prompt + REPAIR_INSTRUCTION
+    raise RuntimeError("Suggestions structured output repair가 종료되지 않았습니다.")
+
+
 async def generate_suggestion(
     review: Review,
     payload: SuggestionRequest,
@@ -177,19 +240,19 @@ async def generate_suggestion(
         "출력하거나 복사하지 마세요. 대신 used_source_keys에서 이 문구에 사용한 "
         "입력 근거 종류만 선택하세요: SRC_USER(사용자 조항), "
         "SRC_STANDARD(대응 표준조항), SRC_GROUNDING(법령 참고 원문). "
-        "used_source_keys에는 이 세 값 외의 문자열을 넣지 마세요.\n"
+        "used_source_keys에는 이 세 값 외의 문자열을 넣지 마세요. "
+        "합법·위법·불법·유효성 같은 법률 결론을 단정하지 마세요. suggestion, "
+        "major_changes, required_confirmations의 모든 문구는 중국어·러시아어 "
+        "문자 없이 한국어로만 작성하세요. 중국어 단어(예: 免责)를 쓰지 말고 "
+        "'책임 면제'처럼 한글로 풀어 쓰세요. major_changes를 완전한 한국어로 "
+        "작성할 수 없으면 빈 배열로 반환하세요.\n"
         + json.dumps(context, ensure_ascii=False, default=str)
     )
     try:
-        structured = model.with_structured_output(SuggestionStructuredOutput)
-        raw = await asyncio.wait_for(
-            structured.ainvoke(prompt),
-            timeout=settings.llm_timeout_seconds,
-        )
-        structured_output = (
-            raw
-            if isinstance(raw, SuggestionStructuredOutput)
-            else SuggestionStructuredOutput.model_validate(raw)
+        structured_output = await _invoke_structured_with_repair(
+            model,
+            prompt,
+            timeout_seconds=settings.llm_timeout_seconds,
         )
     except (asyncio.TimeoutError, TimeoutError) as error:
         raise ExternalServiceTimeoutError(
@@ -211,6 +274,20 @@ async def generate_suggestion(
     output = structured_output.root
     if not isinstance(output, SuggestionGeneratedOutput):
         return _response("INSUFFICIENT_GROUNDING", payload=payload)
+    serialized_output = output.model_dump_json()
+    internal_ids = {
+        payload.user_clause_id,
+        expected_standard_id,
+        *grounding_source_ids,
+    }
+    if any(identifier in serialized_output for identifier in internal_ids):
+        return _response("LLM_OUTPUT_INVALID", payload=payload)
+    if LEGAL_ASSERTION_PATTERN.search(serialized_output):
+        return _response("LLM_OUTPUT_INVALID", payload=payload)
+    if CYRILLIC_PATTERN.search(serialized_output):
+        return _response("LLM_OUTPUT_INVALID", payload=payload)
+    if CJK_IDEOGRAPH_PATTERN.search(serialized_output):
+        return _response("LLM_OUTPUT_INVALID", payload=payload)
     source_text = json.dumps(context, ensure_ascii=False, default=str)
     allowed_numbers = set(NUMBER_PATTERN.findall(source_text))
     generated_numbers = set(NUMBER_PATTERN.findall(output.suggestion))

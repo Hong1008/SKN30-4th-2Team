@@ -58,7 +58,7 @@
 
 ## 4. 데이터 보안 및 운영 규칙
 
-- **운영 LLM 제한**: 운영 환경(`APP_ENV=prod`)에서는 `LLM_PROVIDER=ollama`만 허용합니다. 선택된 provider가 외부 LLM일 경우 시작 단계에서 서버 실행을 차단합니다.
+- **운영 LLM 제한**: 운영 환경(`APP_ENV=prod`)에서는 `LLM_PROVIDER=vllm`만 허용합니다. `VLLM_BASE_URL`은 승인된 RunPod vLLM endpoint로 제한하고 API 키를 로그·응답에 노출하지 않습니다.
 - **비밀값 보존**: API 키(`SecretStr`)는 어떠한 경우에도 로그, API 응답, 에러 메시지에 노출하지 않습니다.
 - **임시 파일 관리**: 업로드 파일 처리 완료 시 즉시 삭제하며 원문 내용은 로그에 남기지 않습니다.
 

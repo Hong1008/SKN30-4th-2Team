@@ -25,6 +25,7 @@ WorkShield는 IT·SW 분야(SW 프리랜서, SI·SM 하도급) 계약서를 표�
 - Python ≥ 3.13
 - [uv](https://docs.astral.sh/uv/) (의존성 관리 및 실행)
 - [just](https://github.com/casey/just) (MCP 작업 실행 도구)
+- [runpodctl](https://docs.runpod.io/cli/get-started) (RunPod vLLM Pod 배포·삭제용 CLI)
 - Node.js (MCP 의존성 `kordoc` 및 `korean-law-mcp` CLI 실행용)
 
 ---
@@ -98,3 +99,4 @@ uv run python scripts/generate_openapi.py
 
 - **MCP 서버 세부 가이드**: [mcp/README.md](mcp/README.md) (FastMCP 도구 목록, 파이프라인 검토 규칙, 품질 기준)
 - **API 서버 세부 가이드**: [api/README.md](api/README.md) (FastAPI 구조, LLM Provider 설정, MCP Lifespan 연동)
+- **RunPod vLLM Pod 배포 가이드**: [deploy/README.md](deploy/README.md) (Pod 생성·삭제와 `api/.env` 연결 설정)
