@@ -93,6 +93,18 @@ Ollama base URL 전달, 비밀값 비노출, reasoning 변환, 지원하지 않�
 - `api/.venv/bin/pytest -q`: Settings 캐시, 운영 provider 제한, `/health`의 설정 의존성 선언 검증
 - `api/.venv/bin/ruff check app main.py tests`
 
+## 추가 기록: 환경 Settings와 기능 policy 분리
+
+기능 동작 규칙을 환경별 접속 정보와 함께 `Settings`에 누적하지 않는다.
+`Settings`는 비밀값과 DB·MCP·LLM provider 등 환경별 접속·실행 정보만 관리한다.
+업로드 제한, 지원 확장자, 세션 TTL, LLM 생성·timeout, 메타데이터 캐시와
+스토리지 정리 주기는 소비하는 도메인의 불변 `policy.py` 객체로 이동했다.
+
+정책 변경은 코드 리뷰·테스트·배포 이력에 남기며 환경 변수로 덮어쓰지 않는다.
+테스트나 평가 도구에서 다른 값이 필요하면 환경 변수가 아니라 별도의 policy
+객체를 생성해 명시적으로 주입한다. 향후 운영 근거가 확인되어 환경별 조정이
+필요해진 값만 중첩 Settings로 승격하고 별도 ADR로 기록한다.
+
 ## 요구사항 MCP 응답 계약 정규화 기록
 
 이번 세션에서는 [요구사항.json](../requirements/요구사항.json)의 기존 필드는 변경하지 않고, 현행

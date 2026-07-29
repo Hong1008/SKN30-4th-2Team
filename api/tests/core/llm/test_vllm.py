@@ -8,6 +8,7 @@ import pytest
 from pydantic import BaseModel
 
 from app.config import Settings
+from app.core.llm.policy import LLMPolicy
 from app.core.llm.provider.vllm import VLLMChatOpenAI, build_vllm_model
 from app.core.llm.types import ReasoningMode
 
@@ -31,11 +32,6 @@ def _settings() -> Settings:
         llm_model="served-qwen-model",
         vllm_base_url="https://vllm.example.com/v1",
         vllm_api_key="vllm-secret",
-        llm_timeout_seconds=123,
-        llm_temperature=0,
-        llm_top_p=1,
-        llm_seed=42,
-        llm_max_completion_tokens=512,
     )
 
 
@@ -71,7 +67,11 @@ def test_vllm_passes_openai_compatible_connection_settings(
         FakeVLLMModel,
     )
 
-    build_vllm_model(_settings(), ReasoningMode.OFF)
+    build_vllm_model(
+        _settings(),
+        ReasoningMode.OFF,
+        LLMPolicy(timeout_seconds=123),
+    )
 
     call = FakeVLLMModel.calls[-1]
     assert call["model"] == "served-qwen-model"

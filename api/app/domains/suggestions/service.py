@@ -11,13 +11,14 @@ from langchain_core.exceptions import OutputParserException
 from langchain_core.language_models.chat_models import BaseChatModel
 from pydantic import ValidationError
 
+from app.config import Settings
 from app.core.common.errors import (
     AppValidationError,
     ConflictError,
     ExternalServiceTimeoutError,
 )
 from app.core.common.logging import log_event
-from app.config import Settings
+from app.core.llm.policy import DEFAULT_LLM_POLICY, LLMPolicy
 from app.domains.grounding.service import get_review_grounding
 from app.core.llm.mcp.types import WorkShieldMCPRuntime
 from app.domains.reviews.context import (
@@ -183,6 +184,7 @@ async def generate_suggestion(
     runtime: WorkShieldMCPRuntime,
     model: BaseChatModel,
     settings: Settings,
+    llm_policy: LLMPolicy = DEFAULT_LLM_POLICY,
 ) -> SuggestionResponse:
     if review.state is not ReviewState.COMPLETED or not review.result:
         raise ConflictError(
@@ -252,7 +254,7 @@ async def generate_suggestion(
         structured_output = await _invoke_structured_with_repair(
             model,
             prompt,
-            timeout_seconds=settings.llm_timeout_seconds,
+            timeout_seconds=llm_policy.timeout_seconds,
         )
     except (asyncio.TimeoutError, TimeoutError) as error:
         raise ExternalServiceTimeoutError(

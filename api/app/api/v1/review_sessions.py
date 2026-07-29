@@ -21,6 +21,7 @@ from app.domains.review_sessions.schemas import (
     ReviewSessionResponse,
     UploadInfo,
 )
+from app.domains.review_sessions.dependencies import ReviewSessionPolicyDep
 from app.domains.review_sessions.service import (
     confirm_out_of_scope,
     create_review_session,
@@ -98,18 +99,25 @@ async def create_session(
     storage: FileStorageDep = None,
     runtime: WorkShieldMCPRuntimeDep = None,
     settings: SettingsDep = None,
+    policy: ReviewSessionPolicyDep = None,
 ):
     """계약서 파일을 저장하고 익명 검토 세션을 생성한다."""
-    content = await file.read(settings.max_upload_size_bytes + 1)
+    content = await file.read(policy.max_upload_size_bytes + 1)
     entity, access_token = await create_review_session(
         db_session=db_session,
         storage=storage,
         runtime=runtime,
         settings=settings,
+        policy=policy,
         file_name=file.filename,
         content=content,
     )
-    set_session_access_cookie(response, token=access_token, settings=settings)
+    set_session_access_cookie(
+        response,
+        token=access_token,
+        settings=settings,
+        policy=policy,
+    )
     return success_response(request, _response(entity))
 
 

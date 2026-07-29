@@ -6,6 +6,7 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_openai import ChatOpenAI
 
 from app.config import Settings
+from app.core.llm.policy import DEFAULT_LLM_POLICY, LLMPolicy
 from app.core.llm.types import LLMConfigurationError, ReasoningMode
 
 
@@ -32,8 +33,10 @@ def _enabled_effort(profile: dict[str, Any]) -> str:
 def build_openai_model(
     settings: Settings,
     reasoning: ReasoningMode,
+    policy: LLMPolicy = DEFAULT_LLM_POLICY,
 ) -> BaseChatModel:
     """OpenAI chat model을 capability에 맞는 reasoning 설정으로 생성한다."""
+    del policy
     if settings.openai_api_key is None:
         raise LLMConfigurationError("OPENAI_API_KEY가 필요합니다.")
     if not settings.llm_model:

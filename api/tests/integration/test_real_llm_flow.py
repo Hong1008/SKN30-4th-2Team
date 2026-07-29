@@ -13,6 +13,7 @@ from app.domains.chat.schemas import ChatRequest
 from app.domains.chat.service import answer_review_question
 from app.config import Settings
 from app.core.llm.factory import create_chat_model
+from app.core.llm.policy import LLMPolicy
 from app.domains.reviews.domain import MCPReviewStatus, Review, ReviewState
 from app.domains.suggestions.schemas import SuggestionRequest
 from app.domains.suggestions.service import generate_suggestion
@@ -100,13 +101,18 @@ def _settings() -> Settings:
         app_env="local",
         llm_provider=provider,
         llm_model=model,
-        llm_timeout_seconds=float(
+        workshield_mcp_timeout=30,
+    )
+
+
+def _llm_policy() -> LLMPolicy:
+    return LLMPolicy(
+        timeout_seconds=float(
             os.getenv(
                 "LLM_TEST_TIMEOUT",
                 os.getenv("OLLAMA_TEST_TIMEOUT", "180"),
             )
-        ),
-        workshield_mcp_timeout=30,
+        )
     )
 
 
@@ -156,7 +162,8 @@ def _review() -> Review:
 async def test_real_llm_chat_structured_output() -> None:
     """Chat이 검증 가능한 ID와 비어 있지 않은 답변을 생성한다."""
     settings = _settings()
-    model = RecordingChatModel(create_chat_model(settings))
+    llm_policy = _llm_policy()
+    model = RecordingChatModel(create_chat_model(settings, policy=llm_policy))
     runtime = SimpleNamespace(tools=(GroundingTool(),))
     review = _review()
 
@@ -170,6 +177,7 @@ async def test_real_llm_chat_structured_output() -> None:
         runtime=runtime,
         model=model,
         settings=settings,
+        llm_policy=llm_policy,
     )
     chat_seconds = time.monotonic() - chat_started
 
@@ -198,7 +206,8 @@ async def test_real_llm_chat_structured_output() -> None:
 async def test_real_llm_suggestion_structured_output() -> None:
     """Suggestions가 검증 가능한 표준조항·법령 ID를 포함해 생성한다."""
     settings = _settings()
-    model = RecordingChatModel(create_chat_model(settings))
+    llm_policy = _llm_policy()
+    model = RecordingChatModel(create_chat_model(settings, policy=llm_policy))
     runtime = SimpleNamespace(tools=(GroundingTool(),))
     review = _review()
 
@@ -215,6 +224,7 @@ async def test_real_llm_suggestion_structured_output() -> None:
         runtime=runtime,
         model=model,
         settings=settings,
+        llm_policy=llm_policy,
     )
     suggestion_seconds = time.monotonic() - suggestion_started
 

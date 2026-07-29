@@ -59,7 +59,6 @@ def _settings(tmp_path: Path) -> Settings:
         app_env="local",
         llm_provider="ollama",
         database_url=f"sqlite+pysqlite:///{tmp_path / 'integration.db'}",
-        temp_upload_dir=tmp_path / "uploads",
         workshield_mcp_transport=transport,
         workshield_mcp_url=os.getenv(
             "WORKSHIELD_MCP_URL",

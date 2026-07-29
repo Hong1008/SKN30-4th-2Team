@@ -35,6 +35,7 @@ from app.core.idempotency.service import (
 from app.core.llm.mcp.dependencies import WorkShieldMCPRuntimeDep
 from app.core.storage.dependencies import FileStorageDep
 from app.domains.review_sessions.repository import SqlAlchemyReviewSessionRepository
+from app.domains.review_sessions.dependencies import ReviewSessionPolicyDep
 from app.domains.reviews.domain import ReviewState
 from app.domains.reviews.presentation import present_review_results
 from app.domains.reviews.repository import SqlAlchemyReviewRepository
@@ -65,6 +66,7 @@ def _schedule_review(
     storage,
     runtime,
     settings,
+    policy,
 ) -> None:
     """검토를 앱 수명주기와 함께 추적하는 백그라운드 작업으로 예약한다."""
     task = asyncio.create_task(
@@ -74,6 +76,7 @@ def _schedule_review(
             runtime=runtime,
             settings=settings,
             review_id=review_id,
+            policy=policy,
         )
     )
     tasks = getattr(request.app.state, "review_tasks", {})
@@ -108,6 +111,7 @@ async def start_review(
     db_session: DbSessionDep,
     database: DatabaseDep,
     settings: SettingsDep,
+    policy: ReviewSessionPolicyDep,
     access_token: SessionCookie = None,
     runtime: WorkShieldMCPRuntimeDep = None,
     storage: FileStorageDep = None,
@@ -142,7 +146,7 @@ async def start_review(
             db_session,
             review_session,
             idempotency_key=internal_operation_key("reviews.create", key),
-            settings=settings,
+            policy=policy,
         )
         response_data = ReviewCreateResponse(
             review_id=entity.id,
@@ -156,7 +160,7 @@ async def start_review(
             idempotency_key=key,
             fingerprint=fingerprint,
             response_snapshot=response_data.model_dump(mode="json"),
-            ttl_seconds=settings.session_ttl_seconds,
+            ttl_seconds=policy.session_ttl_seconds,
         )
         if raced_replay is not None:
             return success_response(
@@ -171,6 +175,7 @@ async def start_review(
             storage=storage,
             runtime=runtime,
             settings=settings,
+            policy=policy,
         )
         return success_response(request, response_data)
 
@@ -317,6 +322,7 @@ def get_review(request: Request, owned: OwnedReviewDep):
         storage=storage,
         runtime=runtime,
         settings=idem_ctx.settings,
+        policy=idem_ctx.review_session_policy,
     ),
 )
 async def retry(
@@ -332,7 +338,7 @@ async def retry(
         idempotency_key=internal_operation_key(
             "reviews.retry", idem_ctx.request.state.idempotency_key
         ),
-        settings=idem_ctx.settings,
+        policy=idem_ctx.review_session_policy,
     )
     return ReviewCreateResponse(
         review_id=entity.id,

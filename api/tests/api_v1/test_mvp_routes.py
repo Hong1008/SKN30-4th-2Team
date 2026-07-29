@@ -93,7 +93,6 @@ def create_mvp_app(tmp_path: Path) -> tuple[FastAPI, dict[str, int]]:
         app_env="local",
         llm_provider="ollama",
         llm_model="test",
-        temp_upload_dir=tmp_path / "uploads",
     )
     calls: dict[str, int] = {}
     tools = (

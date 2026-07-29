@@ -29,6 +29,8 @@
 7. 파일은 `FileStorage`로만 다룬다. 저장 경로를 조합하거나 직접 삭제하지 않는다.
 8. 계약서·결과·프롬프트 본문과 비밀값을 로그·오류 응답에 넣지 않는다.
 9. API 계약을 바꾸면 OpenAPI를 함께 갱신한다.
+10. 환경별 접속 정보·비밀값은 `Settings`로, 배포과 함께 변경하는 기능 규칙은
+    도메인별 불변 policy 객체로 관리한다.
 
 추가 패턴(CQRS, Event Sourcing, 범용 Repository, 별도 DI 컨테이너)은 실제
 필요성과 ADR 합의 전에는 도입하지 않는다.
@@ -71,6 +73,7 @@ import·Mapper 규칙은 [계층과 영속성](./backend-ref/backend-development
 | SQLite 경로·스키마 변경 | [SQLite](./backend-ref/backend-development-reference.md#sqlite) |
 | DB와 MCP·LLM 호출 순서 | [트랜잭션](./backend-ref/backend-development-reference.md#트랜잭션) |
 | 응답 Envelope·오류 코드 | [API 응답과 오류](./backend-ref/backend-development-reference.md#api-응답과-오류) |
+| Settings와 기능 policy 구분 | [Settings와 기능 policy](./backend-ref/backend-development-reference.md#settings와-기능-policy) |
 | 테스트 범위·실행 명령 | [테스트와 검증](./backend-ref/backend-development-reference.md#테스트와-검증) |
 | FK, lock, OpenAPI, 스키마 문제 | [문제 해결](./backend-ref/backend-development-reference.md#문제-해결) |
 
@@ -81,6 +84,7 @@ import·Mapper 규칙은 [계층과 영속성](./backend-ref/backend-development
 - [ ] Domain이 FastAPI·Pydantic·SQLAlchemy에 의존하지 않는다.
 - [ ] Mapper 양방향과 테스트를 DB 변경에 맞춰 수정했다.
 - [ ] 오류는 공통 `AppError`를 사용하고 민감 본문을 노출하지 않는다.
+- [ ] 환경별 설정과 코드로 고정할 기능 policy를 구분했다.
 - [ ] 테스트와 린트를 통과했고, API 변경 시 OpenAPI를 갱신했다.
 
 ## 검증 명령

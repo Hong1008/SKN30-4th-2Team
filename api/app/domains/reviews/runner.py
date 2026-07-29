@@ -10,6 +10,10 @@ from app.config import Settings
 from app.core.db.database import Database
 from app.core.llm.mcp.types import WorkShieldMCPRuntime
 from app.domains.review_sessions.activity import resume_ttl_after_review
+from app.domains.review_sessions.policy import (
+    DEFAULT_REVIEW_SESSION_POLICY,
+    ReviewSessionPolicy,
+)
 from app.domains.review_sessions.repository import SqlAlchemyReviewSessionRepository
 from app.domains.review_sessions.service import _tool_payload
 from app.domains.reviews.domain import MCPReviewStatus, ReviewState
@@ -205,6 +209,7 @@ async def execute_review(
     runtime: WorkShieldMCPRuntime,
     settings: Settings,
     review_id: str,
+    policy: ReviewSessionPolicy = DEFAULT_REVIEW_SESSION_POLICY,
 ) -> None:
     """검토를 수행하고 별도 DB session으로 최종 상태를 저장한다."""
     with database.session() as db_session:
@@ -319,7 +324,7 @@ async def execute_review(
         resume_ttl_after_review(
             db_session,
             review,
-            ttl_seconds=settings.session_ttl_seconds,
+            ttl_seconds=policy.session_ttl_seconds,
         )
         storage_key_to_delete = None
         if (

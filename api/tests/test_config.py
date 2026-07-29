@@ -4,7 +4,6 @@ import pytest
 from pydantic import ValidationError
 
 from app.config import (
-    DEFAULT_SUPPORTED_FILE_EXTENSIONS,
     MCPTransport,
     Settings,
     get_settings,
@@ -71,83 +70,23 @@ def test_database_defaults_to_file_sqlite() -> None:
     assert settings.database_echo is False
 
 
-def test_upload_and_session_settings_have_expected_defaults() -> None:
-    settings = Settings(
-        app_env="local",
-        llm_provider="ollama",
-        llm_model="configured-model",
-    )
+def test_settings_excludes_feature_policy_fields() -> None:
+    policy_fields = {
+        "max_upload_size_bytes",
+        "supported_file_extensions",
+        "temp_upload_dir",
+        "session_ttl_seconds",
+        "expired_tombstone_ttl_seconds",
+        "storage_cleanup_interval_seconds",
+        "metadata_cache_ttl_seconds",
+        "llm_timeout_seconds",
+        "llm_temperature",
+        "llm_top_p",
+        "llm_seed",
+        "llm_max_completion_tokens",
+    }
 
-    assert settings.max_upload_size_bytes == 10 * 1024 * 1024
-    assert settings.supported_file_extensions == DEFAULT_SUPPORTED_FILE_EXTENSIONS
-    assert settings.temp_upload_dir.as_posix() == "data/99_uploads"
-    assert settings.session_ttl_seconds == 30 * 60
-    assert settings.storage_cleanup_interval_seconds == 60
-    assert settings.llm_temperature == 0
-    assert settings.llm_top_p == 1
-    assert settings.llm_seed == 42
-    assert settings.llm_max_completion_tokens == 512
-
-
-@pytest.mark.parametrize(
-    ("field_name", "invalid_value"),
-    [
-        ("llm_temperature", -0.1),
-        ("llm_top_p", 0),
-        ("llm_top_p", 1.1),
-        ("llm_max_completion_tokens", 0),
-        ("llm_max_completion_tokens", 1001),
-    ],
-)
-def test_llm_generation_settings_reject_invalid_values(
-    field_name: str,
-    invalid_value: int | float,
-) -> None:
-    with pytest.raises(ValidationError):
-        Settings(
-            app_env="local",
-            llm_provider="ollama",
-            **{field_name: invalid_value},
-        )
-
-
-def test_supported_file_extensions_accepts_comma_separated_value() -> None:
-    settings = Settings(
-        app_env="local",
-        llm_provider="ollama",
-        supported_file_extensions="pdf, DOCX, .hwp",
-    )
-
-    assert settings.supported_file_extensions == ("pdf", "docx", "hwp")
-
-
-def test_supported_file_extensions_rejects_formats_outside_product_scope() -> None:
-    with pytest.raises(ValidationError, match="HWP, HWPX, PDF, DOCX"):
-        Settings(
-            app_env="local",
-            llm_provider="ollama",
-            supported_file_extensions="pdf,xlsx",
-        )
-
-
-@pytest.mark.parametrize(
-    ("field_name", "invalid_value"),
-    [
-        ("max_upload_size_bytes", 0),
-        ("session_ttl_seconds", 0),
-        ("storage_cleanup_interval_seconds", 0),
-        ("supported_file_extensions", ""),
-    ],
-)
-def test_upload_and_session_settings_reject_invalid_values(
-    field_name: str, invalid_value: int | str
-) -> None:
-    with pytest.raises(ValidationError):
-        Settings(
-            app_env="local",
-            llm_provider="ollama",
-            **{field_name: invalid_value},
-        )
+    assert policy_fields.isdisjoint(Settings.model_fields)
 
 
 def test_production_rejects_debug_mode() -> None:

@@ -2,7 +2,6 @@
 
 from fastapi import APIRouter, Header, Request, Response, status
 
-from app.config import SettingsDep
 from app.core.common.responses import (
     ApiResponse,
     COMMON_ERROR_RESPONSES,
@@ -10,6 +9,7 @@ from app.core.common.responses import (
 )
 from app.core.llm.mcp.dependencies import WorkShieldMCPRuntimeDep
 from app.domains.metadata.schemas import MetadataResponse
+from app.domains.metadata.policy import DEFAULT_METADATA_POLICY
 from app.domains.metadata.service import get_metadata
 
 router = APIRouter(tags=["metadata"], responses=COMMON_ERROR_RESPONSES)
@@ -20,13 +20,12 @@ async def metadata(
     request: Request,
     response: Response,
     runtime: WorkShieldMCPRuntimeDep,
-    settings: SettingsDep,
     if_none_match: str | None = Header(default=None, alias="If-None-Match"),
 ):
     """MCP 코드 목록과 제품 정책을 캐시 가능한 단일 응답으로 제공한다."""
-    payload, etag, stale = await get_metadata(request, runtime, settings)
+    payload, etag, stale = await get_metadata(request, runtime)
     cache_control = (
-        f"public, max-age={settings.metadata_cache_ttl_seconds}, "
+        f"public, max-age={DEFAULT_METADATA_POLICY.cache_ttl_seconds}, "
         "stale-while-revalidate=600"
     )
     response.headers["Cache-Control"] = cache_control

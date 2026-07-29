@@ -16,6 +16,11 @@ from app.domains.review_sessions.activity import resume_ttl_after_review
 from app.domains.reviews.repository import SqlAlchemyReviewRepository
 from app.core.storage.cleanup import SessionFileLifecycle
 from app.core.storage.local import LocalFileStorage
+from app.core.storage.policy import DEFAULT_STORAGE_POLICY, StoragePolicy
+from app.domains.review_sessions.policy import (
+    DEFAULT_REVIEW_SESSION_POLICY,
+    ReviewSessionPolicy,
+)
 
 
 async def _periodic_storage_cleanup(
@@ -72,25 +77,35 @@ def _recover_interrupted_reviews(
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """SQLite와 MCP session을 API 애플리케이션 수명과 함께 관리한다."""
     settings = get_settings()
+    review_session_policy = getattr(
+        app.state,
+        "review_session_policy",
+        DEFAULT_REVIEW_SESSION_POLICY,
+    )
+    storage_policy = getattr(
+        app.state,
+        "storage_policy",
+        DEFAULT_STORAGE_POLICY,
+    )
+    if not isinstance(review_session_policy, ReviewSessionPolicy):
+        raise TypeError("review_session_policy는 ReviewSessionPolicy여야 합니다.")
+    if not isinstance(storage_policy, StoragePolicy):
+        raise TypeError("storage_policy는 StoragePolicy여야 합니다.")
     database = Database(settings.database_url, echo=settings.database_echo)
     database.create_schema()
     _recover_interrupted_reviews(
         database,
-        ttl_seconds=getattr(settings, "session_ttl_seconds", 30 * 60),
+        ttl_seconds=review_session_policy.session_ttl_seconds,
     )
     database.ensure_review_active_index()
-    storage_root = settings.temp_upload_dir
+    storage_root = review_session_policy.temp_upload_dir
     if not storage_root.is_absolute():
         storage_root = (API_ROOT / storage_root).resolve()
     file_storage = LocalFileStorage(storage_root)
     SessionFileLifecycle(
         database,
         file_storage,
-        tombstone_ttl_seconds=getattr(
-            settings,
-            "expired_tombstone_ttl_seconds",
-            24 * 60 * 60,
-        ),
+        tombstone_ttl_seconds=storage_policy.expired_tombstone_ttl_seconds,
     ).cleanup_expired_and_orphaned()
     app.state.database = database
     app.state.file_storage = file_storage
@@ -99,12 +114,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         _periodic_storage_cleanup(
             database,
             file_storage,
-            interval_seconds=settings.storage_cleanup_interval_seconds,
-            tombstone_ttl_seconds=getattr(
-                settings,
-                "expired_tombstone_ttl_seconds",
-                24 * 60 * 60,
-            ),
+            interval_seconds=storage_policy.cleanup_interval_seconds,
+            tombstone_ttl_seconds=storage_policy.expired_tombstone_ttl_seconds,
         )
     )
     try:

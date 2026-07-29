@@ -41,6 +41,9 @@ cp .env.example .env
   서버 시작 시 필요한 테이블을 자동 생성하며 DB 파일은 Git으로 추적하지 않습니다.
 - 운영 기본 설정은 `APP_DEBUG=false`, `API_DOCS_ENABLED=false`,
   `DATABASE_ECHO=false`이며 debug와 DB 쿼리 로그는 운영에서 활성화할 수 없습니다.
+- `Settings`와 환경 변수에는 비밀값 및 환경별 접속·실행 정보만 둡니다.
+  업로드 제한, 세션 TTL, LLM 생성값과 timeout, 캐시·정리 주기는 각 기능의
+  `policy.py`에 있는 불변 코드 정책을 사용합니다.
 
 ### 서버 실행
 
@@ -59,18 +62,18 @@ api/
 ├── app/
 │   ├── factory.py        # FastAPI 앱 생성과 공통 기반 등록
 │   ├── lifespan.py       # MCP 등 외부 자원의 수명주기
-│   ├── config.py         # 애플리케이션 전체 공통 Settings 및 SettingsDep (DI)
+│   ├── config.py         # 환경·접속·비밀 Settings 및 SettingsDep (DI)
 │   ├── api/              # 시스템 API와 /api/v1 라우터
-│   ├── common/           # 공통 응답, 오류, 요청 ID, 비식별 이벤트 로그
-│   ├── db/               # SQLite Engine, Session 의존성, ORM Row
-│   ├── review_sessions/  # 검토 세션 도메인, Mapper, Repository
-│   ├── reviews/          # 검토 도메인, Mapper, Repository
-│   └── llm/              # LLM 및 MCP 오케스트레이션 패키지
-│       ├── factory.py        # Settings에 따른 BaseChatModel 생성 factory
-│       ├── dependencies.py   # LLM 도메인 전용 FastAPI 의존성 (ChatModelDep, MCPRuntimeDep 등)
-│       ├── types.py          # ReasoningMode, LLM 예외 정의
-│       ├── provider/         # LLM provider별 구현체 (openai, gemini, ollama, vllm 등)
-│       └── mcp/              # WorkShield MCP Client 계층 (connection, client, types)
+│   ├── core/             # DB, 저장소, LLM/MCP, 공통 기술 기반
+│   │   ├── llm/
+│   │   │   ├── policy.py     # LLM 생성·timeout 기능 정책
+│   │   │   ├── factory.py    # Settings에 따른 BaseChatModel 생성 factory
+│   │   │   ├── provider/     # provider별 구현체
+│   │   │   └── mcp/          # WorkShield MCP Client 계층
+│   │   └── storage/
+│   │       └── policy.py     # 파일 정리 기능 정책
+│   └── domains/          # 검토 세션·검토·메타데이터 등 비즈니스 기능
+│       └── */policy.py   # 도메인별 불변 정책
 └── tests/               # 단위 테스트
 ```
 
@@ -82,7 +85,9 @@ WorkShield API는 모듈 간 결합도를 낮추고 테스트 용이성을 확�
 
 1. **설정 주입 (`SettingsDep`)**:
    - 모듈이나 라우터 내에서 `Settings()` 인스턴스를 직접 생성하지 않습니다.
-   - 애플리케이션 전체 공통 설정은 `app/config.py`에서 제공하는 `SettingsDep`를 매개변수 타입으로 선언하여 주입받습니다.
+   - 환경·접속·비밀 설정은 `app/config.py`에서 제공하는 `SettingsDep`를 매개변수 타입으로 선언하여 주입받습니다.
+   - 기능 policy는 `Settings`에 추가하지 않고 해당 `policy.py`의 불변 객체를
+     생성자나 함수 매개변수로 주입합니다.
 2. **도메인별 의존성 분리 (`dependencies.py`)**:
    - `SettingsDep`를 제외한 각 패키지/도메인 전용 의존성은 해당 도메인 패키지의 `dependencies.py` 파일에서 각각 독립적으로 관리합니다.
    - (예: LLM provider 모델 인스턴스는 `app/core/llm/dependencies.py`의 `ChatModelDep`, MCP session/tools는 `app/core/llm/dependencies.py`의 `MCPRuntimeDep`, `MCPToolsDep` 사용)

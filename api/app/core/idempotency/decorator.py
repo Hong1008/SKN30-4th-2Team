@@ -19,6 +19,8 @@ from app.core.idempotency.service import (
     require_idempotency_key,
     save_response,
 )
+from app.domains.review_sessions.dependencies import ReviewSessionPolicyDep
+from app.domains.review_sessions.policy import DEFAULT_REVIEW_SESSION_POLICY
 
 
 @dataclass(slots=True)
@@ -28,6 +30,7 @@ class IdempotencyContext:
     request: Request
     db_session: DbSessionDep
     settings: SettingsDep
+    review_session_policy: ReviewSessionPolicyDep = DEFAULT_REVIEW_SESSION_POLICY
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key")
 
 
@@ -76,12 +79,15 @@ def idempotent(
             if idem_ctx is not None:
                 request = idem_ctx.request
                 db_session = idem_ctx.db_session
-                settings = idem_ctx.settings
+                review_session_policy = idem_ctx.review_session_policy
                 idempotency_key_raw = idem_ctx.idempotency_key
             else:
                 request = kwargs["request"]
                 db_session = kwargs["db_session"]
-                settings = kwargs["settings"]
+                review_session_policy = kwargs.get(
+                    "review_session_policy",
+                    DEFAULT_REVIEW_SESSION_POLICY,
+                )
                 idempotency_key_raw = kwargs.get("idempotency_key")
 
             # 1. 키 검증 및 request.state 주입
@@ -132,7 +138,7 @@ def idempotent(
                     idempotency_key=key,
                     fingerprint=fingerprint,
                     response_snapshot=response_data.model_dump(mode="json"),
-                    ttl_seconds=settings.session_ttl_seconds,
+                    ttl_seconds=review_session_policy.session_ttl_seconds,
                 )
                 if raced_replay is not None:
                     return success_response(
