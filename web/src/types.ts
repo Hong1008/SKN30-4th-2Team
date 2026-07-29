@@ -31,15 +31,14 @@ export interface ClauseResult {
   categoryCode?: string
   standardTitle?: string
   standardText?: string
-  standardSource?: string
-  standardClauseId?: string
-  standardVersion?: string
+  standardContractLabel?: string
   matchStatus: 'CANDIDATE_SELECTED' | 'NO_CANDIDATE'
 }
 
 export interface MissingClauseResult {
   id: string
   category: string
+  standardContractLabel: string
   title: string
   text: string
   explanation: string
@@ -170,13 +169,10 @@ export interface CodeLabel {
 }
 
 export interface StandardClauseData {
-  clause_id: string;
-  contract_type: string;
+  standard_contract_label: string;
   category: CodeLabel;
   title: string;
   text: string;
-  source: string;
-  version: string;
 }
 
 export interface ReviewClauseResultData {
@@ -288,8 +284,11 @@ export interface GroundingItem {
 export interface ChatSource {
   type: 'USER_CLAUSE' | 'STANDARD_CLAUSE' | 'LAW';
   id?: string | null;
+  display_label?: string | null;
+  standard_contract_label?: string | null;
   law_name?: string | null;
   article?: string | null;
+  source_url?: string | null;
 }
 
 export interface ChatHistoryMessage {
@@ -324,6 +323,7 @@ export interface SuggestionResponse {
   user_clause_ids: string[];
   standard_clause_ids: string[];
   grounding_source_ids: string[];
+  sources: ChatSource[];
   required_confirmations: RequiredConfirmation[];
   missing_inputs: string[];
   disclaimer: string;

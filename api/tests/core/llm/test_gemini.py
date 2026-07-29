@@ -5,6 +5,7 @@ from typing import Any
 import pytest
 
 from app.config import Settings
+from app.core.llm.policy import LLMPolicy
 from app.core.llm.provider.gemini import build_gemini_model
 from app.core.llm.types import LLMConfigurationError, ReasoningMode
 
@@ -44,7 +45,9 @@ def _settings(**overrides: object) -> Settings:
 def test_gemini_maps_reasoning_on_without_model_name_branch(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("app.core.llm.provider.gemini.ChatGoogleGenerativeAI", FakeGeminiModel)
+    monkeypatch.setattr(
+        "app.core.llm.provider.gemini.ChatGoogleGenerativeAI", FakeGeminiModel
+    )
 
     build_gemini_model(_settings(), ReasoningMode.ON)
 
@@ -62,7 +65,9 @@ def test_gemma_style_boolean_reasoning_maps_to_minimal_and_high(
     thinking_level: str,
 ) -> None:
     FakeGeminiModel.profile_override = {"reasoning_output": True}
-    monkeypatch.setattr("app.core.llm.provider.gemini.ChatGoogleGenerativeAI", FakeGeminiModel)
+    monkeypatch.setattr(
+        "app.core.llm.provider.gemini.ChatGoogleGenerativeAI", FakeGeminiModel
+    )
 
     build_gemini_model(_settings(), mode)
 
@@ -71,7 +76,9 @@ def test_gemma_style_boolean_reasoning_maps_to_minimal_and_high(
 
 def test_gemini_passes_selected_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
     FakeGeminiModel.profile_override = {"reasoning_output": True}
-    monkeypatch.setattr("app.core.llm.provider.gemini.ChatGoogleGenerativeAI", FakeGeminiModel)
+    monkeypatch.setattr(
+        "app.core.llm.provider.gemini.ChatGoogleGenerativeAI", FakeGeminiModel
+    )
 
     build_gemini_model(_settings(), ReasoningMode.OFF)
 
@@ -80,11 +87,39 @@ def test_gemini_passes_selected_api_key(monkeypatch: pytest.MonkeyPatch) -> None
     assert "gemini-secret" not in repr(api_key)
 
 
+def test_gemini_applies_shared_generation_policy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    FakeGeminiModel.profile_override = {"reasoning_output": False}
+    monkeypatch.setattr(
+        "app.core.llm.provider.gemini.ChatGoogleGenerativeAI",
+        FakeGeminiModel,
+    )
+    policy = LLMPolicy(
+        timeout_seconds=120,
+        temperature=0.2,
+        top_p=0.8,
+        seed=7,
+        max_completion_tokens=700,
+    )
+
+    build_gemini_model(_settings(), ReasoningMode.OFF, policy)
+
+    call = FakeGeminiModel.calls[-1]
+    assert call["request_timeout"] == 120
+    assert call["temperature"] == 0.2
+    assert call["top_p"] == 0.8
+    assert call["seed"] == 7
+    assert call["max_tokens"] == 700
+
+
 def test_gemini_rejects_reasoning_on_for_unsupported_model(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     FakeGeminiModel.profile_override = {"reasoning_output": False}
-    monkeypatch.setattr("app.core.llm.provider.gemini.ChatGoogleGenerativeAI", FakeGeminiModel)
+    monkeypatch.setattr(
+        "app.core.llm.provider.gemini.ChatGoogleGenerativeAI", FakeGeminiModel
+    )
 
     with pytest.raises(LLMConfigurationError, match="추론을 지원하지 않습니다"):
         build_gemini_model(_settings(), ReasoningMode.ON)
@@ -97,7 +132,9 @@ def test_gemini_rejects_unavailable_reasoning_level(
         "reasoning_output": True,
         "reasoning_effort_levels": ["minimal", "low"],
     }
-    monkeypatch.setattr("app.core.llm.provider.gemini.ChatGoogleGenerativeAI", FakeGeminiModel)
+    monkeypatch.setattr(
+        "app.core.llm.provider.gemini.ChatGoogleGenerativeAI", FakeGeminiModel
+    )
 
     with pytest.raises(LLMConfigurationError, match="high 추론 수준"):
         build_gemini_model(_settings(), ReasoningMode.ON)
@@ -111,7 +148,9 @@ def test_gemini_rejects_off_for_default_on_reasoning_model(
         "reasoning_effort_levels": ["minimal", "low", "medium", "high"],
         "reasoning_effort_default": "minimal",
     }
-    monkeypatch.setattr("app.core.llm.provider.gemini.ChatGoogleGenerativeAI", FakeGeminiModel)
+    monkeypatch.setattr(
+        "app.core.llm.provider.gemini.ChatGoogleGenerativeAI", FakeGeminiModel
+    )
 
     with pytest.raises(LLMConfigurationError, match="추론을 끌 수 없습니다"):
         build_gemini_model(_settings(), ReasoningMode.OFF)

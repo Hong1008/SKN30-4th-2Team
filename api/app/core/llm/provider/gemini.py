@@ -27,7 +27,6 @@ def build_gemini_model(
     policy: LLMPolicy = DEFAULT_LLM_POLICY,
 ) -> BaseChatModel:
     """Gemini/Gemma chat model을 reasoning on/off 계약에 맞춰 생성한다."""
-    del policy
     if settings.gemini_api_key is None:
         raise LLMConfigurationError("GEMINI_API_KEY가 필요합니다.")
     if not settings.llm_model:
@@ -37,6 +36,11 @@ def build_gemini_model(
         "model": settings.llm_model,
         "api_key": settings.gemini_api_key,
         "vertexai": False,
+        "temperature": policy.temperature,
+        "top_p": policy.top_p,
+        "seed": policy.seed,
+        "max_tokens": policy.max_completion_tokens,
+        "request_timeout": policy.timeout_seconds,
     }
     probe = ChatGoogleGenerativeAI(**common)
     profile = _profile(probe)
@@ -50,9 +54,7 @@ def build_gemini_model(
 
     supported_levels = profile.get("reasoning_effort_levels")
     if reasoning is ReasoningMode.OFF and supported_levels:
-        raise LLMConfigurationError(
-            "선택한 Gemini 모델은 추론을 끌 수 없습니다."
-        )
+        raise LLMConfigurationError("선택한 Gemini 모델은 추론을 끌 수 없습니다.")
 
     thinking_level = _THINKING_LEVEL[reasoning]
     if supported_levels and thinking_level not in supported_levels:

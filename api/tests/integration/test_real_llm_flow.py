@@ -70,9 +70,13 @@ class RecordingChatModel:
         self._delegate = delegate
         self.outputs: list[object] = []
 
-    def with_structured_output(self, schema: type) -> RecordingStructuredModel:
+    def with_structured_output(
+        self,
+        schema: type,
+        **kwargs: object,
+    ) -> RecordingStructuredModel:
         return RecordingStructuredModel(
-            self._delegate.with_structured_output(schema),
+            self._delegate.with_structured_output(schema, **kwargs),
             self.outputs,
         )
 
@@ -242,12 +246,8 @@ async def test_real_llm_suggestion_structured_output() -> None:
     assert suggestion.text
     assert suggestion.used_source_keys
     assert suggestion.standard_clause_ids == (
-        ["std_liability_1"]
-        if "SRC_STANDARD" in suggestion.used_source_keys
-        else []
+        ["std_liability_1"] if "SRC_STANDARD" in suggestion.used_source_keys else []
     )
     assert suggestion.grounding_source_ids == (
-        ["law_1"]
-        if "SRC_GROUNDING" in suggestion.used_source_keys
-        else []
+        ["law_1"] if "SRC_GROUNDING" in suggestion.used_source_keys else []
     )

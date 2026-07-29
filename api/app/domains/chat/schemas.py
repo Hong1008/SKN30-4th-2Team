@@ -53,8 +53,20 @@ class ChatSource(BaseModel):
         description="참조 근거 유형 (USER_CLAUSE, STANDARD_CLAUSE, LAW)"
     )
     id: str | None = Field(default=None, description="참조 조항 또는 근거 식별자")
+    display_label: str | None = Field(
+        default=None,
+        description="내부 식별자를 노출하지 않는 사용자용 출처 명칭",
+    )
+    standard_contract_label: str | None = Field(
+        default=None,
+        description="표준조항 출처의 사용자용 표준계약서 명칭",
+    )
     law_name: str | None = Field(default=None, description="법령 명칭")
     article: str | None = Field(default=None, description="법령 조항 번호")
+    source_url: str | None = Field(
+        default=None,
+        description="검증된 법령 원문 출처 URL",
+    )
 
 
 class ChatStructuredOutput(BaseModel):

@@ -24,6 +24,29 @@ class SuggestionSourceKey(StrEnum):
     GROUNDING = "SRC_GROUNDING"
 
 
+class SuggestionSourceType(StrEnum):
+    """협의문구 응답에 표시하는 검증된 근거 유형."""
+
+    USER_CLAUSE = "USER_CLAUSE"
+    STANDARD_CLAUSE = "STANDARD_CLAUSE"
+    LAW = "LAW"
+
+
+class SuggestionSource(BaseModel):
+    """내부 ID와 사용자 표시 정보를 함께 보존하는 협의문구 출처."""
+
+    type: SuggestionSourceType = Field(description="출처 유형")
+    id: str = Field(description="검증에 사용하는 내부 출처 식별자")
+    display_label: str | None = Field(default=None, description="사용자용 출처 명칭")
+    standard_contract_label: str | None = Field(
+        default=None,
+        description="표준조항 출처의 사용자용 표준계약서 명칭",
+    )
+    law_name: str | None = Field(default=None, description="법령 명칭")
+    article: str | None = Field(default=None, description="법령 조항 번호")
+    source_url: str | None = Field(default=None, description="검증된 법령 원문 URL")
+
+
 class SuggestionRequest(BaseModel):
     user_clause_id: str = Field(
         min_length=1,
@@ -118,6 +141,10 @@ class SuggestionResponse(BaseModel):
     grounding_source_ids: list[str] = Field(
         default_factory=list,
         description="SRC_GROUNDING에 대응해 백엔드가 결합한 법령 근거 ID 목록",
+    )
+    sources: list[SuggestionSource] = Field(
+        default_factory=list,
+        description="백엔드가 검증된 ID에서 조립한 사용자 표시용 출처 목록",
     )
     required_confirmations: list[RequiredConfirmation] = Field(
         default_factory=list, description="사용자 확인 필요 항목 목록"
