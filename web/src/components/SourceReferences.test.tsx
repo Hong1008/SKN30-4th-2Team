@@ -15,12 +15,13 @@ describe('공통 출처 UI', () => {
     expect(screen.queryByText(/usr_|std_|law_/)).not.toBeInTheDocument()
   })
 
-  it('표시용 정보와 안전한 법령 링크를 렌더링한다', () => {
+  it('표시용 정보와 법령 이름·조항을 렌더링한다', () => {
     render(<SourceReferences sources={[
       { type: 'USER_CLAUSE', display_label: '제3조 · 책임 범위' },
-      { type: 'LAW', law_name: '민법', article: '제390조', source_url: 'https://law.go.kr/example' },
+      { type: 'LAW', law_name: '민법', article: '제390조' },
     ]} />)
     expect(screen.getByText('제3조 · 책임 범위')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /민법 제390조/ })).toHaveAttribute('target', '_blank')
+    expect(screen.getByText('민법 제390조')).toBeInTheDocument()
+    expect(screen.queryByRole('link')).not.toBeInTheDocument()
   })
 })

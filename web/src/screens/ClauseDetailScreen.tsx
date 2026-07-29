@@ -119,7 +119,6 @@ export default function ClauseDetailScreen({ clause, reviewId, onBack, onChatbot
         type: 'LAW' as const,
         law_name: basis?.law_name,
         article: basis?.article,
-        source_url: basis?.source_url,
       }
     }),
   ] : []

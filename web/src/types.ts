@@ -294,7 +294,6 @@ export interface ChatSource {
   category?: string | null;
   law_name?: string | null;
   article?: string | null;
-  source_url?: string | null;
 }
 
 export interface ChatHistoryMessage {

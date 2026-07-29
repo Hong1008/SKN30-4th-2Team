@@ -89,7 +89,6 @@ export default function ChatbotScreen({ reviewId, focusClauseId, focusClauseName
           category: source.category,
           law_name: source.law_name,
           article: source.article,
-          source_url: source.source_url,
         })),
       }])
     } catch (requestError: any) {
