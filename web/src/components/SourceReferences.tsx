@@ -1,0 +1,64 @@
+import { BookOpen, ExternalLink } from 'lucide-react'
+
+export type SourceReferenceType = 'USER_CLAUSE' | 'STANDARD_CLAUSE' | 'LAW'
+
+export interface SourceReference {
+  type: SourceReferenceType
+  display_label?: string | null
+  clause_number?: string | null
+  title?: string | null
+  category?: string | null
+  law_name?: string | null
+  article?: string | null
+  source_url?: string | null
+}
+
+function safeText(value: string | null | undefined): string | null {
+  const normalized = value?.trim()
+  return normalized || null
+}
+
+export function getSourceLabel(source: SourceReference): string {
+  const displayLabel = safeText(source.display_label)
+  if (displayLabel) return displayLabel
+  if (source.type === 'LAW') {
+    const lawLabel = [safeText(source.law_name), safeText(source.article)].filter(Boolean).join(' ')
+    return lawLabel || '법령 근거'
+  }
+  const clauseLabel = [
+    safeText(source.clause_number),
+    safeText(source.title),
+    safeText(source.category),
+  ].filter(Boolean).join(' · ')
+  if (clauseLabel) return clauseLabel
+  return source.type === 'USER_CLAUSE' ? '현재 검토 조항' : '대응 표준조항'
+}
+
+function getSafeUrl(value: string | null | undefined): string | null {
+  if (!value) return null
+  try {
+    const url = new URL(value)
+    return url.protocol === 'https:' || url.protocol === 'http:' ? url.href : null
+  } catch {
+    return null
+  }
+}
+
+export default function SourceReferences({ sources, title = '출처' }: { sources: SourceReference[]; title?: string }) {
+  if (sources.length === 0) return null
+  return (
+    <div className="mt-3 border-t border-slate-200 pt-2">
+      <p className="mb-1 text-xs font-semibold text-slate-500">{title}</p>
+      <div className="flex flex-wrap gap-1.5">
+        {sources.map((source, index) => {
+          const label = getSourceLabel(source)
+          const url = getSafeUrl(source.source_url)
+          const content = <><BookOpen className="size-3" aria-hidden="true" />{label}{url && <ExternalLink className="size-3" aria-hidden="true" />}</>
+          return url
+            ? <a key={`${source.type}-${index}`} href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-1 text-xs text-slate-700 hover:bg-slate-200">{content}</a>
+            : <span key={`${source.type}-${index}`} className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-1 text-xs text-slate-600">{content}</span>
+        })}
+      </div>
+    </div>
+  )
+}

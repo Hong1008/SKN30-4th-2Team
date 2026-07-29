@@ -1,10 +1,11 @@
 import { createClientId } from '../utils/clientId'
 import { useEffect, useRef, useState } from 'react'
-import { BookOpen, RotateCcw, Send, X } from 'lucide-react'
+import { RotateCcw, Send, X } from 'lucide-react'
 import { api } from '../api/api'
 import { useMetadata } from '../contexts/MetadataContext'
 import { getStatusPresentation } from '../utils/metadata'
 import { getErrorMessage } from '../utils/apiErrors'
+import SourceReferences, { type SourceReference } from '../components/SourceReferences'
 
 interface Props {
   reviewId: string
@@ -26,7 +27,7 @@ interface Message {
   refused?: boolean
   disclaimer?: string
   limitations?: string[]
-  sources?: Array<{ label: string; type: string }>
+  sources?: SourceReference[]
   outcome?: string
   toolStatus?: string
   retryable?: boolean | null
@@ -82,9 +83,13 @@ export default function ChatbotScreen({ reviewId, focusClauseId, focusClauseName
         outcome: data.outcome, toolStatus: data.tool_status, retryable: data.retryable, retryPrompt: text,
         sources: data.sources.map(source => ({
           type: source.type,
-          label: source.type === 'USER_CLAUSE' ? `사용자 조항 ${source.id ?? ''}`
-            : source.type === 'STANDARD_CLAUSE' ? `표준조항 ${source.id ?? ''}`
-              : [source.law_name, source.article].filter(Boolean).join(' ') || source.id || '법령 근거',
+          display_label: source.display_label,
+          clause_number: source.clause_number,
+          title: source.title,
+          category: source.category,
+          law_name: source.law_name,
+          article: source.article,
+          source_url: source.source_url,
         })),
       }])
     } catch (requestError: any) {
@@ -114,7 +119,7 @@ export default function ChatbotScreen({ reviewId, focusClauseId, focusClauseName
         <p className="whitespace-pre-line leading-6">{message.text}</p>
         {message.toolStatus && message.toolStatus !== 'OK' && <p className="mt-2 text-xs text-amber-700">법령 조회: {toolPresentation?.message || '법령 원문을 확인하지 못했습니다. 법령이 존재하지 않는다는 의미는 아닙니다.'}</p>}
         {message.role === 'assistant' && message.retryable && message.retryPrompt && <button type="button" onClick={() => void send(message.retryPrompt)} disabled={isSending} className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-blue-700 disabled:text-slate-400"><RotateCcw className="size-3" />같은 질문 다시 시도</button>}
-        {message.sources?.length ? <div className="mt-3 border-t border-slate-200 pt-2"><p className="mb-1 text-xs font-semibold text-slate-500">답변 출처</p>{message.sources.map((source, i) => <span key={`${source.label}-${i}`} className="mr-1 inline-flex items-center gap-1 text-xs text-slate-600"><BookOpen className="size-3" />{source.label}</span>)}</div> : null}
+        {message.sources?.length ? <SourceReferences sources={message.sources} title="답변 출처" /> : null}
         {message.limitations?.length ? <p className="mt-2 text-xs text-slate-500">제한: {message.limitations.join(', ')}</p> : null}
         {message.disclaimer && <p className="mt-2 text-xs text-slate-500">{message.disclaimer}</p>}
       </div></div>})}

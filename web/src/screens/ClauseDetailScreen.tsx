@@ -7,6 +7,7 @@ import { api } from '../api/api'
 import { useMetadata } from '../contexts/MetadataContext'
 import { getMetadataLabel, getStatusPresentation } from '../utils/metadata'
 import { getErrorMessage, getSafeKoreanMessage } from '../utils/apiErrors'
+import SourceReferences, { type SourceReference } from '../components/SourceReferences'
 
 interface Props {
   clause: ClauseResult
@@ -101,6 +102,27 @@ export default function ClauseDetailScreen({ clause, reviewId, onBack, onChatbot
         ...suggestion.missing_inputs.map(field => [field, field] as [string, string]),
       ]).entries())
     : []
+  const suggestionSources: SourceReference[] = suggestion ? [
+    ...(suggestion.user_clause_ids.length > 0 ? [{
+      type: 'USER_CLAUSE' as const,
+      clause_number: clause.article,
+      category: clause.category,
+    }] : []),
+    ...(suggestion.standard_clause_ids.length > 0 ? [{
+      type: 'STANDARD_CLAUSE' as const,
+      title: clause.standardTitle,
+      category: clause.category,
+    }] : []),
+    ...suggestion.grounding_source_ids.map(sourceId => {
+      const basis = legalBasis.find(item => item.source_id === sourceId)
+      return {
+        type: 'LAW' as const,
+        law_name: basis?.law_name,
+        article: basis?.article,
+        source_url: basis?.source_url,
+      }
+    }),
+  ] : []
 
   return (
     <div className="space-y-6 animate-fade-up">
@@ -325,19 +347,7 @@ export default function ClauseDetailScreen({ clause, reviewId, onBack, onChatbot
               </button>
             </div>
           )}
-          {(suggestion.user_clause_ids.length > 0 || suggestion.standard_clause_ids.length > 0 || suggestion.grounding_source_ids.length > 0) && (
-            <div className="text-xs leading-5 text-slate-500">
-              {suggestion.user_clause_ids.length > 0 && (
-                <p>참고 사용자 조항: {suggestion.user_clause_ids.join(', ')}</p>
-              )}
-              {suggestion.standard_clause_ids.length > 0 && (
-                <p>참고 표준조항: {suggestion.standard_clause_ids.join(', ')}</p>
-              )}
-              {suggestion.grounding_source_ids.length > 0 && (
-                <p>참고 법령 근거: {suggestion.grounding_source_ids.join(', ')}</p>
-              )}
-            </div>
-          )}
+          <SourceReferences sources={suggestionSources} title="협의 문구 출처" />
           {suggestion.outcome === 'GENERATED' && suggestion.grounding_source_ids.length === 0 && (
             <p className="text-xs text-amber-700">법령 근거 없이 표준조항을 기준으로 작성된 초안입니다.</p>
           )}

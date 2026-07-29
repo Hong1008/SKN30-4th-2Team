@@ -28,4 +28,30 @@ describe('챗봇 요청 상태', () => {
     await userEvent.click(screen.getByRole('button', { name: '질문 전송' }))
     expect(api.chat).toHaveBeenCalledTimes(1)
   })
+
+  it('출처의 내부 ID를 표시하지 않고 안전한 라벨을 사용한다', async () => {
+    vi.mocked(api.chat).mockResolvedValue({
+      data: {
+        answer: '답변입니다.',
+        refused: false,
+        disclaimer: '',
+        limitations: [],
+        outcome: 'ANSWERED',
+        tool_status: 'OK',
+        retryable: false,
+        sources: [
+          { type: 'USER_CLAUSE', id: 'usr_internal_123' },
+          { type: 'STANDARD_CLAUSE', id: 'std_internal_456', display_label: '제5조 · 대금 지급' },
+          { type: 'LAW', id: 'law_internal_789', law_name: '민법', article: '제390조' },
+        ],
+      },
+    } as never)
+    render(<ChatbotScreen {...props} />)
+    await userEvent.type(screen.getByPlaceholderText('검토 결과에 대해 질문해 주세요'), '근거를 알려줘')
+    await userEvent.click(screen.getByRole('button', { name: '질문 전송' }))
+    expect(await screen.findByText('현재 검토 조항')).toBeInTheDocument()
+    expect(screen.getByText('제5조 · 대금 지급')).toBeInTheDocument()
+    expect(screen.getByText('민법 제390조')).toBeInTheDocument()
+    expect(screen.queryByText(/internal_/)).not.toBeInTheDocument()
+  })
 })
