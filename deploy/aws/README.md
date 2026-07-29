@@ -24,6 +24,20 @@ CDK synth 전에 `cd iac && uv sync --no-dev && npm install`로 Python virtual
 environment와 고정 CLI를 준비한다. `cdk.json`은 그 virtual environment의
 Python을 사용하므로 전역 CDK·Python 설치에 의존하지 않는다.
 
+CDK는 기본적으로 `config/prod.example.json`을 사용해 계정 없이 synth한다.
+실제 배포 전에는 이를 복사한 Git 비추적 `config/prod.json`에 account, region,
+단일 availability zone, origin domain, hosted zone, CloudFront origin-facing
+managed prefix list ID를 입력하고 다음처럼 실행한다.
+
+```bash
+cd deploy/aws/iac
+npm exec cdk -- synth --context config=../config/prod.json
+```
+
+`bootstrap/github-oidc-role.yaml`은 OIDC provider와 deploy/execution role의
+최초 생성용 CloudFormation template다. CDK stack보다 먼저 관리자 session으로
+배포한다.
+
 ## 스크립트 경계
 
 - `bootstrap/bootstrap.sh`: GitHub OIDC와 CDK bootstrap의 관리자 진입점

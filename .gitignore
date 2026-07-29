@@ -20,6 +20,7 @@ api/data/
 deploy/aws/iac/cdk.out/
 deploy/aws/iac/.venv/
 deploy/aws/iac/node_modules/
+deploy/aws/iac/cdk.context.json
 deploy/aws/config/prod.json
 deploy/aws/env/*.env
 deploy/aws/env/*.local

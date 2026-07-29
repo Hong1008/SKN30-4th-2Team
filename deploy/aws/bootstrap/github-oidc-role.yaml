@@ -1,0 +1,76 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: WorkShield GitHub Actions OIDC deploy role bootstrap
+Parameters:
+  GitHubOrganization:
+    Type: String
+    Default: Hong1008
+  GitHubRepository:
+    Type: String
+    Default: SKN30-4th-2Team
+  GitHubEnvironment:
+    Type: String
+    Default: production
+  DeployRoleName:
+    Type: String
+    Default: workshield-prod-github-deploy
+Resources:
+  GitHubOidcProvider:
+    Type: AWS::IAM::OIDCProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList: [sts.amazonaws.com]
+  CloudFormationExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: workshield-prod-cfn-execution
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: {Service: cloudformation.amazonaws.com}
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: WorkShieldInfrastructure
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [ec2:*, cloudfront:*, s3:*, route53:*, ssm:*, secretsmanager:*, logs:*, cloudwatch:*]
+                Resource: '*'
+              - Effect: Allow
+                Action: [iam:CreateRole, iam:DeleteRole, iam:GetRole, iam:PassRole, iam:AttachRolePolicy, iam:DetachRolePolicy, iam:PutRolePolicy, iam:DeleteRolePolicy]
+                Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/workshield-*
+  GitHubDeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Ref DeployRoleName
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Ref GitHubOidcProvider
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:sub: !Sub repo:${GitHubOrganization}/${GitHubRepository}:environment:${GitHubEnvironment}
+      Policies:
+        - PolicyName: WorkShieldDeployOrchestration
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [cloudformation:CreateChangeSet, cloudformation:Describe*, cloudformation:ExecuteChangeSet, cloudformation:DeleteChangeSet, cloudformation:DeleteStack]
+                Resource: '*'
+              - Effect: Allow
+                Action: sts:AssumeRole
+                Resource: !GetAtt CloudFormationExecutionRole.Arn
+              - Effect: Allow
+                Action: [s3:ListBucket, s3:GetObject, s3:PutObject, s3:DeleteObject, cloudfront:CreateInvalidation, cloudfront:GetDistribution, ssm:SendCommand, ssm:GetCommandInvocation, ec2:DescribeInstances]
+                Resource: '*'
+Outputs:
+  GitHubDeployRoleArn:
+    Value: !GetAtt GitHubDeployRole.Arn
+  CloudFormationExecutionRoleArn:
+    Value: !GetAtt CloudFormationExecutionRole.Arn
