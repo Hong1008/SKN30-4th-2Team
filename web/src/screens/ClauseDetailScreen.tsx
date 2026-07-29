@@ -1,3 +1,4 @@
+import { createClientId } from '../utils/clientId'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { ArrowLeft, Scale, Copy, ChevronRight, MessageSquare, Check, BookOpen, Loader2, RefreshCw } from 'lucide-react'
 import Badge from '../components/Badge'
@@ -69,7 +70,7 @@ export default function ClauseDetailScreen({ clause, reviewId, onBack, onChatbot
     setSuggestionError('')
     setSuggestion(null)
     try {
-      const idempotencyKey = suggestionRequestKey.current ?? crypto.randomUUID()
+      const idempotencyKey = suggestionRequestKey.current ?? createClientId()
       suggestionRequestKey.current = idempotencyKey
       const response = await api.suggestions(
         reviewId,
