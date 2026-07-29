@@ -167,9 +167,8 @@ export default function ClauseDetailScreen({ clause, reviewId, onBack, onChatbot
           <pre className="flex-1 whitespace-pre-wrap break-words px-5 py-5 font-sans text-sm leading-7 text-slate-800">
             {clause.standardText || '매칭된 표준 조항이 없습니다.'}
           </pre>
-          {clause.standardClauseId && (
+          {(clause.standardVersion || clause.standardSource) && (
             <div className="border-t border-blue-100 px-5 py-3 text-xs leading-5 text-slate-500">
-              <p>표준조항 ID: {clause.standardClauseId}</p>
               {clause.standardVersion && <p>버전: {clause.standardVersion}</p>}
               {clause.standardSource && <p>출처: {clause.standardSource}</p>}
             </div>
@@ -325,17 +324,20 @@ export default function ClauseDetailScreen({ clause, reviewId, onBack, onChatbot
               </button>
             </div>
           )}
-          {(suggestion.user_clause_ids.length > 0 || suggestion.standard_clause_ids.length > 0 || suggestion.grounding_source_ids.length > 0) && (
+          {suggestion.sources.length > 0 && (
             <div className="text-xs leading-5 text-slate-500">
-              {suggestion.user_clause_ids.length > 0 && (
-                <p>참고 사용자 조항: {suggestion.user_clause_ids.join(', ')}</p>
-              )}
-              {suggestion.standard_clause_ids.length > 0 && (
-                <p>참고 표준조항: {suggestion.standard_clause_ids.join(', ')}</p>
-              )}
-              {suggestion.grounding_source_ids.length > 0 && (
-                <p>참고 법령 근거: {suggestion.grounding_source_ids.join(', ')}</p>
-              )}
+              <p className="font-semibold text-slate-600">참고 출처</p>
+              {suggestion.sources.map((source, index) => {
+                const prefix = source.type === 'USER_CLAUSE' ? '사용자 조항'
+                  : source.type === 'STANDARD_CLAUSE' ? '표준조항'
+                    : '법령 근거'
+                const label = source.display_label
+                  || [source.law_name, source.article].filter(Boolean).join(' ')
+                  || prefix
+                return source.source_url
+                  ? <a key={`${source.type}-${source.id}-${index}`} href={source.source_url} target="_blank" rel="noreferrer" className="block text-blue-700 underline">{prefix} · {label}</a>
+                  : <p key={`${source.type}-${source.id}-${index}`}>{prefix} · {label}</p>
+              })}
             </div>
           )}
           {suggestion.outcome === 'GENERATED' && suggestion.grounding_source_ids.length === 0 && (

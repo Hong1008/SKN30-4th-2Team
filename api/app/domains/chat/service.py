@@ -4,6 +4,9 @@ import asyncio
 import json
 import logging
 import re
+import time
+from collections.abc import Mapping
+from dataclasses import dataclass
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -31,6 +34,7 @@ from app.domains.grounding.schemas import (
     GroundingStatus,
 )
 from app.domains.reviews.context import (
+    clause_display_label,
     clause_category,
     clause_results,
     find_user_clause,
@@ -46,6 +50,7 @@ DISCLAIMER = "현재 검토 결과와 확인된 근거에 한정한 참고 설�
 MCP_NOT_REQUESTED = "NOT_REQUESTED"
 MAX_USER_CLAUSE_CHARS = 1200
 MAX_STANDARD_CLAUSE_CHARS = 1000
+MAX_RELEVANT_CLAUSES = 3
 GENERIC_QUESTION_TERMS = {
     "계약",
     "계약서",
@@ -61,6 +66,58 @@ GENERIC_QUESTION_TERMS = {
     "해주세요",
     "해야",
     "하나요",
+    "정한",
+    "정하다",
+    "있나요",
+    "어디",
+    "어디인가요",
+    "인가요",
+    "되나요",
+}
+KOREAN_PARTICLE_SUFFIXES = (
+    "으로부터",
+    "에서부터",
+    "에게서",
+    "으로는",
+    "에서는",
+    "으로",
+    "에서",
+    "에게",
+    "까지",
+    "부터",
+    "처럼",
+    "보다",
+    "은",
+    "는",
+    "이",
+    "가",
+    "을",
+    "를",
+    "에",
+    "의",
+    "도",
+    "만",
+    "와",
+    "과",
+    "로",
+)
+WHOLE_REVIEW_PATTERN = re.compile(r"(전체|전반|모든|요약)")
+MONEY_QUESTION_PATTERN = re.compile(r"(얼마|금액|대금|보수|비용|돈)")
+MONEY_EVIDENCE_PATTERN = re.compile(
+    r"(\d[\d,]*(?:\.\d+)?\s*원|금액|대금|보수|비용|지급)"
+)
+DATE_QUESTION_PATTERN = re.compile(r"(언제|기간|기한|날짜|며칠|몇\s*일)")
+DATE_EVIDENCE_PATTERN = re.compile(
+    r"(\d+\s*(일|개월|년|영업일)|기간|기한|날짜|까지|이내|이후|이전)"
+)
+INCOMPLETE_END_PATTERN = re.compile(
+    r"([,:;·/\-]|이며|이고|하고|하거나|따라서|그러나|또한|반면에|때문에)\s*$"
+)
+TOKEN_LIMIT_FINISH_REASONS = {
+    "length",
+    "max_tokens",
+    "max_token",
+    "max_output_tokens",
 }
 LEGAL_QUESTION_PATTERN = re.compile(
     r"(법률|법령|법적|법적으로|위법|불법|합법|적법|조문|법조문|판례|"
@@ -78,8 +135,10 @@ COMMON_SYSTEM_PROMPT = """당신은 현재 계약 검토 문맥에 근거해 답
 - 법령 근거가 없더라도 사용자 조항, 표준조항 또는 비교·검토 결과가 있으면 확인 가능한 범위에서 설명하거나 협의문구를 작성하세요. 법령 조회가 실패하거나 결과가 없으면 법령을 추측하지 말고 법령 근거를 확인하지 못했다는 한계를 limitations에 밝히세요.
 - 법률적 확정 판단이 어려우면 그 한계를 분명히 밝히고 합법·위법·유효성·승소 가능성을 단정하지 마세요.
 - 사용자 조항, 표준조항, 비교·검토 결과와 법령 근거가 모두 없을 때만 INSUFFICIENT_GROUNDING을 반환하세요.
+- review_result.required_source_keys가 있으면 질문에 직접 관련된 근거가 이미 선별된 것입니다. 이 근거로 답할 수 있는데도 INSUFFICIENT_GROUNDING을 반환하지 마세요.
 - deviation이 NONE이어도 동일함, 적절함, 문제없음 또는 안전함을 뜻하지 않습니다. "표준 대응 후보가 확인됨"으로만 표현하세요.
-- ANSWERED이면 answer를 공백이 아닌 문장으로 작성하고, sources.id에는 입력에 제공된 source_key만 사용하세요.
+- ANSWERED이면 answer를 공백이 아닌 완결된 문장으로 작성하고, sources.id에는 입력에 제공된 source_key만 사용하세요. 답변에 직접 사용한 근거가 여러 개라면 sources에 모두 포함하세요.
+- 답변을 쉼표, 접속어, 열린 괄호처럼 뒤 내용이 필요한 상태로 끝내지 마세요.
 - source_key, SRC_USER, SRC_STANDARD, SRC_LAW 같은 내부 식별자를 answer 본문에는 절대 쓰지 마세요.
 - deviation 코드(NONE, EXTRA, NO_MATCH)를 그대로 풀이하거나 "일치"라고 표현하지 말고 실제 조항 문언의 차이만 설명하세요.
 - 사용자가 이해하기 쉬운 한국어로 핵심부터 답하세요.
@@ -91,6 +150,25 @@ GROUNDING_STATUS_PRIORITY = {
     GroundingStatus.TIMEOUT: 3,
     GroundingStatus.UPSTREAM_ERROR: 4,
 }
+
+
+@dataclass(frozen=True, slots=True)
+class ClauseSelection:
+    clauses: list[dict[str, object]]
+    missing_standards: list[dict[str, object]]
+    confident: bool
+    whole_review: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class StructuredGeneration:
+    parsed: object
+    parsing_error: BaseException | None
+    finish_reason: str | None
+    prompt_tokens: int | None
+    completion_tokens: int | None
+    total_tokens: int | None
+    duration_ms: float
 
 
 def _is_legal_question(question: str) -> bool:
@@ -231,7 +309,8 @@ def _compact_review_context(
     result: dict[str, object],
     selected_clauses: list[dict[str, object]],
     *,
-    include_missing: bool,
+    selected_missing_standards: list[dict[str, object]],
+    required_source_ids: set[str],
 ) -> tuple[dict[str, object], dict[str, tuple[str, str]]]:
     """전체 원문 폭증과 긴 내부 ID 복사를 막는 LLM 전용 문맥을 만든다."""
     source_map: dict[str, tuple[str, str]] = {}
@@ -285,31 +364,37 @@ def _compact_review_context(
         )
 
     compact_missing: list[dict[str, object]] = []
-    missing = result.get("missing_standard_clauses")
-    if include_missing and isinstance(missing, list):
-        for raw in missing:
-            if not isinstance(raw, dict):
-                continue
-            standard = raw.get("standard")
-            if not isinstance(standard, dict):
-                continue
-            raw_id = standard.get("clause_id") or standard.get("id")
-            actual_id = str(raw_id) if raw_id is not None else None
-            compact_missing.append(
-                {
-                    "deviation": "MISSING",
-                    "standard": {
-                        "source_key": source_key("STANDARD_CLAUSE", actual_id),
-                        "category": standard.get("category"),
-                        "title": standard.get("title"),
-                    },
-                }
-            )
+    for raw in selected_missing_standards:
+        standard = raw.get("standard")
+        if not isinstance(standard, dict):
+            continue
+        raw_id = standard.get("clause_id") or standard.get("id")
+        actual_id = str(raw_id) if raw_id is not None else None
+        compact_missing.append(
+            {
+                "deviation": "MISSING",
+                "standard": {
+                    "source_key": source_key("STANDARD_CLAUSE", actual_id),
+                    "category": standard.get("category"),
+                    "title": standard.get("title"),
+                    "text": _clip_text(
+                        standard.get("text"),
+                        MAX_STANDARD_CLAUSE_CHARS,
+                    ),
+                },
+            }
+        )
+    required_source_keys = [
+        key
+        for key, (_source_type, actual_id) in source_map.items()
+        if actual_id in required_source_ids
+    ]
     return (
         {
             "status": result.get("status"),
             "clause_results": compact_clauses,
             "missing_standard_clauses": compact_missing,
+            "required_source_keys": required_source_keys,
         },
         source_map,
     )
@@ -319,30 +404,191 @@ def _relevant_clause_results(
     result: dict[str, object],
     question: str,
     focused: dict[str, object] | None,
-) -> list[dict[str, object]]:
-    """전체 질문에서 문언이 직접 겹치는 조항을 우선해 로컬 모델 입력을 줄인다."""
+) -> ClauseSelection:
+    """사용자 조항과 누락 표준조항을 섞지 않고 질문 근거를 선별한다."""
     if focused is not None:
-        return [focused]
+        return ClauseSelection([focused], [], confident=True)
     candidates = clause_results(result)
-    if not candidates or re.search(r"(전체|전반|모든|요약)", question):
-        return candidates
-    terms = {
-        term
-        for term in re.findall(r"[가-힣A-Za-z0-9]{2,}", question)
-        if term not in GENERIC_QUESTION_TERMS
-    }
+    missing = result.get("missing_standard_clauses")
+    missing_candidates = (
+        [item for item in missing if isinstance(item, dict)]
+        if isinstance(missing, list)
+        else []
+    )
+    if WHOLE_REVIEW_PATTERN.search(question):
+        return ClauseSelection(
+            candidates,
+            missing_candidates,
+            confident=True,
+            whole_review=True,
+        )
+
+    terms = _question_terms(question)
+    phrases = _question_phrases(question)
     if not terms:
-        return candidates
-    scored: list[tuple[int, dict[str, object]]] = []
+        return ClauseSelection(candidates, [], confident=False)
+
+    scored: list[tuple[float, int, dict[str, object], set[str]]] = []
     for item in candidates:
-        searchable = json.dumps(item, ensure_ascii=False, default=str)
-        score = sum(1 for term in terms if term in searchable)
-        if score:
-            scored.append((score, item))
-    if not scored:
-        return candidates
-    best_score = max(score for score, _item in scored)
-    return [item for score, item in scored if score == best_score][:3]
+        user_clause = item.get("user_clause")
+        searchable = user_clause if isinstance(user_clause, str) else ""
+        score, signals = _relevance_score(terms, phrases, searchable)
+        if MONEY_QUESTION_PATTERN.search(question) and MONEY_EVIDENCE_PATTERN.search(
+            searchable
+        ):
+            score += 3.0
+            signals.add("__money__")
+        if DATE_QUESTION_PATTERN.search(question) and DATE_EVIDENCE_PATTERN.search(
+            searchable
+        ):
+            score += 3.0
+            signals.add("__date__")
+        scored.append((score, len(scored), item, signals))
+
+    selected = _select_signal_covering_candidates(scored)
+    if selected:
+        return ClauseSelection(selected, [], confident=True)
+
+    missing_scored: list[tuple[float, int, dict[str, object], set[str]]] = []
+    for item in missing_candidates:
+        standard = item.get("standard")
+        searchable = (
+            json.dumps(standard, ensure_ascii=False, default=str)
+            if isinstance(standard, dict)
+            else ""
+        )
+        score, signals = _relevance_score(terms, phrases, searchable)
+        missing_scored.append((score, len(missing_scored), item, signals))
+    selected_missing = _select_signal_covering_candidates(missing_scored)
+    if selected_missing:
+        return ClauseSelection([], selected_missing, confident=True)
+
+    return ClauseSelection(candidates, [], confident=False)
+
+
+def _term_variants(term: str) -> set[str]:
+    """복합 조사도 한 단계씩 제거하되 두 글자 미만 어간은 만들지 않는다."""
+    variants = {term}
+    current = term
+    while True:
+        stripped = current
+        for suffix in KOREAN_PARTICLE_SUFFIXES:
+            if current.endswith(suffix) and len(current) - len(suffix) >= 2:
+                stripped = current[: -len(suffix)]
+                break
+        if stripped == current:
+            return variants
+        variants.add(stripped)
+        current = stripped
+
+
+def _is_generic_question_term(raw: str, normalized: str) -> bool:
+    return (
+        raw in GENERIC_QUESTION_TERMS
+        or normalized in GENERIC_QUESTION_TERMS
+        or re.fullmatch(r"[갑을][은는이가의과와을를]", raw) is not None
+    )
+
+
+def _meaningful_question_roots(question: str) -> list[str]:
+    roots: list[str] = []
+    for raw in re.findall(r"[가-힣A-Za-z0-9]{2,}", question.lower()):
+        variants = _term_variants(raw)
+        normalized = min(variants, key=len)
+        if _is_generic_question_term(raw, normalized):
+            continue
+        roots.append(normalized)
+    return roots
+
+
+def _question_terms(question: str) -> set[str]:
+    terms: set[str] = set()
+    for raw in re.findall(r"[가-힣A-Za-z0-9]{2,}", question.lower()):
+        variants = _term_variants(raw)
+        normalized = min(variants, key=len)
+        if _is_generic_question_term(raw, normalized):
+            continue
+        terms.update(
+            variant
+            for variant in variants
+            if variant not in GENERIC_QUESTION_TERMS
+        )
+    return terms
+
+
+def _question_phrases(question: str) -> set[str]:
+    roots = _meaningful_question_roots(question)
+    return {
+        _normalized_similarity_text("".join(roots[index : index + 2]))
+        for index in range(len(roots) - 1)
+    }
+
+
+def _normalized_similarity_text(value: str) -> str:
+    return re.sub(r"[^가-힣a-z0-9]", "", value.lower())
+
+
+def _character_ngrams(value: str, size: int) -> set[str]:
+    if len(value) <= size:
+        return {value} if value else set()
+    return {value[index : index + size] for index in range(len(value) - size + 1)}
+
+
+def _term_similarity_score(term: str, searchable: str) -> float:
+    normalized_term = _normalized_similarity_text(term)
+    normalized_searchable = _normalized_similarity_text(searchable)
+    if len(normalized_term) < 2 or not normalized_searchable:
+        return 0.0
+    if normalized_term in normalized_searchable:
+        return 8.0 + min(len(normalized_term), 8) / 2
+
+    gram_size = 2 if len(normalized_term) <= 3 else 3
+    term_grams = _character_ngrams(normalized_term, gram_size)
+    if not term_grams:
+        return 0.0
+    searchable_grams = _character_ngrams(normalized_searchable, gram_size)
+    overlap_ratio = len(term_grams & searchable_grams) / len(term_grams)
+    return overlap_ratio * 4.0 if overlap_ratio >= 0.5 else 0.0
+
+
+def _relevance_score(
+    terms: set[str],
+    phrases: set[str],
+    searchable: str,
+) -> tuple[float, set[str]]:
+    normalized_searchable = _normalized_similarity_text(searchable)
+    signals: set[str] = set()
+    score = 0.0
+    for phrase in phrases:
+        if len(phrase) >= 4 and phrase in normalized_searchable:
+            score += 18.0
+            signals.add(f"phrase:{phrase}")
+    for term in terms:
+        normalized_term = _normalized_similarity_text(term)
+        term_score = _term_similarity_score(term, searchable)
+        score += term_score
+        if len(normalized_term) >= 2 and normalized_term in normalized_searchable:
+            signals.add(f"term:{min(_term_variants(term), key=len)}")
+    return score, signals
+
+
+def _select_signal_covering_candidates(
+    scored: list[tuple[float, int, dict[str, object], set[str]]],
+) -> list[dict[str, object]]:
+    """최고 점수 조항부터 질문의 새 핵심어를 설명하는 조항만 추가한다."""
+    ranked = sorted(scored, key=lambda entry: (-entry[0], entry[1]))
+    if not ranked or ranked[0][0] < 8.0 or not ranked[0][3]:
+        return []
+    selected: list[dict[str, object]] = []
+    covered_signals: set[str] = set()
+    for score, _index, item, signals in ranked:
+        if score < 8.0 or not (signals - covered_signals):
+            continue
+        selected.append(item)
+        covered_signals.update(signals)
+        if len(selected) == MAX_RELEVANT_CLAUSES:
+            break
+    return selected
 
 
 def _sanitize_answer(answer: str) -> str:
@@ -395,6 +641,161 @@ def _is_llm_connection_failure(error: BaseException) -> bool:
     )
 
 
+def _value(source: object | None, key: str) -> object | None:
+    if source is None:
+        return None
+    if isinstance(source, Mapping):
+        return source.get(key)
+    return getattr(source, key, None)
+
+
+def _token_count(source: object | None, *keys: str) -> int | None:
+    for key in keys:
+        value = _value(source, key)
+        if isinstance(value, int):
+            return value
+    return None
+
+
+def _structured_generation(result: object, duration_ms: float) -> StructuredGeneration:
+    if not isinstance(result, Mapping) or "parsed" not in result:
+        return StructuredGeneration(
+            parsed=result,
+            parsing_error=None,
+            finish_reason=None,
+            prompt_tokens=None,
+            completion_tokens=None,
+            total_tokens=None,
+            duration_ms=duration_ms,
+        )
+
+    raw_message = result.get("raw")
+    response_metadata = _value(raw_message, "response_metadata")
+    finish_reason = _value(response_metadata, "finish_reason")
+    if finish_reason is None:
+        finish_reason = _value(raw_message, "finish_reason")
+    usage = _value(raw_message, "usage_metadata") or _value(
+        response_metadata,
+        "token_usage",
+    )
+    parsing_error = result.get("parsing_error")
+    return StructuredGeneration(
+        parsed=result.get("parsed"),
+        parsing_error=parsing_error
+        if isinstance(parsing_error, BaseException)
+        else None,
+        finish_reason=str(finish_reason) if finish_reason is not None else None,
+        prompt_tokens=_token_count(usage, "input_tokens", "prompt_tokens"),
+        completion_tokens=_token_count(usage, "output_tokens", "completion_tokens"),
+        total_tokens=_token_count(usage, "total_tokens"),
+        duration_ms=duration_ms,
+    )
+
+
+async def _generate_structured_chat(
+    model: BaseChatModel,
+    messages: list[SystemMessage | HumanMessage],
+    timeout_seconds: float,
+) -> StructuredGeneration:
+    started = time.monotonic()
+    structured = model.with_structured_output(
+        ChatStructuredOutput,
+        include_raw=True,
+    )
+    result = await asyncio.wait_for(
+        structured.ainvoke(messages),
+        timeout=timeout_seconds,
+    )
+    return _structured_generation(
+        result,
+        duration_ms=(time.monotonic() - started) * 1000,
+    )
+
+
+def _has_unclosed_delimiters(answer: str) -> bool:
+    delimiter_pairs = (("(", ")"), ("[", "]"), ("{", "}"), ("“", "”"), ("‘", "’"))
+    return any(
+        answer.count(opening) != answer.count(closing)
+        for opening, closing in delimiter_pairs
+    )
+
+
+def _is_incomplete_answer(answer: str, finish_reason: str | None) -> bool:
+    normalized_reason = (finish_reason or "").strip().lower()
+    if normalized_reason in TOKEN_LIMIT_FINISH_REASONS:
+        return True
+    stripped = answer.strip()
+    return bool(
+        not stripped
+        or INCOMPLETE_END_PATTERN.search(stripped)
+        or _has_unclosed_delimiters(stripped)
+    )
+
+
+def _source_ids_for_clauses(
+    clauses: list[dict[str, object]],
+) -> set[str]:
+    source_ids: set[str] = set()
+    for clause in clauses:
+        user_id = user_clause_id(clause)
+        standard_id = standard_clause_id(clause)
+        if user_id:
+            source_ids.add(user_id)
+        if standard_id:
+            source_ids.add(standard_id)
+    return source_ids
+
+
+def _source_display_labels(
+    result: dict[str, object],
+) -> dict[tuple[str, str], str]:
+    labels: dict[tuple[str, str], str] = {}
+    candidates = clause_results(result)
+    missing = result.get("missing_standard_clauses")
+    if isinstance(missing, list):
+        candidates.extend(item for item in missing if isinstance(item, dict))
+    for item in candidates:
+        user_id = user_clause_id(item)
+        user_label = clause_display_label(item.get("user_clause"))
+        if user_id and user_label:
+            labels[("USER_CLAUSE", user_id)] = user_label
+        standard = standard_clause(item)
+        standard_id = standard_clause_id(item)
+        if standard is None:
+            raw_standard = item.get("standard")
+            standard = raw_standard if isinstance(raw_standard, dict) else None
+            if standard is not None:
+                raw_id = standard.get("clause_id") or standard.get("id")
+                standard_id = str(raw_id) if raw_id is not None else None
+        if standard is not None and standard_id:
+            standard_label = clause_display_label(
+                standard.get("text"),
+                standard.get("title"),
+            )
+            if standard_label:
+                labels[("STANDARD_CLAUSE", standard_id)] = standard_label
+    return labels
+
+
+def _required_source_ids(selection: ClauseSelection) -> set[str]:
+    """근거 일관성 검증에는 직접 선별한 사용자/누락 표준조항만 사용한다."""
+    if not selection.confident or selection.whole_review:
+        return set()
+    required = {
+        source_id
+        for item in selection.clauses
+        if (source_id := user_clause_id(item))
+    }
+    for item in selection.missing_standards:
+        standard = item.get("standard")
+        if not isinstance(standard, dict):
+            continue
+        raw_id = standard.get("clause_id") or standard.get("id")
+        if raw_id is not None:
+            required.add(str(raw_id))
+    return required
+
+
 async def answer_review_question(
     review: Review,
     payload: ChatRequest,
@@ -439,6 +840,12 @@ async def answer_review_question(
         if grounding.grounding_status == "OK"
         for item in grounding.items
     }
+    law_sources = {
+        item.source_id: item
+        for grounding in groundings
+        if grounding.grounding_status == "OK"
+        for item in grounding.items
+    }
     tool_status, grounding_limitations = _grounding_outcome(groundings)
     has_review_evidence = _has_review_evidence(review.result, focused)
     if not has_review_evidence and not law_ids:
@@ -455,16 +862,17 @@ async def answer_review_question(
             disclaimer=DISCLAIMER,
         )
 
-    selected_clauses = _relevant_clause_results(
+    clause_selection = _relevant_clause_results(
         review.result,
         payload.message,
         focused,
     )
-    all_clauses = clause_results(review.result)
+    required_source_ids = _required_source_ids(clause_selection)
     compact_review_result, source_map = _compact_review_context(
         review.result,
-        selected_clauses,
-        include_missing=len(selected_clauses) == len(all_clauses),
+        clause_selection.clauses,
+        selected_missing_standards=clause_selection.missing_standards,
+        required_source_ids=required_source_ids,
     )
     compact_grounding = _compact_grounding_context(groundings, source_map)
     safe_focused = (
@@ -490,48 +898,113 @@ async def answer_review_question(
             + json.dumps(context, ensure_ascii=False, default=str)
         ),
     ]
-    try:
-        structured = model.with_structured_output(ChatStructuredOutput)
-        raw = await asyncio.wait_for(
-            structured.ainvoke(messages),
-            timeout=llm_policy.timeout_seconds,
-        )
-    except Exception as error:
-        if _is_llm_timeout(error):
-            raise ExternalServiceTimeoutError(
-                code="LLM_TIMEOUT",
-                message="답변 생성 시간이 초과되었습니다.",
-                retryable=True,
-                next_action="RETRY",
-            ) from error
-        if _is_llm_connection_failure(error):
-            raise ExternalServiceError(
-                code="LLM_CONNECTION_FAILED",
-                message="답변 생성 서비스에 연결하지 못했습니다.",
-                retryable=True,
-                next_action="RETRY",
-            ) from error
-        return _invalid_response(
-            review,
-            "STRUCTURED_OUTPUT_INVOCATION_FAILED",
-            error_type=type(error).__name__,
-        )
+    output: ChatStructuredOutput | None = None
+    for attempt in range(2):
+        try:
+            generation = await _generate_structured_chat(
+                model,
+                messages,
+                llm_policy.timeout_seconds,
+            )
+        except Exception as error:
+            if _is_llm_timeout(error):
+                raise ExternalServiceTimeoutError(
+                    code="LLM_TIMEOUT",
+                    message="답변 생성 시간이 초과되었습니다.",
+                    retryable=True,
+                    next_action="RETRY",
+                ) from error
+            if _is_llm_connection_failure(error):
+                raise ExternalServiceError(
+                    code="LLM_CONNECTION_FAILED",
+                    message="답변 생성 서비스에 연결하지 못했습니다.",
+                    retryable=True,
+                    next_action="RETRY",
+                ) from error
+            return _invalid_response(
+                review,
+                "STRUCTURED_OUTPUT_INVOCATION_FAILED",
+                error_type=type(error).__name__,
+            )
 
-    if raw is None or (isinstance(raw, str) and not raw.strip()):
+        log_event(
+            event="llm.chat.generation",
+            review_id=review.id,
+            state=attempt + 1,
+            reason=generation.finish_reason,
+            prompt_tokens=generation.prompt_tokens,
+            completion_tokens=generation.completion_tokens,
+            total_tokens=generation.total_tokens,
+            duration_ms=generation.duration_ms,
+        )
+        raw = generation.parsed
+        if generation.parsing_error is not None:
+            return _invalid_response(
+                review,
+                "STRUCTURED_OUTPUT_PARSE_FAILED",
+                error_type=type(generation.parsing_error).__name__,
+            )
+        if raw is None or (isinstance(raw, str) and not raw.strip()):
+            return _invalid_response(review, "EMPTY_OUTPUT")
+        try:
+            output = (
+                raw
+                if isinstance(raw, ChatStructuredOutput)
+                else ChatStructuredOutput.model_validate(raw)
+            )
+        except Exception as error:
+            return _invalid_response(
+                review,
+                "STRUCTURED_OUTPUT_PARSE_FAILED",
+                error_type=type(error).__name__,
+            )
+
+        if output.outcome == "ANSWERED" and (
+            not output.answer or not output.answer.strip()
+        ):
+            return _invalid_response(review, "EMPTY_ANSWER")
+        if (
+            output.outcome == "ANSWERED"
+            and output.answer
+            and _is_incomplete_answer(output.answer, generation.finish_reason)
+        ):
+            if attempt == 0:
+                messages = [
+                    *messages,
+                    HumanMessage(
+                        content=(
+                            "직전 생성이 토큰 제한 또는 불완전한 문장으로 끝났습니다. "
+                            "동일한 JSON 근거만 사용하고 핵심을 더 간결하게 정리해, "
+                            "답변 전체를 처음부터 완결된 형태로 다시 작성하세요."
+                        )
+                    ),
+                ]
+                continue
+            return _invalid_response(review, "INCOMPLETE_ANSWER")
+        if (
+            output.outcome == "INSUFFICIENT_GROUNDING"
+            and required_source_ids
+        ):
+            if attempt == 0:
+                messages = [
+                    *messages,
+                    HumanMessage(
+                        content=(
+                            "직전 응답은 INSUFFICIENT_GROUNDING이었지만 "
+                            "review_result.required_source_keys에 질문과 직접 관련된 "
+                            "근거가 있습니다. 동일한 JSON 근거만 사용해 질문에 답하고, "
+                            "사용한 required_source_keys를 sources에 포함하세요."
+                        )
+                    ),
+                ]
+                continue
+            return _invalid_response(review, "GROUNDING_CONTRADICTION")
+        break
+
+    if output is None:
         return _invalid_response(review, "EMPTY_OUTPUT")
-    try:
-        output = (
-            raw
-            if isinstance(raw, ChatStructuredOutput)
-            else ChatStructuredOutput.model_validate(raw)
-        )
-    except Exception as error:
-        return _invalid_response(
-            review,
-            "STRUCTURED_OUTPUT_PARSE_FAILED",
-            error_type=type(error).__name__,
-        )
 
+    source_labels = _source_display_labels(review.result)
     resolved_sources: list[ChatSource] = []
     for source in output.sources:
         mapped = source_map.get(source.id or "")
@@ -544,46 +1017,105 @@ async def answer_review_question(
         if source.type == "LAW":
             if not source.id or source.id not in law_ids:
                 return _invalid_response(review, "UNKNOWN_LAW_SOURCE")
+            law_source = law_sources[source.id]
+            source = source.model_copy(
+                update={
+                    "display_label": " ".join(
+                        part
+                        for part in (law_source.law_name, law_source.article)
+                        if part
+                    )
+                    or None,
+                    "law_name": law_source.law_name,
+                    "article": law_source.article,
+                    "source_url": law_source.source_url,
+                }
+            )
         elif not source.id or (
             not was_mapped and source.id not in registry[source.type]
         ):
             return _invalid_response(review, "UNKNOWN_CLAUSE_SOURCE")
+        if source.type != "LAW" and source.id:
+            source = source.model_copy(
+                update={
+                    "display_label": source_labels.get(
+                        (str(source.type), source.id)
+                    ),
+                    "source_url": None,
+                }
+            )
         resolved_sources.append(source)
     output.sources = resolved_sources
-    cited_ids = {source.id for source in resolved_sources if source.id}
+    cited_sources = {
+        (str(source.type), source.id)
+        for source in resolved_sources
+        if source.id
+    }
+    required_source_types = {
+        actual_id: source_type
+        for source_type, actual_id in source_map.values()
+        if actual_id in required_source_ids
+    }
+    for actual_id in required_source_ids:
+        source_type = required_source_types.get(actual_id)
+        if source_type is None or (source_type, actual_id) in cited_sources:
+            continue
+        output.sources.append(
+            ChatSource(
+                type=source_type,
+                id=actual_id,
+                display_label=source_labels.get((source_type, actual_id)),
+            )
+        )
+        cited_sources.add((source_type, actual_id))
     for grounding in groundings:
         if grounding.grounding_status != "OK":
             continue
         for item in grounding.items:
-            if item.source_id in cited_ids:
+            if ("LAW", item.source_id) in cited_sources:
                 continue
             output.sources.append(
                 ChatSource(
                     type="LAW",
                     id=item.source_id,
+                    display_label=" ".join(
+                        part
+                        for part in (item.law_name, item.article)
+                        if part
+                    )
+                    or None,
                     law_name=item.law_name,
                     article=item.article,
+                    source_url=item.source_url,
                 )
             )
-            cited_ids.add(item.source_id)
-    if output.outcome == "ANSWERED" and (
-        not output.answer or not output.answer.strip()
-    ):
-        return _invalid_response(review, "EMPTY_ANSWER")
+            cited_sources.add(("LAW", item.source_id))
     if output.outcome == "ANSWERED" and not output.sources:
-        law_metadata = {
-            item.source_id: item
-            for grounding in groundings
-            for item in grounding.items
-        }
+        fallback_selection = clause_selection
+        if not fallback_selection.confident and output.answer:
+            fallback_selection = _relevant_clause_results(
+                review.result,
+                output.answer,
+                focused,
+            )
+        allowed_source_ids = _source_ids_for_clauses(fallback_selection.clauses)
+        for item in fallback_selection.missing_standards:
+            standard = item.get("standard")
+            if not isinstance(standard, dict):
+                continue
+            raw_id = standard.get("clause_id") or standard.get("id")
+            if raw_id is not None:
+                allowed_source_ids.add(str(raw_id))
+        if not fallback_selection.confident or not allowed_source_ids:
+            return _invalid_response(review, "EMPTY_SOURCES")
         for source_type, actual_id in dict.fromkeys(source_map.values()):
-            law = law_metadata.get(actual_id)
+            if source_type == "LAW" or actual_id not in allowed_source_ids:
+                continue
             output.sources.append(
                 ChatSource(
                     type=source_type,
                     id=actual_id,
-                    law_name=law.law_name if law else None,
-                    article=law.article if law else None,
+                    display_label=source_labels.get((source_type, actual_id)),
                 )
             )
     refused = output.outcome != "ANSWERED"

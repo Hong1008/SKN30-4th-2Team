@@ -34,6 +34,7 @@ class GroundingTool:
                     "article": "제390조",
                     "text": "채무불이행으로 인한 손해배상에 관한 참고 원문입니다.",
                     "source": "국가법령정보센터",
+                    "source_url": "https://www.law.go.kr/법령/민법/제390조",
                 }
             ],
         }
@@ -181,6 +182,32 @@ async def test_backend_binds_ids_from_source_keys_without_exposing_them_to_llm()
     assert response.user_clause_ids == ["uc_rev_suggestion_1"]
     assert response.standard_clause_ids == ["std_liability_1"]
     assert response.grounding_source_ids == ["law_1"]
+    assert [source.model_dump() for source in response.sources] == [
+        {
+            "type": "USER_CLAUSE",
+            "id": "uc_rev_suggestion_1",
+            "display_label": None,
+            "law_name": None,
+            "article": None,
+            "source_url": None,
+        },
+        {
+            "type": "STANDARD_CLAUSE",
+            "id": "std_liability_1",
+            "display_label": "손해배상",
+            "law_name": None,
+            "article": None,
+            "source_url": None,
+        },
+        {
+            "type": "LAW",
+            "id": "law_1",
+            "display_label": "민법 제390조",
+            "law_name": "민법",
+            "article": "제390조",
+            "source_url": "https://www.law.go.kr/법령/민법/제390조",
+        },
+    ]
     assert "uc_rev_suggestion_1" not in model.prompts[0]
     assert "std_liability_1" not in model.prompts[0]
     assert "law_1" not in model.prompts[0]

@@ -26,7 +26,7 @@ interface Message {
   refused?: boolean
   disclaimer?: string
   limitations?: string[]
-  sources?: Array<{ label: string; type: string }>
+  sources?: Array<{ label: string; type: string; sourceUrl?: string | null }>
   outcome?: string
   toolStatus?: string
   retryable?: boolean | null
@@ -81,9 +81,10 @@ export default function ChatbotScreen({ reviewId, focusClauseId, focusClauseName
         outcome: data.outcome, toolStatus: data.tool_status, retryable: data.retryable,
         sources: data.sources.map(source => ({
           type: source.type,
-          label: source.type === 'USER_CLAUSE' ? `사용자 조항 ${source.id ?? ''}`
-            : source.type === 'STANDARD_CLAUSE' ? `표준조항 ${source.id ?? ''}`
-              : [source.law_name, source.article].filter(Boolean).join(' ') || source.id || '법령 근거',
+          sourceUrl: source.source_url,
+          label: source.type === 'USER_CLAUSE' ? ['사용자 조항', source.display_label].filter(Boolean).join(' · ')
+            : source.type === 'STANDARD_CLAUSE' ? ['표준조항', source.display_label].filter(Boolean).join(' · ')
+              : source.display_label || [source.law_name, source.article].filter(Boolean).join(' ') || '법령 근거',
         })),
       }])
     } catch (requestError: any) {
@@ -112,7 +113,7 @@ export default function ChatbotScreen({ reviewId, focusClauseId, focusClauseName
         {message.refused && <p className="mb-2 text-xs font-semibold text-amber-700">{outcomePresentation?.message || '현재 검토 근거로는 답변이 제한됩니다. 질문 범위를 조정해 주세요.'}</p>}
         <p className="whitespace-pre-line leading-6">{message.text}</p>
         {message.toolStatus && !['OK', 'NOT_REQUESTED', 'LLM_OUTPUT_INVALID'].includes(message.toolStatus) && <p className="mt-2 text-xs text-amber-700">법령 조회: {toolPresentation?.message || '법령 원문을 확인하지 못했습니다. 법령이 존재하지 않는다는 의미는 아닙니다.'}</p>}
-        {message.sources?.length ? <div className="mt-3 border-t border-slate-200 pt-2"><p className="mb-1 text-xs font-semibold text-slate-500">답변 출처</p>{message.sources.map((source, i) => <span key={`${source.label}-${i}`} className="mr-1 inline-flex items-center gap-1 text-xs text-slate-600"><BookOpen className="size-3" />{source.label}</span>)}</div> : null}
+        {message.sources?.length ? <div className="mt-3 border-t border-slate-200 pt-2"><p className="mb-1 text-xs font-semibold text-slate-500">답변 출처</p>{message.sources.map((source, i) => source.sourceUrl ? <a key={`${source.label}-${i}`} href={source.sourceUrl} target="_blank" rel="noreferrer" className="mr-1 inline-flex items-center gap-1 text-xs text-blue-700 underline"><BookOpen className="size-3" />{source.label}</a> : <span key={`${source.label}-${i}`} className="mr-1 inline-flex items-center gap-1 text-xs text-slate-600"><BookOpen className="size-3" />{source.label}</span>)}</div> : null}
         {message.limitations?.length ? <p className="mt-2 text-xs text-slate-500">제한: {message.limitations.join(', ')}</p> : null}
         {message.disclaimer && <p className="mt-2 text-xs text-slate-500">{message.disclaimer}</p>}
       </div></div>})}<div ref={bottomRef} />

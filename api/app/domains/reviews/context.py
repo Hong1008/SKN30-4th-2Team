@@ -1,7 +1,26 @@
 """검토 결과에서 조항·표준조항·카테고리 컨텍스트를 안전하게 추출."""
 
+import re
 from copy import deepcopy
 from typing import Any
+
+
+ARTICLE_HEADING_PATTERN = re.compile(
+    r"제\s*(\d+)\s*조(?:\s*[（(]\s*([^）)\n]+)\s*[）)])?"
+)
+
+
+def clause_display_label(text: object, title: object = None) -> str | None:
+    """조항 원문의 번호·제목 또는 검증된 제목으로 사용자 표시명을 만든다."""
+    searchable = text if isinstance(text, str) else ""
+    match = ARTICLE_HEADING_PATTERN.search(searchable)
+    if match:
+        article = f"제{match.group(1)}조"
+        heading = match.group(2).strip() if match.group(2) else ""
+        return f"{article} {heading}".strip()
+    if isinstance(title, str) and title.strip():
+        return title.strip()
+    return None
 
 
 def clause_results(result: dict[str, Any] | None) -> list[dict[str, Any]]:

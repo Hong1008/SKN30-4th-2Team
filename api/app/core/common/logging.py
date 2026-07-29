@@ -28,6 +28,9 @@ def log_event(
     reason: str | None = None,
     error_type: str | None = None,
     sources: list[str] | None = None,
+    prompt_tokens: int | None = None,
+    completion_tokens: int | None = None,
+    total_tokens: int | None = None,
     duration_ms: float | None = None,
     level: int = logging.INFO,
 ) -> None:
@@ -49,6 +52,12 @@ def log_event(
         fields.append(("error_type", error_type))
     if sources is not None:
         fields.append(("sources", ",".join(sources) if sources else "none"))
+    if prompt_tokens is not None:
+        fields.append(("prompt_tokens", prompt_tokens))
+    if completion_tokens is not None:
+        fields.append(("completion_tokens", completion_tokens))
+    if total_tokens is not None:
+        fields.append(("total_tokens", total_tokens))
     if duration_ms is not None:
         fields.append(("duration_ms", duration_ms))
 

@@ -38,31 +38,83 @@ class GroundingTool:
                     "law_name": "민법",
                     "article": "제390조",
                     "text": "채무불이행으로 인한 손해배상 참고 원문",
+                    "source_url": "https://www.law.go.kr/법령/민법/제390조",
                 }
             ]
         return response
 
 
 class StructuredRunnable:
-    def __init__(self, payload: object) -> None:
+    def __init__(
+        self,
+        payload: object,
+        *,
+        include_raw: bool = False,
+        finish_reason: str = "stop",
+    ) -> None:
         self.payload = payload
+        self.include_raw = include_raw
+        self.finish_reason = finish_reason
         self.prompts: list[list[object]] = []
 
     async def ainvoke(self, prompt: list[object]) -> object:
         self.prompts.append(prompt)
+        if self.include_raw:
+            return {
+                "raw": SimpleNamespace(
+                    response_metadata={"finish_reason": self.finish_reason},
+                    usage_metadata={
+                        "input_tokens": 100,
+                        "output_tokens": 50,
+                        "total_tokens": 150,
+                    },
+                ),
+                "parsed": self.payload,
+                "parsing_error": None,
+            }
         return self.payload
 
 
 class ChatModel:
-    def __init__(self, payload: object) -> None:
+    def __init__(self, payload: object, *, finish_reason: str = "stop") -> None:
+        self.payload = payload
+        self.finish_reason = finish_reason
         self.runnable = StructuredRunnable(payload)
 
-    def with_structured_output(self, _schema: type) -> StructuredRunnable:
+    def with_structured_output(
+        self,
+        _schema: type,
+        *,
+        include_raw: bool = False,
+    ) -> StructuredRunnable:
+        self.runnable.include_raw = include_raw
+        self.runnable.finish_reason = self.finish_reason
         return self.runnable
 
 
+class SequenceChatModel:
+    def __init__(self, outputs: list[tuple[object, str]]) -> None:
+        self.outputs = outputs
+        self.runnables: list[StructuredRunnable] = []
+
+    def with_structured_output(
+        self,
+        _schema: type,
+        *,
+        include_raw: bool = False,
+    ) -> StructuredRunnable:
+        payload, finish_reason = self.outputs[len(self.runnables)]
+        runnable = StructuredRunnable(
+            payload,
+            include_raw=include_raw,
+            finish_reason=finish_reason,
+        )
+        self.runnables.append(runnable)
+        return runnable
+
+
 class FailingChatModel:
-    def with_structured_output(self, _schema: type) -> None:
+    def with_structured_output(self, _schema: type, **_kwargs: object) -> None:
         raise ValueError("사용자 질문이나 비밀값이 포함될 수 있는 내부 메시지")
 
 
@@ -78,7 +130,11 @@ class RaisingChatModel:
     def __init__(self, error: Exception) -> None:
         self.error = error
 
-    def with_structured_output(self, _schema: type) -> RaisingRunnable:
+    def with_structured_output(
+        self,
+        _schema: type,
+        **_kwargs: object,
+    ) -> RaisingRunnable:
         return RaisingRunnable(self.error)
 
 
@@ -89,7 +145,11 @@ class SlowRunnable:
 
 
 class SlowChatModel:
-    def with_structured_output(self, _schema: type) -> SlowRunnable:
+    def with_structured_output(
+        self,
+        _schema: type,
+        **_kwargs: object,
+    ) -> SlowRunnable:
         return SlowRunnable()
 
 
@@ -142,6 +202,111 @@ def _review_with_missing_category() -> Review:
                 "category": "PAYMENT",
                 "title": "대금 지급",
                 "text": "대금은 정해진 기일에 지급한다.",
+            },
+        }
+    ]
+    return review
+
+
+def _review_with_payment_clause() -> Review:
+    review = _review()
+    assert review.result is not None
+    review.result["clause_results"].append(
+        {
+            "user_clause_id": "uc_rev_chat_2",
+            "user_clause": "용역대금은 3,000,000원이며 매월 말일 지급한다.",
+            "deviation": "NONE",
+            "match": {
+                "status": "CANDIDATE_SELECTED",
+                "standard": {
+                    "clause_id": "std_payment_1",
+                    "category": "PAYMENT",
+                    "title": "용역대금 지급",
+                    "text": "용역대금과 지급기일은 당사자가 합의하여 정한다.",
+                },
+            },
+            "toxic_patterns": [],
+        }
+    )
+    return review
+
+
+def _review_with_scope_clauses() -> Review:
+    review = _review()
+    assert review.result is not None
+    review.result["clause_results"] = [
+        {
+            "user_clause_id": "uc_rev_chat_1",
+            "user_clause": (
+                "## 제1조 (목적 및 업무 범위)\n"
+                "을은 백엔드 API 개발, 데이터베이스 설계 및 API 명세서 "
+                "작성을 수행하고 그 결과물을 납품한다."
+            ),
+            "deviation": "NONE",
+            "match": {
+                "status": "CANDIDATE_SELECTED",
+                "standard": {
+                    "clause_id": "std_scope_1",
+                    "category": "SCOPE",
+                    "title": "업무 범위",
+                    "text": "### 제1조 (업무 범위)\n업무 범위는 별지에서 정한다.",
+                },
+            },
+            "toxic_patterns": [],
+        },
+        {
+            "user_clause_id": "uc_rev_chat_2",
+            "user_clause": (
+                "## 제2조 (계약기간 및 대금)\n"
+                "계약기간은 2026년 7월 15일부터 2026년 8월 14일까지로 한다."
+            ),
+            "deviation": "NONE",
+            "match": {
+                "status": "CANDIDATE_SELECTED",
+                "standard": {
+                    "clause_id": "std_period_1",
+                    "category": "PERIOD",
+                    "title": "계약기간",
+                    "text": (
+                        "### 제2조 (계약기간)\n추가비용이나 자동 연장 업무는 "
+                        "별도 합의한다."
+                    ),
+                },
+            },
+            "toxic_patterns": [],
+        },
+        {
+            "user_clause_id": "uc_rev_chat_3",
+            "user_clause": (
+                "## 제3조 (검수 및 보완)\n"
+                "추가 업무는 갑과 을의 별도 서면 합의로 정한다."
+            ),
+            "deviation": "NONE",
+            "match": {"status": "NO_MATCH"},
+            "toxic_patterns": [],
+        },
+        {
+            "user_clause_id": "uc_rev_chat_4",
+            "user_clause": (
+                "## 제4조 (계약 해지)\n"
+                "중대한 계약 위반을 시정하지 않으면 서면 통지로 해지할 수 있다."
+            ),
+            "deviation": "NONE",
+            "match": {"status": "NO_MATCH"},
+            "toxic_patterns": [],
+        },
+    ]
+    review.result["missing_standard_clauses"] = [
+        {
+            "deviation": "MISSING",
+            "standard": {
+                "clause_id": "std_jurisdiction_22",
+                "category": "JURISDICTION",
+                "title": "관할 법원",
+                "text": (
+                    "### 제22조 (관할 법원)\n"
+                    "분쟁은 민사소송법상 관할 법원에 제기한다."
+                ),
             },
         }
     ]
@@ -236,7 +401,13 @@ async def test_whole_review_law_question_fetches_current_review_category() -> No
         {
             "outcome": "ANSWERED",
             "answer": "관련 법령 참고 원문과 함께 확인할 수 있습니다.",
-            "sources": [{"type": "LAW", "id": "law_1"}],
+            "sources": [
+                {
+                    "type": "LAW",
+                    "id": "law_1",
+                    "source_url": "https://unverified.example/law",
+                }
+            ],
             "limitations": [],
         }
     )
@@ -252,6 +423,11 @@ async def test_whole_review_law_question_fetches_current_review_category() -> No
     assert response.outcome == "ANSWERED"
     assert response.tool_status == "OK"
     assert tool.calls == [{"contract_type": "SW_FREELANCE", "category": "LIABILITY"}]
+    assert response.sources[0].law_name == "민법"
+    assert response.sources[0].article == "제390조"
+    assert response.sources[0].source_url == (
+        "https://www.law.go.kr/법령/민법/제390조"
+    )
 
 
 @pytest.mark.asyncio
@@ -407,9 +583,9 @@ async def test_whole_review_question_selects_matching_clause_and_hides_source_ke
 ):
     review = _review()
     assert review.result is not None
-    review.result["clause_results"][0][
-        "user_clause"
-    ] = "하자가 있으면 을이 협의된 기간 내에 보완한다."
+    review.result["clause_results"][0]["user_clause"] = (
+        "하자가 있으면 을이 협의된 기간 내에 보완한다."
+    )
     review.result["clause_results"].append(
         {
             "user_clause_id": "uc_rev_chat_2",
@@ -449,7 +625,7 @@ async def test_backend_attaches_selected_sources_when_model_omits_them() -> None
     model = ChatModel(
         {
             "outcome": "ANSWERED",
-            "answer": "하자는 계약 문언에 따라 을이 협의된 기간 안에 보완합니다.",
+            "answer": "손해배상 책임 범위는 상호 협의하도록 정해져 있습니다.",
             "sources": [],
             "limitations": [],
         }
@@ -457,7 +633,7 @@ async def test_backend_attaches_selected_sources_when_model_omits_them() -> None
 
     response = await answer_review_question(
         _review(),
-        ChatRequest(message="하자가 있으면 누가 보완하나요?"),
+        ChatRequest(message="손해배상 책임 범위는 어떻게 정했나요?"),
         runtime=SimpleNamespace(tools=(GroundingTool(),)),
         model=model,
         settings=_settings(),
@@ -466,8 +642,306 @@ async def test_backend_attaches_selected_sources_when_model_omits_them() -> None
     assert response.outcome == "ANSWERED"
     assert {source.id for source in response.sources} == {
         "uc_rev_chat_1",
-        "std_liability_1",
     }
+
+
+@pytest.mark.asyncio
+async def test_particle_suffix_question_selects_only_payment_clause() -> None:
+    model = ChatModel(
+        {
+            "outcome": "ANSWERED",
+            "answer": "용역대금은 3,000,000원이고 매월 말일에 지급합니다.",
+            "sources": [],
+            "limitations": [],
+        }
+    )
+
+    response = await answer_review_question(
+        _review_with_payment_clause(),
+        ChatRequest(message="용역대금은 얼마인가요?"),
+        runtime=SimpleNamespace(tools=(GroundingTool(),)),
+        model=model,
+        settings=_settings(),
+    )
+
+    context = json.loads(str(model.runnable.prompts[0][-1].content).split("\n", 1)[1])
+    selected = context["review_result"]["clause_results"]
+    assert len(selected) == 1
+    assert "3,000,000원" in selected[0]["user_clause"]
+    assert {source.id for source in response.sources} == {
+        "uc_rev_chat_2",
+    }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("question", "expected_id", "expected_text"),
+    [
+        (
+            "을의 업무 범위에는 무엇이 포함되나요?",
+            "uc_rev_chat_1",
+            "API 명세서",
+        ),
+        (
+            "추가 업무가 발생했을 때 자동으로 을이 수행해야 하나요?",
+            "uc_rev_chat_3",
+            "별도 서면 합의",
+        ),
+    ],
+)
+async def test_user_clause_ranking_ignores_standard_clause_text(
+    question: str,
+    expected_id: str,
+    expected_text: str,
+) -> None:
+    model = ChatModel(
+        {
+            "outcome": "ANSWERED",
+            "answer": "질문과 직접 관련된 사용자 계약서 문언을 확인했습니다.",
+            "sources": [],
+            "limitations": [],
+        }
+    )
+
+    response = await answer_review_question(
+        _review_with_scope_clauses(),
+        ChatRequest(message=question),
+        runtime=SimpleNamespace(tools=(GroundingTool(),)),
+        model=model,
+        settings=_settings(),
+    )
+
+    context = json.loads(str(model.runnable.prompts[0][-1].content).split("\n", 1)[1])
+    selected = context["review_result"]["clause_results"]
+    assert len(selected) == 1
+    assert expected_text in selected[0]["user_clause"]
+    assert {source.id for source in response.sources} == {expected_id}
+
+
+@pytest.mark.asyncio
+async def test_missing_standard_is_searched_separately_from_user_clauses() -> None:
+    model = ChatModel(
+        {
+            "outcome": "ANSWERED",
+            "answer": (
+                "사용자 계약서에는 특정 관할 법원이 없고, "
+                "표준조항 후보는 법정 관할 법원을 제시합니다."
+            ),
+            "sources": [],
+            "limitations": [],
+        }
+    )
+
+    response = await answer_review_question(
+        _review_with_scope_clauses(),
+        ChatRequest(message="계약서에 정한 관할 법원은 어디인가요?"),
+        runtime=SimpleNamespace(tools=(GroundingTool(),)),
+        model=model,
+        settings=_settings(),
+    )
+
+    context = json.loads(str(model.runnable.prompts[0][-1].content).split("\n", 1)[1])
+    assert context["review_result"]["clause_results"] == []
+    assert len(context["review_result"]["missing_standard_clauses"]) == 1
+    assert {source.id for source in response.sources} == {"std_jurisdiction_22"}
+    assert response.sources[0].display_label == "제22조 관할 법원"
+
+
+@pytest.mark.asyncio
+async def test_false_insufficient_grounding_is_regenerated_once() -> None:
+    model = SequenceChatModel(
+        [
+            (
+                {
+                    "outcome": "INSUFFICIENT_GROUNDING",
+                    "answer": None,
+                    "sources": [],
+                    "limitations": ["근거가 없습니다."],
+                },
+                "stop",
+            ),
+            (
+                {
+                    "outcome": "ANSWERED",
+                    "answer": (
+                        "업무 범위에는 백엔드 API 개발, 데이터베이스 설계 및 "
+                        "API 명세서 작성이 포함됩니다."
+                    ),
+                    "sources": [{"type": "USER_CLAUSE", "id": "SRC_USER_1"}],
+                    "limitations": [],
+                },
+                "stop",
+            ),
+        ]
+    )
+
+    response = await answer_review_question(
+        _review_with_scope_clauses(),
+        ChatRequest(message="을의 업무 범위에는 무엇이 포함되나요?"),
+        runtime=SimpleNamespace(tools=(GroundingTool(),)),
+        model=model,
+        settings=_settings(),
+    )
+
+    assert response.outcome == "ANSWERED"
+    assert len(model.runnables) == 2
+    assert "required_source_keys" in str(model.runnables[1].prompts[0][-1].content)
+    assert response.sources[0].display_label == "제1조 목적 및 업무 범위"
+
+
+@pytest.mark.asyncio
+async def test_repeated_false_insufficient_grounding_is_output_invalid() -> None:
+    insufficient = {
+        "outcome": "INSUFFICIENT_GROUNDING",
+        "answer": None,
+        "sources": [],
+        "limitations": ["근거가 없습니다."],
+    }
+    model = SequenceChatModel([(insufficient, "stop"), (insufficient, "stop")])
+
+    response = await answer_review_question(
+        _review_with_scope_clauses(),
+        ChatRequest(message="을의 업무 범위에는 무엇이 포함되나요?"),
+        runtime=SimpleNamespace(tools=(GroundingTool(),)),
+        model=model,
+        settings=_settings(),
+    )
+
+    assert response.outcome == "LLM_OUTPUT_INVALID"
+    assert len(model.runnables) == 2
+
+
+@pytest.mark.asyncio
+async def test_backend_supplements_each_directly_matched_user_clause() -> None:
+    model = ChatModel(
+        {
+            "outcome": "ANSWERED",
+            "answer": (
+                "2026년 8월 10일은 계약기간 중이지만, "
+                "계약 위반과 서면 통지라는 해지 조건도 충족해야 합니다."
+            ),
+            "sources": [
+                {"type": "USER_CLAUSE", "id": "uc_rev_chat_4"},
+            ],
+            "limitations": [],
+        }
+    )
+
+    response = await answer_review_question(
+        _review_with_scope_clauses(),
+        ChatRequest(message="계약 기간 중인 2026년 8월 10일에 계약 해지가 가능한가요?"),
+        runtime=SimpleNamespace(tools=(GroundingTool(),)),
+        model=model,
+        settings=_settings(),
+    )
+
+    assert {source.id for source in response.sources} == {
+        "uc_rev_chat_2",
+        "uc_rev_chat_4",
+    }
+    assert {source.display_label for source in response.sources} == {
+        "제2조 계약기간 및 대금",
+        "제4조 계약 해지",
+    }
+
+
+@pytest.mark.asyncio
+async def test_incomplete_answer_is_regenerated_once() -> None:
+    model = SequenceChatModel(
+        [
+            (
+                {
+                    "outcome": "ANSWERED",
+                    "answer": "용역대금은 3,000,000원이며,",
+                    "sources": [{"type": "USER_CLAUSE", "id": "SRC_USER_1"}],
+                    "limitations": [],
+                },
+                "stop",
+            ),
+            (
+                {
+                    "outcome": "ANSWERED",
+                    "answer": "용역대금은 3,000,000원이며 매월 말일에 지급합니다.",
+                    "sources": [{"type": "USER_CLAUSE", "id": "SRC_USER_1"}],
+                    "limitations": [],
+                },
+                "stop",
+            ),
+        ]
+    )
+
+    response = await answer_review_question(
+        _review_with_payment_clause(),
+        ChatRequest(message="용역대금은 얼마인가요?"),
+        runtime=SimpleNamespace(tools=(GroundingTool(),)),
+        model=model,
+        settings=_settings(),
+    )
+
+    assert response.outcome == "ANSWERED"
+    assert response.answer == "용역대금은 3,000,000원이며 매월 말일에 지급합니다."
+    assert len(model.runnables) == 2
+    assert len(model.runnables[1].prompts[0]) == 3
+
+
+@pytest.mark.asyncio
+async def test_token_limit_finish_reason_triggers_regeneration() -> None:
+    model = SequenceChatModel(
+        [
+            (
+                {
+                    "outcome": "ANSWERED",
+                    "answer": "용역대금은 3,000,000원입니다.",
+                    "sources": [{"type": "USER_CLAUSE", "id": "SRC_USER_1"}],
+                    "limitations": [],
+                },
+                "MAX_TOKENS",
+            ),
+            (
+                {
+                    "outcome": "ANSWERED",
+                    "answer": "용역대금은 3,000,000원입니다.",
+                    "sources": [{"type": "USER_CLAUSE", "id": "SRC_USER_1"}],
+                    "limitations": [],
+                },
+                "STOP",
+            ),
+        ]
+    )
+
+    response = await answer_review_question(
+        _review_with_payment_clause(),
+        ChatRequest(message="용역대금은 얼마인가요?"),
+        runtime=SimpleNamespace(tools=(GroundingTool(),)),
+        model=model,
+        settings=_settings(),
+    )
+
+    assert response.outcome == "ANSWERED"
+    assert len(model.runnables) == 2
+
+
+@pytest.mark.asyncio
+async def test_repeated_incomplete_answer_is_output_invalid() -> None:
+    incomplete = {
+        "outcome": "ANSWERED",
+        "answer": "용역대금은 3,000,000원이며,",
+        "sources": [{"type": "USER_CLAUSE", "id": "SRC_USER_1"}],
+        "limitations": [],
+    }
+    model = SequenceChatModel([(incomplete, "stop"), (incomplete, "stop")])
+
+    response = await answer_review_question(
+        _review_with_payment_clause(),
+        ChatRequest(message="용역대금은 얼마인가요?"),
+        runtime=SimpleNamespace(tools=(GroundingTool(),)),
+        model=model,
+        settings=_settings(),
+    )
+
+    assert response.outcome == "LLM_OUTPUT_INVALID"
+    assert response.answer is None
+    assert len(model.runnables) == 2
 
 
 @pytest.mark.asyncio

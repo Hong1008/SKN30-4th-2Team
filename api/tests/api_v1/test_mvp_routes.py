@@ -85,7 +85,7 @@ class FakeChatModel:
     def __init__(self, calls: dict[str, int]) -> None:
         self._calls = calls
 
-    def with_structured_output(self, schema: type):
+    def with_structured_output(self, schema: type, **_kwargs: object):
         return FakeStructuredRunnable(schema, self._calls)
 
 
@@ -421,9 +421,7 @@ async def test_full_mvp_flow_and_browser_isolation(tmp_path: Path) -> None:
             for line in cancelled_events.text.splitlines()
             if line.startswith("data: ")
         )
-        cancelled_event = json.loads(
-            cancelled_data_line.removeprefix("data: ")
-        )
+        cancelled_event = json.loads(cancelled_data_line.removeprefix("data: "))
         assert cancelled_progress["sequence"] == 3
         assert cancelled_event["review_state"] == "CANCELLED"
         assert cancelled_event["sequence"] == cancelled_progress["sequence"]
@@ -599,8 +597,7 @@ async def test_metadata_cache_and_etag(tmp_path: Path) -> None:
         {"code": "RESULT_ASSEMBLY", "label": "결과 정리"},
     ]
     contract_type_labels = {
-        item["code"]: item["label"]
-        for item in first.json()["data"]["contract_types"]
+        item["code"]: item["label"] for item in first.json()["data"]["contract_types"]
     }
     assert contract_type_labels["SW_FREELANCE"] == "SW 프리랜서 용역"
     assert contract_type_labels["SI_SUBCONTRACT"] == "SI 하도급"

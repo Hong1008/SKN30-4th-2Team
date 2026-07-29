@@ -288,8 +288,10 @@ export interface GroundingItem {
 export interface ChatSource {
   type: 'USER_CLAUSE' | 'STANDARD_CLAUSE' | 'LAW';
   id?: string | null;
+  display_label?: string | null;
   law_name?: string | null;
   article?: string | null;
+  source_url?: string | null;
 }
 
 export interface ChatHistoryMessage {
@@ -324,6 +326,7 @@ export interface SuggestionResponse {
   user_clause_ids: string[];
   standard_clause_ids: string[];
   grounding_source_ids: string[];
+  sources: ChatSource[];
   required_confirmations: RequiredConfirmation[];
   missing_inputs: string[];
   disclaimer: string;
