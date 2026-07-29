@@ -534,6 +534,37 @@ async def test_stdio_uses_storage_local_path_and_no_transaction_during_mcp(
 
 
 @pytest.mark.asyncio
+async def test_network_mcp_uses_file_content_and_original_file_name(
+    database: Database,
+    tmp_path: Path,
+) -> None:
+    storage, review = _seed_executable_review(
+        database,
+        tmp_path,
+        "network_boundary",
+    )
+    inspecting = InspectingSession(database, review.id, _valid_result())
+    runtime = SimpleNamespace(
+        session=inspecting,
+        tools=(),
+        supports_file_path=False,
+    )
+
+    await execute_review(
+        database=database,
+        storage=storage,
+        runtime=runtime,
+        settings=_settings(),
+        review_id=review.id,
+    )
+
+    assert inspecting.arguments is not None
+    assert inspecting.arguments["file_content"] == "Y29udHJhY3Q="
+    assert inspecting.arguments["file_name"] == "계약서.pdf"
+    assert "file_path" not in inspecting.arguments
+
+
+@pytest.mark.asyncio
 async def test_cancelled_runner_does_not_store_final_result(
     database: Database,
     tmp_path: Path,

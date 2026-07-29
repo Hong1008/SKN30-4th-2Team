@@ -1,0 +1,17 @@
+[project]
+name = "workshield-infrastructure"
+version = "0.1.0"
+description = "WorkShield local infrastructure control plane and AWS CDK application"
+requires-python = ">=3.13"
+dependencies = [
+    "aws-cdk-lib==2.169.0",
+    "constructs>=10.0.0,<11.0.0",
+]
+
+[tool.uv]
+package = false
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0,<9",
+]

@@ -1,0 +1,115 @@
+name: Deploy container images
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: Existing immutable API and MCP image tag to deploy
+        required: true
+        type: string
+  workflow_call:
+    inputs:
+      image_tag:
+        description: Existing immutable API and MCP image tag to deploy
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: workshield-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+      SSM_DOCUMENT_NAME: ${{ vars.SSM_DOCUMENT_NAME }}
+      CONFIGURED_GHCR_OWNER: ${{ vars.GHCR_OWNER }}
+      IMAGE_TAG: ${{ inputs.image_tag }}
+    steps:
+      - name: Validate deployment configuration
+        run: |
+          set -euo pipefail
+          [[ "$IMAGE_TAG" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]]
+          test -n "$AWS_REGION"
+          test -n "$AWS_DEPLOY_ROLE_ARN"
+          test -n "$SSM_DOCUMENT_NAME"
+          owner="${CONFIGURED_GHCR_OWNER:-$GITHUB_REPOSITORY_OWNER}"
+          owner="${owner,,}"
+          repository="${GITHUB_REPOSITORY#*/}"
+          repository="${repository,,}"
+          [[ "$owner" =~ ^[a-z0-9][a-z0-9._-]*$ ]]
+          [[ "$repository" =~ ^[a-z0-9][a-z0-9._-]*$ ]]
+          printf 'IMAGE_REPOSITORY=ghcr.io/%s/%s\n' "$owner" "$repository" >> "$GITHUB_ENV"
+      - name: Log in to GHCR for manifest verification
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+      - name: Resolve immutable image digests
+        id: images
+        run: |
+          set -euo pipefail
+          for component in api mcp; do
+            tagged_image="${IMAGE_REPOSITORY}/${component}:${IMAGE_TAG}"
+            digest="$(docker buildx imagetools inspect "$tagged_image" | awk '$1 == "Digest:" {print $2; exit}')"
+            [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+            printf '%s_image=%s@%s\n' "$component" "${IMAGE_REPOSITORY}/${component}" "$digest" >> "$GITHUB_OUTPUT"
+          done
+      - name: Configure short-lived AWS credentials through OIDC
+        uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4.0.1
+        with:
+          aws-region: ${{ vars.AWS_REGION }}
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          role-session-name: workshield-deploy-${{ github.run_id }}
+          mask-aws-account-id: true
+      - name: Deploy through the fixed SSM document
+        env:
+          API_IMAGE: ${{ steps.images.outputs.api_image }}
+          MCP_IMAGE: ${{ steps.images.outputs.mcp_image }}
+        run: |
+          set -euo pipefail
+          parameters="$(jq -cn \
+            --arg release_tag "$IMAGE_TAG" \
+            --arg api_image "$API_IMAGE" \
+            --arg mcp_image "$MCP_IMAGE" \
+            '{ReleaseTag:[$release_tag],ApiImage:[$api_image],McpImage:[$mcp_image]}')"
+          command_id="$(aws ssm send-command \
+            --document-name "$SSM_DOCUMENT_NAME" \
+            --targets \
+              'Key=tag:Project,Values=WorkShield' \
+              'Key=tag:Environment,Values=prod' \
+            --parameters "$parameters" \
+            --comment "Deploy WorkShield container tag ${IMAGE_TAG}" \
+            --query 'Command.CommandId' \
+            --output text)"
+
+          for _ in $(seq 1 90); do
+            status="$(aws ssm list-commands \
+              --command-id "$command_id" \
+              --query 'Commands[0].Status' \
+              --output text)"
+            case "$status" in
+              Success)
+                printf 'Deployed %s through SSM command %s\n' "$IMAGE_TAG" "$command_id"
+                exit 0
+                ;;
+              Failed|Cancelled|TimedOut|Cancelling)
+                aws ssm list-command-invocations --command-id "$command_id" --details
+                exit 1
+                ;;
+            esac
+            sleep 10
+          done
+
+          aws ssm list-command-invocations --command-id "$command_id" --details
+          echo "::error::Timed out waiting for SSM command $command_id"
+          exit 1

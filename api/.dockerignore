@@ -1,0 +1,19 @@
+# 비밀·개인 데이터·개발 산출물은 API image에 포함하지 않는다.
+.env
+.env.*
+data/
+.venv/
+.pytest_cache/
+.ruff_cache/
+__pycache__/
+**/__pycache__/
+*.py[cod]
+
+# 런타임과 무관한 개발 자료
+tests/
+evaluation/
+scripts/
+README.md
+AGENTS.md
+.git/
+.github/

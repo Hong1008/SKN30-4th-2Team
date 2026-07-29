@@ -1,0 +1,77 @@
+name: Roll back web release
+
+on:
+  workflow_dispatch:
+    inputs:
+      web_release_tag:
+        description: Existing immutable Web release tag to restore
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: workshield-production
+  cancel-in-progress: false
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+      WEB_BUCKET: ${{ vars.WEB_BUCKET }}
+      CLOUDFRONT_DISTRIBUTION_ID: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}
+      WEB_RELEASE_TAG: ${{ inputs.web_release_tag }}
+    steps:
+      - name: Validate rollback coordinates
+        run: |
+          set -euo pipefail
+          [[ "$WEB_RELEASE_TAG" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]]
+          [[ "$WEB_BUCKET" =~ ^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$ ]]
+          [[ "$CLOUDFRONT_DISTRIBUTION_ID" =~ ^[A-Z0-9]+$ ]]
+          test -n "$AWS_REGION"
+          test -n "$AWS_DEPLOY_ROLE_ARN"
+      - name: Configure short-lived AWS credentials through OIDC
+        uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4.0.1
+        with:
+          aws-region: ${{ vars.AWS_REGION }}
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          role-session-name: workshield-web-rollback-${{ github.run_id }}
+          mask-aws-account-id: true
+      - name: Verify preserved release
+        run: |
+          set -euo pipefail
+          manifest="$RUNNER_TEMP/web-release-manifest.json"
+          aws s3 cp \
+            "s3://${WEB_BUCKET}/releases/${WEB_RELEASE_TAG}/manifest.json" \
+            "$manifest" \
+            --only-show-errors
+          test "$(jq -er '.release_tag' "$manifest")" = "$WEB_RELEASE_TAG"
+          jq -er '.source_sha, .artifact_sha256' "$manifest" >/dev/null
+          aws s3api head-object \
+            --bucket "$WEB_BUCKET" \
+            --key "releases/${WEB_RELEASE_TAG}/site/index.html" \
+            >/dev/null
+      - name: Restore release and invalidate CloudFront
+        run: |
+          set -euo pipefail
+          aws s3 sync \
+            "s3://${WEB_BUCKET}/releases/${WEB_RELEASE_TAG}/site/" \
+            "s3://${WEB_BUCKET}/live/" \
+            --delete \
+            --only-show-errors
+          invalidation_id="$(aws cloudfront create-invalidation \
+            --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" \
+            --paths '/*' \
+            --query 'Invalidation.Id' \
+            --output text)"
+          aws cloudfront wait invalidation-completed \
+            --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" \
+            --id "$invalidation_id"
+          printf 'Restored Web release %s\n' "$WEB_RELEASE_TAG"

@@ -1,0 +1,20 @@
+name: Roll back container images
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: Existing immutable API and MCP image tag to restore
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: read
+  id-token: write
+
+jobs:
+  rollback:
+    uses: ./.github/workflows/deploy-containers.yml
+    with:
+      image_tag: ${{ inputs.image_tag }}

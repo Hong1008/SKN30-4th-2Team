@@ -47,8 +47,8 @@ def create_chat_model(
     if provider == LLMProvider.GEMINI.value and settings.gemini_api_key is None:
         raise LLMConfigurationError("GEMINI_API_KEY가 필요합니다.")
     if provider == LLMProvider.RUNPOD_SERVERLESS.value:
-        if settings.runpod_api_key is None:
-            raise LLMConfigurationError("RUNPOD_API_KEY가 필요합니다.")
+        if settings.runpod_serverless_api_key is None:
+            raise LLMConfigurationError("RUNPOD_SERVERLESS_API_KEY가 필요합니다.")
         if not settings.runpod_ollama_endpoint_id:
             raise LLMConfigurationError("RUNPOD_OLLAMA_ENDPOINT_ID가 필요합니다.")
     if provider == LLMProvider.VLLM.value:
