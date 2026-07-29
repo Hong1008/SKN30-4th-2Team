@@ -25,13 +25,13 @@ uv sync
 
 ```bash
 cp .env.example .env
-# .env를 열고 OPENAI_API_KEY 또는 GEMINI_API_KEY 등 필요한 비밀값을 입력합니다.
+# .env를 열고 선택 provider의 API 키와 접속 정보를 입력합니다.
 ```
 
 | 파일 | Git 추적 | 용도 |
 | --- | --- | --- |
 | `.env.local` | ✅ | 로컬 개발 기본값 (`APP_ENV=local`, `LLM_PROVIDER=openai`) |
-| `.env.prod` | ✅ | 운영 기본값 (`APP_ENV=prod`, `LLM_PROVIDER=ollama`) |
+| `.env.prod` | ✅ | 운영 기본값 (`APP_ENV=prod`, `LLM_PROVIDER=vllm`) |
 | `.env` | ❌ | API 키 및 내부 서비스 URL (비밀값 보관) |
 | `.env.example` | ✅ | `.env` 템플릿 파일 |
 
@@ -69,7 +69,7 @@ api/
 │       ├── factory.py        # Settings에 따른 BaseChatModel 생성 factory
 │       ├── dependencies.py   # LLM 도메인 전용 FastAPI 의존성 (ChatModelDep, MCPRuntimeDep 등)
 │       ├── types.py          # ReasoningMode, LLM 예외 정의
-│       ├── provider/         # LLM provider별 구현체 (openai, gemini, ollama)
+│       ├── provider/         # LLM provider별 구현체 (openai, gemini, ollama, vllm 등)
 │       └── mcp/              # WorkShield MCP Client 계층 (connection, client, types)
 └── tests/               # 단위 테스트
 ```
@@ -102,9 +102,10 @@ async def analyze_contract(settings: SettingsDep, model: ChatModelDep):
 
 ## LLM Provider
 
-- 지원하는 provider: `openai`, `gemini`, `ollama`
+- 지원하는 provider: `openai`, `gemini`, `ollama`, `vllm`, `runpod_serverless`
 - `factory.py`가 `Settings.llm_provider` 값에 따라 알맞은 `BaseChatModel` 구현체를 생성합니다.
-- **운영 환경 제한**: 데이터 보안을 위해 운영 환경(`APP_ENV=prod`)에서는 `LLM_PROVIDER`가 `ollama`가 아닐 경우 API 시작 단계에서 설정을 검증하여 차단합니다.
+- **운영 환경 제한**: 운영 환경(`APP_ENV=prod`)에서는 `LLM_PROVIDER=vllm`만 허용합니다.
+- **vLLM 설정**: `VLLM_BASE_URL`에는 서버 origin 또는 `/v1` API root를 지정하고 `VLLM_API_KEY`, `/v1/models`가 반환하는 `LLM_MODEL`을 함께 설정합니다.
 - **추론 옵션**: `ReasoningMode.off`(기본값) 및 `ReasoningMode.on`을 지원하며 provider별 추론 지원 여부(Reasoning capability)를 검증합니다.
 
 ---
