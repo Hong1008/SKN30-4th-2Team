@@ -68,7 +68,7 @@ class Settings(BaseSettings):
 
     openai_api_key: SecretStr | None = None
     gemini_api_key: SecretStr | None = None
-    runpod_api_key: SecretStr | None = None
+    runpod_serverless_api_key: SecretStr | None = None
     runpod_ollama_endpoint_id: str | None = None
     ollama_base_url: AnyHttpUrl = "http://localhost:11434"
     vllm_base_url: AnyHttpUrl | None = None
@@ -111,7 +111,7 @@ class Settings(BaseSettings):
         if self.llm_provider is LLMProvider.GEMINI:
             return self.gemini_api_key
         if self.llm_provider is LLMProvider.RUNPOD_SERVERLESS:
-            return self.runpod_api_key
+            return self.runpod_serverless_api_key
         if self.llm_provider is LLMProvider.VLLM:
             return self.vllm_api_key
         return None

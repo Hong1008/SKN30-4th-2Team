@@ -17,7 +17,7 @@ def _settings(provider: str, **overrides: object) -> Settings:
         "llm_model": "configured-model",
         "openai_api_key": "openai-secret",
         "gemini_api_key": "gemini-secret",
-        "runpod_api_key": "runpod-secret",
+        "runpod_serverless_api_key": "runpod-secret",
         "runpod_ollama_endpoint_id": "endpoint-id",
         "ollama_base_url": "http://ollama.internal:11434",
         "vllm_base_url": "https://vllm.internal/v1",
@@ -61,7 +61,7 @@ def test_factory_rejects_missing_selected_provider_key() -> None:
 @pytest.mark.parametrize(
     ("overrides", "message"),
     [
-        ({"runpod_api_key": None}, "RUNPOD_API_KEY"),
+        ({"runpod_serverless_api_key": None}, "RUNPOD_SERVERLESS_API_KEY"),
         ({"runpod_ollama_endpoint_id": None}, "RUNPOD_OLLAMA_ENDPOINT_ID"),
     ],
 )

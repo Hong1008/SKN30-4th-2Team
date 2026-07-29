@@ -16,12 +16,11 @@ api/data/
 .test-tmp/
 .tmp/
 
-# AWS 배포 도구의 로컬 산출물·운영 전용 설정과 인증서
-deploy/aws/iac/cdk.out/
-deploy/aws/iac/.venv/
-deploy/aws/iac/node_modules/
-deploy/aws/iac/cdk.context.json
-deploy/aws/config/prod.json
-deploy/aws/env/*.env
-deploy/aws/env/*.local
-deploy/aws/certificates/
+# 로컬 인프라 control plane 산출물과 운영 전용 설정
+infra/cdk.out/
+infra/.venv/
+infra/node_modules/
+infra/cdk.context.json
+infra/config/prod.json
+infra/config/prod.secrets.env
+infra/.state/

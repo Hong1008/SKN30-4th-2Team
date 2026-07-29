@@ -1,40 +1,68 @@
-python := if os_family() == "windows" { "py -3" } else { "python3" }
+set shell := ["bash", "-euo", "pipefail", "-c"]
 
-# 도움말 출력 (메뉴판)
+task := "env PYTHONPATH=infra/src uv run --project infra python -m workshield_infra.tasks"
+
 default:
     @just --list
 
-# RunPod vLLM LLM Pod 생성 및 api/.env 바인딩 (기본 모델: qwen3.5-9b-gguf-q8_0, 기본 GPU: NVIDIA A40)
-deploy_llm_pod model="qwen3.5-9B-FP8-dynamic" gpu="NVIDIA A40":
-    {{python}} deploy/llm_pod/deploy_llm_pod.py --model "{{model}}" --gpu "{{gpu}}"
+# 내부 Python/CDK 의존성을 lockfile 그대로 설치한다.
+infra-init:
+    git submodule update --init --recursive
+    uv sync --project infra --frozen
+    npm ci --prefix infra
 
-# RunPod vLLM LLM Pod 삭제 및 api/.env의 VLLM_BASE_URL, VLLM_API_KEY 제거
-rm_llm_pod:
-    {{python}} deploy/llm_pod/rm_llm_pod.py
+# 로컬 도구, 설정, secret 권한, submodule 경계를 검사한다.
+infra-check environment="prod":
+    {{task}} check --environment "{{environment}}"
 
-# AWS CDK 템플릿 정적 생성 (실제 AWS 계정 접근 없음)
-aws-synth:
-    cd deploy/aws/iac && npm exec cdk -- synth
+# CDK bootstrap과 application deploy 권한이 없는 GitHub OIDC role을 준비한다.
+infra-bootstrap profile environment="prod":
+    {{task}} bootstrap --profile "{{profile}}" --environment "{{environment}}"
 
-# 운영 Compose 파일의 변수 치환·스키마 검사 (컨테이너 실행 없음)
-aws-compose-config:
-    docker compose --env-file deploy/aws/env/prod.env.example -f deploy/aws/compose.prod.yaml config
+# 실제 변경 없이 현재 상태와 ensure 단계를 출력한다.
+infra-plan profile environment="prod":
+    {{task}} plan --profile "{{profile}}" --environment "{{environment}}"
 
-# 운영 API/MCP 이미지 로컬 빌드
-aws-build-api:
-    docker build --tag workshield-api:local api
+# AWS, RunPod, runtime binding과 EC2 asset을 로컬에서 수렴한다.
+infra-ensure profile environment="prod":
+    {{task}} ensure --profile "{{profile}}" --environment "{{environment}}"
 
-aws-build-mcp:
-    docker build --tag workshield-mcp:local mcp
+# 비밀값을 제외한 AWS, RunPod, 활성 release 상태를 출력한다.
+infra-status profile environment="prod":
+    {{task}} status --profile "{{profile}}" --environment "{{environment}}"
 
-# 로컬 prod.env의 비밀 아닌 배포 식별자를 GitHub Environment Variables로 동기화
-github-env-sync-local env_file="deploy/aws/env/prod.env" environment="production" repository="Hong1008/SKN30-4th-2Team":
-    bash deploy/aws/scripts/sync-github-environment-local.sh --env-file "{{env_file}}" --environment "{{environment}}" --repository "{{repository}}"
+# 실제 변경 없이 폐기 범위와 순서를 출력한다.
+infra-destroy-plan profile environment="prod":
+    {{task}} destroy-plan --profile "{{profile}}" --environment "{{environment}}"
 
-# Foundation Elastic IP를 DuckDNS origin A 레코드로 동기화
-duckdns-sync-local profile="4th-student":
-    bash deploy/aws/scripts/sync-duckdns-local.sh --profile "{{profile}}"
+# 프로젝트 비용 리소스를 폐기한다. 정확한 confirm 문자열이 필요하다.
+infra-destroy profile confirm="DESTROY workshield-prod" environment="prod":
+    {{task}} destroy --profile "{{profile}}" --environment "{{environment}}" --confirm "{{confirm}}"
 
-# DuckDNS DNS-01 origin TLS 인증서 발급 및 EC2 갱신 timer 설치
-duckdns-tls-provision-local email profile="4th-student":
-    bash deploy/aws/scripts/provision-duckdns-tls-local.sh "{{email}}" --profile "{{profile}}"
+# 프로젝트 stack이 모두 없는 경우 Access/CDK bootstrap까지 폐기한다.
+infra-purge profile confirm="PURGE workshield-prod-bootstrap" environment="prod":
+    {{task}} purge --profile "{{profile}}" --environment "{{environment}}" --confirm "{{confirm}}"
+
+# Git 비추적 원본을 AWS Secrets Manager runtime secret에 동기화한다.
+infra-secrets-sync profile environment="prod":
+    {{task}} secrets-sync --profile "{{profile}}" --environment "{{environment}}"
+
+# 지원 secret을 생성·회전하고 candidate/consumer health를 검증한다.
+infra-secrets-rotate name profile environment="prod":
+    {{task}} secrets-rotate "{{name}}" --profile "{{profile}}" --environment "{{environment}}"
+
+# latest image를 적용할 RunPod candidate를 검증한 뒤 binding을 전환한다.
+infra-runpod-replace target profile environment="prod":
+    {{task}} runpod-replace "{{target}}" --profile "{{profile}}" --environment "{{environment}}"
+
+# allowlist된 비밀 아닌 CDK output만 GitHub Environment Variable로 등록한다.
+infra-github-configure profile environment="production" infra_environment="prod":
+    {{task}} github-configure --profile "{{profile}}" --environment "{{infra_environment}}" --github-environment "{{environment}}"
+
+# [원클릭 생성] 사전 점검, AWS Bootstrap, 전체 인프라 프로비저닝을 한 번에 실행한다.
+infra-up profile environment="prod":
+    just infra-check "{{environment}}"
+    just infra-bootstrap "{{profile}}" "{{environment}}"
+    just infra-ensure "{{profile}}" "{{environment}}"
+    just infra-status "{{profile}}" "{{environment}}"
+
