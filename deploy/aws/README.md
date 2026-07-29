@@ -41,8 +41,27 @@ npm exec cdk -- synth --context config=../config/prod.json
 ## 스크립트 경계
 
 - `bootstrap/bootstrap.sh`: GitHub OIDC와 CDK bootstrap의 관리자 진입점
-- `scripts/deploy-containers.sh`: SSM에서 실행할 컨테이너 배포 진입점
-- `scripts/rollback.sh`: 이전 SHA로의 컨테이너 롤백 진입점
+- `scripts/put-secrets.sh`: stdin 또는 숨김 입력으로 Secrets Manager에 비밀 등록
+- `scripts/put-parameters.sh`: allowlist 기반 비밀 아닌 Parameter Store 값 등록
+- `scripts/write-deployment-config.sh`: GitHub Environment 값으로 Git 비추적 CDK config 생성
+- `scripts/set-runtime-parameters.sh`: GHCR·Nginx·origin의 runtime parameter 갱신
+- `scripts/install-runtime-assets.sh`: SSM으로 EC2에 secret 없는 release 자산 설치
+- `scripts/deploy-containers.sh`: SSM에서 실행할 container release와 자동 복구
+- `scripts/dispatch-ssm-command.sh`: runner에서 release SHA만 SSM document에 전달
+- `scripts/deploy-web.sh`: 검증된 web build의 S3 배포와 CloudFront invalidation
+- `scripts/destroy-project.sh`: WorkShield 소유 자원의 확인형 폐기
 
-현재 스크립트는 안전한 `--help`/`--dry-run` 인터페이스만 제공한다. AWS API
-호출과 secret 주입은 이후 구현 단계에서 추가한다.
+최초 운영 배포 전에 Foundation stack을 만든 뒤 다음 명령으로 모든 runtime
+secret을 등록한다. 값은 GitHub Actions input이나 command argument로 전달하지
+않는다.
+
+```bash
+deploy/aws/scripts/put-secrets.sh --secret vllm --generate
+deploy/aws/scripts/put-secrets.sh --secret embed --generate
+deploy/aws/scripts/put-secrets.sh --secret origin-header --generate
+deploy/aws/scripts/put-secrets.sh --secret law
+```
+
+`runtime-parameters.example.json`은 형식 예시다. `NGINX_IMAGE`에는 실제
+공식 Nginx immutable digest를 사용해야 하며, workflow는 GHCR owner·origin
+domain과 함께 `set-runtime-parameters.sh`로 값을 갱신한다.

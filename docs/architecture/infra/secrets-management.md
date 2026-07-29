@@ -23,17 +23,27 @@
 
 ```text
 AWS_DEPLOY_ROLE_ARN
-CDK_APP_NAME
 AWS_REGION
+AWS_ACCOUNT_ID
+AWS_AVAILABILITY_ZONE
+ORIGIN_DOMAIN
+HOSTED_ZONE_ID
+HOSTED_ZONE_NAME
+CLOUDFRONT_ORIGIN_PREFIX_LIST_ID
+NGINX_IMAGE
 ```
 
-`production` Environment에 저장해 배포 대상별로 분리한다.
+`production` Environment에 저장하고, destroy workflow가 OIDC role을 사용해야
+하므로 `production-destroy`에도 `AWS_REGION`, `AWS_DEPLOY_ROLE_ARN`을 둔다.
+deploy workflow는 이 값으로 실행 중인 runner에만 `config/prod.json`을 만들며
+해당 파일은 Git에 저장하지 않는다.
 
 container release Command document 이름은 CDK app name을 기준으로 고정한다.
 기본 production 구성의 이름은 `workshield-prod-deploy`이며, workflow는 SSM command에
 release SHA만 전달한다.
 AWS account ID, region, origin domain과 hosted zone ID는 비밀이 아니며
-`deploy/aws/config/prod.json`에서 관리한다. `GHCR_OWNER`는
+GitHub Environment variable에서 생성한 일회성 `deploy/aws/config/prod.json`으로
+CDK에 전달한다. `GHCR_OWNER`는
 `deploy-production.yml`의 수동 입력값으로 받아 소문자로 정규화한다.
 
 ### GitHub Environment Secrets

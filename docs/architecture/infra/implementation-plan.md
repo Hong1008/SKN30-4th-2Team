@@ -285,7 +285,7 @@ GHCR public 사용은 승인됐다. package를 public으로 바꾸면 다시 pri
 2. OIDC·CDK bootstrap
 3. GitHub production Environment 설정
 4. GitHub에 `RUNPOD_API_KEY` Environment Secret 등록
-5. AWS Secrets Manager에 `LAW_OC` 등 bootstrap secret 등록
+5. Foundation stack 배포 후 `put-secrets.sh`로 `vllm`, `embed`, `origin-header`, `law` 등록
 6. 최초 GHCR image 게시와 public visibility 확정
 7. foundation stack 배포
 8. RunPod Pod 자동 생성·상태 확인·binding
@@ -305,7 +305,7 @@ GHCR public 사용은 승인됐다. package를 public으로 바꾸면 다시 pri
 | DNS | Route 53 사용 |
 | reviewer | 정상 배포 선택, 폐기는 `Hong1008` 승인 |
 | Embedder·Reranker | Pod base URL |
-| vLLM | workflow가 URL·model ID·API key 자동 바인딩 |
+| vLLM | workflow가 URL·model ID를 자동 바인딩, API key는 안전한 secret 등록 script로 생성 |
 | LAW_OC | 보유 |
 | 폐기 | 생성한 project AWS·RunPod 자원 자동 삭제 |
 
@@ -318,10 +318,10 @@ GHCR public 사용은 승인됐다. package를 public으로 바꾸면 다시 pri
 3. RunPod 운영 전용 API key 발급 후 Pod create/get/list/delete 권한 확인
 4. GitHub `production`과 `production-destroy` Environment 생성
 5. `RUNPOD_API_KEY`를 Environment Secret으로 등록
-6. AWS account ID를 `deploy/aws/config/prod.json`에 입력
+6. GitHub Environment에 account·AZ·domain·hosted zone·Nginx digest 변수를 입력
 7. 실제 origin domain과 Route 53 hosted zone ID 준비
 8. AWS SSO profile 준비
-9. `LAW_OC`를 구현될 안전한 secret 등록 script로 AWS에 입력
+9. Foundation stack 배포 후 `LAW_OC`와 생성한 runtime secret을 안전한 secret 등록 script로 AWS에 입력
 
 `origin.workshield.com`은 예시이므로 실제 배포 설정으로 사용하지 않는다.
 RunPod URL, Pod ID, vLLM model ID와 vLLM API key는 사용자가 미리 준비할 필요가

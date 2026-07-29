@@ -176,17 +176,28 @@ class FoundationStack(Stack):
             treat_missing_data="notBreaching",
         )
 
-        for name in ("vllm", "embed", "origin-header"):
+        # 실제 값은 6단계의 안전한 stdin script가 입력한다. stack 삭제 시에는
+        # 즉시 폐기하지 않고 destroy script가 7일 복구 기간을 예약한다.
+        for name in ("vllm", "embed", "origin-header", "law"):
             secret = secretsmanager.CfnSecret(self, f"{name.title().replace('-', '')}Secret", name=f"/workshield/prod/{name}")
-            secret.cfn_options.deletion_policy = CfnDeletionPolicy.DELETE
+            secret.cfn_options.deletion_policy = CfnDeletionPolicy.RETAIN
+            secret.cfn_options.update_replace_policy = CfnDeletionPolicy.RETAIN
         for name, value in {
             "release/active-sha": "__UNSET__",
             "vllm/base-url": "__UNSET__",
             "vllm/model": "__UNSET__",
             "runpod/llm/pod-id": "__UNSET__",
+            "runpod/llm/base-url": "__UNSET__",
+            "runpod/llm/model-id": "__UNSET__",
+            "runpod/llm/template-id": "__UNSET__",
             "runpod/embed/pod-id": "__UNSET__",
             "runpod/embed/base-url": "__UNSET__",
+            "runpod/embed/template-id": "__UNSET__",
+            "runpod/last-provision-run-id": "__UNSET__",
             "api/session-ttl-seconds": "1800",
             "api/max-upload-size-bytes": "10485760",
+            "runtime/ghcr-owner": "__UNSET__",
+            "runtime/nginx-image": "__UNSET__",
+            "runtime/origin-domain": "__UNSET__",
         }.items():
             ssm.StringParameter(self, f"Parameter{name.title().replace('/', '').replace('-', '')}", parameter_name=f"/workshield/prod/{name}", string_value=value)

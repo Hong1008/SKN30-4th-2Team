@@ -47,23 +47,5 @@ jobs:
             --output "$RUNNER_TEMP/runpodctl"
           chmod 0755 "$RUNNER_TEMP/runpodctl"
           printf '%s\n' "$RUNNER_TEMP" >> "$GITHUB_PATH"
-      - name: Delete only RunPod Pods recorded for production
-        run: |
-          python3 mcp/deploy/rm_embed_pod.py --state-backend aws --environment prod --ignore-not-found
-          python3 deploy/llm_pod/rm_llm_pod.py --state-backend aws --environment prod --ignore-not-found
-      - name: Delete WorkShield stacks in dependency order
-        run: |
-          for stack in WorkShieldService WorkShieldFoundation; do
-            if aws cloudformation describe-stacks --stack-name "$stack" >/dev/null 2>&1; then
-              aws cloudformation delete-stack --stack-name "$stack"
-              aws cloudformation wait stack-delete-complete --stack-name "$stack"
-            fi
-          done
-      - name: Record retained shared resources
-        run: |
-          {
-            echo '## Destruction result'
-            echo
-            echo 'RunPod Pods recorded under /workshield/prod/runpod and the two WorkShield stacks were targeted.'
-            echo 'The hosted zone, domain registration, GitHub OIDC provider, CDK bootstrap stack, RunPod templates, and GHCR packages are intentionally retained.'
-          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Destroy only WorkShield-owned production resources
+        run: bash deploy/aws/scripts/destroy-project.sh --confirmation "$CONFIRMATION"

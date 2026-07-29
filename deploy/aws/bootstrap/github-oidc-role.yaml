@@ -10,6 +10,9 @@ Parameters:
   GitHubEnvironment:
     Type: String
     Default: production
+  GitHubDestructionEnvironment:
+    Type: String
+    Default: production-destroy
   DeployRoleName:
     Type: String
     Default: workshield-prod-github-deploy
@@ -54,7 +57,9 @@ Resources:
             Condition:
               StringEquals:
                 token.actions.githubusercontent.com:aud: sts.amazonaws.com
-                token.actions.githubusercontent.com:sub: !Sub repo:${GitHubOrganization}/${GitHubRepository}:environment:${GitHubEnvironment}
+                token.actions.githubusercontent.com:sub:
+                  - !Sub repo:${GitHubOrganization}/${GitHubRepository}:environment:${GitHubEnvironment}
+                  - !Sub repo:${GitHubOrganization}/${GitHubRepository}:environment:${GitHubDestructionEnvironment}
       Policies:
         - PolicyName: WorkShieldDeployOrchestration
           PolicyDocument:
@@ -67,7 +72,13 @@ Resources:
                 Action: sts:AssumeRole
                 Resource: !GetAtt CloudFormationExecutionRole.Arn
               - Effect: Allow
-                Action: [s3:ListBucket, s3:GetObject, s3:PutObject, s3:DeleteObject, cloudfront:CreateInvalidation, cloudfront:GetDistribution, ssm:SendCommand, ssm:GetCommandInvocation, ec2:DescribeInstances]
+                Action: [s3:ListBucket, s3:GetObject, s3:PutObject, s3:DeleteObject, cloudfront:CreateInvalidation, cloudfront:GetDistribution, cloudfront:GetInvalidation, ec2:DescribeInstances]
+                Resource: '*'
+              - Effect: Allow
+                Action: [ssm:GetParameter, ssm:GetParameters, ssm:GetParametersByPath, ssm:PutParameter, ssm:DeleteParameters, ssm:SendCommand, ssm:GetCommandInvocation, ssm:ListCommandInvocations]
+                Resource: '*'
+              - Effect: Allow
+                Action: [secretsmanager:DescribeSecret, secretsmanager:GetSecretValue, secretsmanager:DeleteSecret]
                 Resource: '*'
 Outputs:
   GitHubDeployRoleArn:

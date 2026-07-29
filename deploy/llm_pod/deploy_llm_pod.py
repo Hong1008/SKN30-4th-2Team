@@ -44,6 +44,24 @@ def _get_state(environment: str) -> dict[str, str]:
 def _put_state(values: dict[str, str], environment: str) -> None:
     for key, value in values.items():
         _aws(["ssm", "put-parameter", "--name", _parameter(key, environment), "--value", value, "--type", "String", "--overwrite"])
+    # API runtime은 RunPod의 상태 namespace가 아닌 vllm namespace를 읽는다.
+    runtime_values = {
+        "base-url": values.get("base-url", ""),
+        "model": values.get("model-id", ""),
+    }
+    for key, value in runtime_values.items():
+        if value:
+            _aws([
+                "ssm",
+                "put-parameter",
+                "--name",
+                f"/workshield/{environment}/vllm/{key}",
+                "--value",
+                value,
+                "--type",
+                "String",
+                "--overwrite",
+            ])
 
 
 def _local_env_path() -> Path:
@@ -148,6 +166,8 @@ def main() -> int:
             except Exception:
                 print("기존 vLLM Pod가 readiness 검증을 통과하지 못했습니다.", file=sys.stderr)
                 return 1
+        if args.state_backend == "aws":
+            _put_state({"base-url": state.get("base-url", ""), "model-id": model_id}, args.environment)
         output = {"pod_id": state["pod-id"], "base_url": state.get("base-url", ""), "model_id": model_id, "created": False}
         print(json.dumps(output) if args.output == "json" else f"기존 Pod 재사용: {output['pod_id']}")
         return 0

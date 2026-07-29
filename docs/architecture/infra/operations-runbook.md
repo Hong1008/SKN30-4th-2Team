@@ -59,15 +59,19 @@ Variables:
 AWS_ACCOUNT_ID
 AWS_REGION
 AWS_DEPLOY_ROLE_ARN
-CDK_APP_NAME
+AWS_AVAILABILITY_ZONE
 ORIGIN_DOMAIN
+HOSTED_ZONE_ID
+HOSTED_ZONE_NAME
+CLOUDFRONT_ORIGIN_PREFIX_LIST_ID
+NGINX_IMAGE
 ```
 
 AWS access key는 Secret으로 만들지 않는다.
-AWS account ID, region, origin domain과 hosted zone ID는
-`deploy/aws/config/prod.json`을 기준으로 관리하고 GitHub Environment에는
-OIDC role ARN처럼 계정 연결 후 생기는 값만 둘 수 있다. `GHCR_OWNER`는 수동
-workflow 입력으로 받는다.
+이 값은 `production` Environment에 모두 설정한다. deploy workflow는 이를
+runner의 Git 비추적 `deploy/aws/config/prod.json`으로 생성한다. `production-destroy`
+Environment에는 최소한 `AWS_REGION`, `AWS_DEPLOY_ROLE_ARN`과 `RUNPOD_API_KEY`를
+설정한다. `GHCR_OWNER`는 수동 workflow 입력으로 받는다.
 
 Secrets:
 
@@ -84,7 +88,7 @@ bootstrap은 다음 순서로 한 번 수행한다.
 
 1. `deploy/aws/bootstrap/github-oidc-role.yaml` 검토
 2. AWS CLI로 OIDC provider와 deploy role stack 생성
-3. trust subject가 실제 repository와 `production` Environment인지 확인
+3. trust subject가 실제 repository의 `production` 및 `production-destroy` Environment인지 확인
 4. 제한된 CloudFormation execution policy 준비
 5. `cdk bootstrap` 실행
 6. GitHub Environment의 `AWS_DEPLOY_ROLE_ARN` 설정
@@ -110,10 +114,11 @@ repo:<owner>/<repository>:environment:production
 3. `LAW_OC` 등록
 4. origin header 생성
 5. 필요할 때만 Hugging Face token 준비
-6. Secrets Manager에 bootstrap 값을 등록
+6. Foundation stack 배포 후 `put-secrets.sh`로 `vllm`, `embed`, `origin-header`,
+   `law` secret을 모두 등록
 
-VLLM API key, Embedder API key, Pod endpoint와 model ID는 최초 배포 workflow가
-생성·확인·저장한다.
+VLLM·Embedder API key는 `put-secrets.sh --generate`로 생성해 해당 Pod와 runtime에
+같은 값을 사용한다. Pod endpoint와 model ID는 최초 배포 workflow가 확인·저장한다.
 
 `deploy/aws/scripts/put-secrets.sh`는 value를 command argument로 받지 않고
 대화형 입력 또는 안전한 stdin을 사용하도록 구현한다.
@@ -241,8 +246,9 @@ Compose 갱신 시 데이터 볼륨을 삭제하지 않는다. `docker compose d
 
 ### 8.2 웹
 
-release별 S3 artifact 또는 S3 versioning으로 이전 web build를 복구한다.
-복구 후 CloudFront invalidation을 실행한다.
+rollback workflow는 대상 release SHA를 별도 checkout해 같은 revision의 web build를
+S3에 배포하고 CloudFront invalidation을 완료한다. S3 versioning은 추가 복구 수단으로
+유지한다.
 
 ### 8.3 인프라
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from aws_cdk import CfnDeletionPolicy, CfnParameter, Duration, RemovalPolicy, Stack
+from aws_cdk import CfnDeletionPolicy, CfnOutput, Duration, RemovalPolicy, Stack
 from aws_cdk import aws_cloudfront as cloudfront
 from aws_cdk import aws_cloudwatch as cloudwatch
 from aws_cdk import aws_ec2 as ec2
@@ -30,14 +30,9 @@ class ServiceStack(Stack):
         **kwargs: object,
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
-        origin_header = CfnParameter(
-            self,
-            "OriginHeader",
-            type="String",
-            no_echo=True,
-            default="__UNSET__",
-            description="Secrets Manager의 origin header 값. deploy 시에만 NoEcho parameter로 전달합니다.",
-        )
+        # CloudFormation dynamic reference를 사용해 header 원문을 CDK command
+        # argument·template output·workflow log에 노출하지 않는다.
+        origin_header_dynamic_reference = "{{resolve:secretsmanager:/workshield/prod/origin-header:SecretString:ORIGIN_HEADER}}"
 
         self.instance = ec2.Instance(
             self,
@@ -135,7 +130,7 @@ class ServiceStack(Stack):
                     cloudfront.CfnDistribution.OriginProperty(
                         id="api",
                         domain_name=config.origin_domain,
-                        origin_custom_headers=[cloudfront.CfnDistribution.OriginCustomHeaderProperty(header_name="X-WorkShield-Origin", header_value=origin_header.value_as_string)],
+                        origin_custom_headers=[cloudfront.CfnDistribution.OriginCustomHeaderProperty(header_name="X-WorkShield-Origin", header_value=origin_header_dynamic_reference)],
                         custom_origin_config=cloudfront.CfnDistribution.CustomOriginConfigProperty(
                             http_port=80,
                             https_port=443,
@@ -168,6 +163,8 @@ class ServiceStack(Stack):
                 conditions={"StringEquals": {"AWS:SourceArn": f"arn:{self.partition}:cloudfront::{self.account}:distribution/{distribution.attr_id}"}},
             )
         )
+        CfnOutput(self, "WebBucketName", value=web_bucket.bucket_name)
+        CfnOutput(self, "CloudFrontDistributionId", value=distribution.attr_id)
         ssm.CfnDocument(
             self,
             "DeployContainersDocument",
@@ -199,10 +196,11 @@ class ServiceStack(Stack):
         data_id = foundation.data_volume.ref
         corpus_id = foundation.corpus_volume.ref
         return [
-            "dnf install -y docker",
+            "dnf install -y docker awscli docker-compose-plugin",
             "systemctl enable --now docker",
             "usermod -aG docker ec2-user",
             "mkdir -p /opt/workshield/{data,mcp-corpus,certificates,secrets,releases}",
+            "mkdir -p /opt/workshield/runtime/nginx",
             self._mount_command(data_id, "/opt/workshield/data"),
             self._mount_command(corpus_id, "/opt/workshield/mcp-corpus"),
         ]

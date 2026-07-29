@@ -73,6 +73,8 @@ def main() -> int:
     if args.state_backend == "aws":
         for key in ("pod-id", "base-url", "model-id", "template-id", "last-provision-run-id"):
             subprocess.run(["aws", "ssm", "delete-parameter", "--name", f"{PREFIX.format(environment=args.environment)}/{key}"], capture_output=True)
+        for key in ("base-url", "model"):
+            subprocess.run(["aws", "ssm", "delete-parameter", "--name", f"/workshield/{args.environment}/vllm/{key}"], capture_output=True)
     else:
         _clear_local_state()
     print(json.dumps({"pod_id": pod_id, "deleted": result.returncode == 0}))

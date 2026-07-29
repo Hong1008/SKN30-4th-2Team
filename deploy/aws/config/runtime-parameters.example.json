@@ -1,0 +1,7 @@
+{
+  "api/session-ttl-seconds": "1800",
+  "api/max-upload-size-bytes": "10485760",
+  "runtime/ghcr-owner": "example-owner",
+  "runtime/nginx-image": "nginx@sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "runtime/origin-domain": "origin.invalid"
+}
