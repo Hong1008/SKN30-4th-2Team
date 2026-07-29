@@ -1,0 +1,54 @@
+name: Roll back production
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: 40-character lowercase Git SHA to restore
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: workshield-production
+  cancel-in-progress: false
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+      RELEASE_SHA: ${{ inputs.release_sha }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Validate rollback release and GHCR manifests
+        run: |
+          [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          for component in api mcp embed-rerank; do
+            docker manifest inspect "ghcr.io/${owner}/skn30-4th-2team/${component}:${RELEASE_SHA}" >/dev/null
+          done
+      - name: Configure short-lived AWS credentials through OIDC
+        uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4.0.1
+        with:
+          aws-region: ${{ vars.AWS_REGION }}
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          role-session-name: workshield-rollback-${{ github.run_id }}
+          mask-aws-account-id: true
+      - name: Request SSM container rollback
+        run: |
+          command_id="$(aws ssm send-command \
+            --document-name workshield-prod-deploy \
+            --targets 'Key=tag:Project,Values=WorkShield' \
+            --parameters "ReleaseSha=${RELEASE_SHA}" \
+            --comment "WorkShield rollback ${RELEASE_SHA}" \
+            --query 'Command.CommandId' --output text)"
+          test -n "$command_id"
+          printf 'Rollback SSM command submitted: %s\n' "$command_id" >> "$GITHUB_STEP_SUMMARY"

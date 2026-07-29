@@ -24,9 +24,14 @@
 ```text
 AWS_DEPLOY_ROLE_ARN
 CDK_APP_NAME
+AWS_REGION
 ```
 
 `production` Environment에 저장해 배포 대상별로 분리한다.
+
+container release Command document 이름은 CDK app name을 기준으로 고정한다.
+기본 production 구성의 이름은 `workshield-prod-deploy`이며, workflow는 SSM command에
+release SHA만 전달한다.
 AWS account ID, region, origin domain과 hosted zone ID는 비밀이 아니며
 `deploy/aws/config/prod.json`에서 관리한다. `GHCR_OWNER`는
 `deploy-production.yml`의 수동 입력값으로 받아 소문자로 정규화한다.
@@ -64,6 +69,14 @@ secret JSON 예:
 {
   "VLLM_API_KEY": "workflow가 생성",
   "HUGGING_FACE_TOKEN": "필요할 때만 등록"
+}
+```
+
+`/workshield/prod/embed` secret은 MCP runtime 환경 변수와 같은 이름을 사용한다.
+
+```json
+{
+  "RUNPOD_EMBED_API_KEY": "workflow가 생성"
 }
 ```
 

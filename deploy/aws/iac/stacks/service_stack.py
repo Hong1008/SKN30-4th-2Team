@@ -171,6 +171,7 @@ class ServiceStack(Stack):
         ssm.CfnDocument(
             self,
             "DeployContainersDocument",
+            name=f"{config.app_name}-deploy",
             document_type="Command",
             document_format="YAML",
             update_method="NewVersion",

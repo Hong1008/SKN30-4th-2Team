@@ -1,0 +1,69 @@
+name: Destroy production
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type exactly DESTROY workshield-prod
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: workshield-production
+  cancel-in-progress: false
+
+jobs:
+  destroy:
+    runs-on: ubuntu-latest
+    environment: production-destroy
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+      RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
+      CONFIRMATION: ${{ inputs.confirmation }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          submodules: recursive
+      - name: Require exact destruction confirmation
+        run: test "$CONFIRMATION" = 'DESTROY workshield-prod'
+      - name: Configure short-lived AWS credentials through OIDC
+        uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4.0.1
+        with:
+          aws-region: ${{ vars.AWS_REGION }}
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          role-session-name: workshield-destroy-${{ github.run_id }}
+          mask-aws-account-id: true
+      - name: Install RunPod CLI without persisting its API key
+        run: |
+          curl --fail --location --silent --show-error \
+            https://github.com/runpod/runpodctl/releases/latest/download/runpodctl-linux-amd64 \
+            --output "$RUNNER_TEMP/runpodctl"
+          chmod 0755 "$RUNNER_TEMP/runpodctl"
+          printf '%s\n' "$RUNNER_TEMP" >> "$GITHUB_PATH"
+      - name: Delete only RunPod Pods recorded for production
+        run: |
+          python3 mcp/deploy/rm_embed_pod.py --state-backend aws --environment prod --ignore-not-found
+          python3 deploy/llm_pod/rm_llm_pod.py --state-backend aws --environment prod --ignore-not-found
+      - name: Delete WorkShield stacks in dependency order
+        run: |
+          for stack in WorkShieldService WorkShieldFoundation; do
+            if aws cloudformation describe-stacks --stack-name "$stack" >/dev/null 2>&1; then
+              aws cloudformation delete-stack --stack-name "$stack"
+              aws cloudformation wait stack-delete-complete --stack-name "$stack"
+            fi
+          done
+      - name: Record retained shared resources
+        run: |
+          {
+            echo '## Destruction result'
+            echo
+            echo 'RunPod Pods recorded under /workshield/prod/runpod and the two WorkShield stacks were targeted.'
+            echo 'The hosted zone, domain registration, GitHub OIDC provider, CDK bootstrap stack, RunPod templates, and GHCR packages are intentionally retained.'
+          } >> "$GITHUB_STEP_SUMMARY"
