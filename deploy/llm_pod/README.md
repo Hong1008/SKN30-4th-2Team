@@ -50,11 +50,12 @@ python3 deploy/llm_pod/deploy_llm_pod.py \
 | `gemma-4-12B-it-FP8-Dynamic` | `RedHatAI/gemma-4-12B-it-FP8-Dynamic` |
 | `EXAONE-3.5-7.8B-Instruct` | `LGAI-EXAONE/EXAONE-3.5-7.8B-Instruct` |
 
-생성에 성공하면 스크립트는 새 `VLLM_API_KEY`를 만들고 Pod ID 및 엔드포인트를 출력한 뒤, `api/.env`에 아래 값을 저장합니다.
+생성에 성공하면 스크립트는 새 `VLLM_API_KEY`를 만들고 Pod ID 및 엔드포인트만 출력한 뒤, 로컬 모드에서만 `api/.env`에 아래 값을 저장합니다. 키는 화면이나 JSON 출력에 포함하지 않습니다.
 
 ```dotenv
 VLLM_BASE_URL='https://<pod-id>-8000.proxy.runpod.net'
 VLLM_API_KEY='<자동 생성된 키>'
+LLM_MODEL='<RunPod가 보고한 model ID>'
 ```
 
 API 서버에서 vLLM을 사용하려면 `api/.env`의 `LLM_PROVIDER=vllm` 설정과 `LLM_MODEL`도 해당 Pod가 제공하는 모델에 맞게 설정합니다. 자세한 API 설정은 [api/README.md](../../api/README.md)를 참고하세요.
@@ -77,7 +78,18 @@ Pod를 더 이상 사용하지 않을 때는 반드시 아래 명령으로 삭�
 just rm_llm_pod
 ```
 
-삭제 스크립트는 `api/.env`의 `VLLM_BASE_URL`에서 Pod ID를 읽어 RunPod Pod를 삭제한 뒤 `VLLM_BASE_URL`과 `VLLM_API_KEY`를 제거합니다. `VLLM_BASE_URL`이 없으면 삭제할 대상이 없다고 안내하고 종료합니다.
+삭제 스크립트는 `api/.env` 또는 `--pod-id`에서 Pod ID를 읽어 RunPod Pod를 삭제한 뒤 연결 정보를 제거합니다. 대상이 이미 없으면 성공으로 처리합니다.
+
+### CI/AWS 상태 backend
+
+CI에서는 로컬 환경 파일을 변경하지 않도록 AWS 상태 backend를 사용합니다. Pod ID·URL·모델 ID와 template/run metadata는 Parameter Store에만 기록하고, API key는 Secrets Manager로 별도 전달합니다.
+
+```bash
+python3 deploy/llm_pod/deploy_llm_pod.py \
+  --state-backend aws --environment prod --output json --wait
+python3 deploy/llm_pod/rm_llm_pod.py \
+  --state-backend aws --environment prod --ignore-not-found
+```
 
 ## 문제 해결
 

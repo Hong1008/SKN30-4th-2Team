@@ -1,190 +1,188 @@
 #!/usr/bin/env python3
-import sys
-import os
-import json
+"""RunPod vLLM Pod을 로컬 또는 AWS 상태 backend에 멱등 생성한다."""
+
+from __future__ import annotations
+
 import argparse
-import subprocess
-import shutil
+import json
+import os
 import secrets
+import shutil
+import subprocess
+import sys
 import time
 from pathlib import Path
+from typing import Any
 
-# 모든 모델 공통 기본 옵션
-COMMON_ARGS = "--host 0.0.0.0 --port 8000 --enforce-eager --gpu-memory-utilization 0.90 --max-model-len 8128 "
-
-# 모델 프리셋 정의
+TEMPLATE_ID = "6o2zycj91k"
+PARAMETER_PREFIX = "/workshield/{environment}/runpod/llm"
+COMMON_ARGS = "--host 0.0.0.0 --port 8000 --enforce-eager --gpu-memory-utilization 0.90 --max-model-len 8128"
 MODEL_PRESETS = {
-    "qwen3.5-9B-FP8-dynamic": (
-        "RedHatAI/Qwen3.5-9B-FP8-dynamic "
-        "--language-model-only "
-        "--reasoning-parser qwen3 "
-        f"{COMMON_ARGS}"
-    ),
-    "gemma-4-12B-it-FP8-Dynamic": (
-        "RedHatAI/gemma-4-12B-it-FP8-Dynamic "
-        "--reasoning-parser gemma4 "
-        f"{COMMON_ARGS}"
-    ),
-    "EXAONE-3.5-7.8B-Instruct": (
-        "LGAI-EXAONE/EXAONE-3.5-7.8B-Instruct "
-        "--dtype bfloat16 "
-        "--trust-remote-code "
-        f"{COMMON_ARGS}"
-    )
+    "qwen3.5-9B-FP8-dynamic": f"RedHatAI/Qwen3.5-9B-FP8-dynamic --language-model-only --reasoning-parser qwen3 {COMMON_ARGS}",
+    "gemma-4-12B-it-FP8-Dynamic": f"RedHatAI/gemma-4-12B-it-FP8-Dynamic --reasoning-parser gemma4 {COMMON_ARGS}",
+    "EXAONE-3.5-7.8B-Instruct": f"LGAI-EXAONE/EXAONE-3.5-7.8B-Instruct --dtype bfloat16 --trust-remote-code {COMMON_ARGS}",
 }
 
-def generate_api_key() -> str:
-    """Generate 32-byte hex string (same as openssl rand -hex 32)."""
-    if shutil.which("openssl"):
-        try:
-            res = subprocess.run(["openssl", "rand", "-hex", "32"], capture_output=True, text=True, check=True)
-            key = res.stdout.strip()
-            if key:
-                return key
-        except Exception:
-            pass
-    # Fallback to Python secrets module for cross-platform compatibility
-    return secrets.token_hex(32)
 
-def read_env_var(env_path: Path, key: str) -> str:
-    """Read a specific key value from .env file."""
-    if not env_path.exists():
-        return ""
-    for line in env_path.read_text(encoding="utf-8").splitlines():
-        stripped = line.strip()
-        if stripped and not stripped.startswith("#") and "=" in line:
-            k, v = line.split("=", 1)
-            if k.strip() == key:
-                return v.strip().strip("'\"")
-    return ""
+def _aws(args: list[str]) -> str:
+    return subprocess.run(["aws", *args], check=True, capture_output=True, text=True).stdout.strip()
 
-def update_env_file(env_path: Path, updates: dict):
-    """Update or append environment variables in .env file."""
-    env_path.parent.mkdir(parents=True, exist_ok=True)
-    lines = []
-    if env_path.exists():
-        lines = env_path.read_text(encoding="utf-8").splitlines()
-    
-    updated_keys = set()
-    new_lines = []
-    for line in lines:
-        stripped = line.strip()
-        if stripped and not stripped.startswith("#") and "=" in line:
-            key = line.split("=", 1)[0].strip()
-            if key in updates:
-                new_lines.append(f"{key}='{updates[key]}'")
-                updated_keys.add(key)
-                continue
-        new_lines.append(line)
-    
-    for key, val in updates.items():
-        if key not in updated_keys:
-            new_lines.append(f"{key}='{val}'")
-            
-    env_path.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
 
-def main():
-    repo_root = Path(__file__).resolve().parent.parent.parent
-    env_file = repo_root / "api" / ".env"
+def _parameter(name: str, environment: str) -> str:
+    return f"{PARAMETER_PREFIX.format(environment=environment)}/{name}"
 
-    parser = argparse.ArgumentParser(description="Deploy RunPod vLLM Pod with model presets")
-    parser.add_argument("--model", "-m", default="qwen3.5-9b-gguf-q8_0", help="Model preset key or raw start args")
-    parser.add_argument("--gpu", "-g", default="NVIDIA A40", help="GPU ID (default: NVIDIA A40)")
-    parser.add_argument("--custom-args", default="", help="Override docker args directly")
-    args = parser.parse_args()
 
-    gpu_id = args.gpu
-    template_id = "6o2zycj91k"
-    
-    # 1. Docker Args 구성
-    if args.custom_args:
-        docker_args = args.custom_args
-        model_name = "custom"
-    elif args.model in MODEL_PRESETS:
-        model_name = args.model
-        docker_args = MODEL_PRESETS[args.model]
-    else:
-        print(f"❌ Unknown model preset: '{args.model}'")
-        print(f"📋 Available presets: {', '.join(MODEL_PRESETS.keys())}")
-        print("Or pass custom docker args using --custom-args.")
-        sys.exit(1)
-    
-    print("=" * 60)
-    print("🚀 RunPod LLM Pod Deployment")
-    print("=" * 60)
-    print(f"📌 Model Preset: {model_name}")
-    print(f"📌 GPU Target  : {gpu_id}")
-    print(f"📌 Template ID : {template_id}")
-    print(f"📌 Docker Args : {docker_args}")
-
-    # 2. API KEY 생성
-    api_key = generate_api_key()
-    print(f"\n🔑 Generated VLLM_API_KEY (openssl rand -hex 32):")
-    print(f"   {api_key}\n")
-
-    # 3. HF_TOKEN 읽기 (Rate limit 및 비공개 레포지토리 다운로드 대응)
-    hf_token = read_env_var(env_file, "HUGGING_FACE_TOKEN") or read_env_var(env_file, "HF_TOKEN")
-
-    # 4. runpodctl 존재 확인
-    runpodctl_bin = shutil.which("runpodctl")
-    if not runpodctl_bin:
-        print("❌ Error: 'runpodctl' CLI was not found in your PATH.")
-        print("Please install runpodctl or run 'just install-runpod'.")
-        sys.exit(1)
-
-    # 5. Pod 생성 명령어 조립 및 실행
-    pod_env = {"VLLM_API_KEY": api_key}
-    if hf_token:
-        pod_env["HF_TOKEN"] = hf_token
-        pod_env["HUGGING_FACE_HUB_TOKEN"] = hf_token
-
-    env_json = json.dumps(pod_env)
-    cmd = [
-        runpodctl_bin, "pod", "create",
-        "--template-id", template_id,
-        "--gpu-id", gpu_id,
-        "--env", env_json,
-        "--docker-args", docker_args,
-        "-o", "json"
-    ]
-    
-    print(f"🛠️ Executing command:\n  {' '.join(cmd)}\n")
-    
+def _get_state(environment: str) -> dict[str, str]:
+    names = [_parameter(key, environment) for key in ("pod-id", "base-url", "model-id", "template-id", "last-provision-run-id")]
     try:
-        res = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        out = res.stdout.strip()
-        data = json.loads(out)
-        pod_id = data.get("id")
-        if not pod_id:
-            print("❌ Failed to parse Pod ID from output:")
-            print(out)
-            sys.exit(1)
-    except subprocess.CalledProcessError as e:
-        print("❌ Error creating pod:")
-        print(e.stderr or e.stdout)
-        sys.exit(1)
-    except json.JSONDecodeError:
-        print("❌ Error parsing JSON output from runpodctl:")
-        print(res.stdout)
-        sys.exit(1)
+        body = json.loads(_aws(["ssm", "get-parameters", "--names", *names, "--output", "json"]))
+    except subprocess.CalledProcessError:
+        return {}
+    return {item["Name"].rsplit("/", 1)[-1]: item["Value"] for item in body.get("Parameters", [])}
 
-    # 7. Pod Base URL 생성 (Template 8000번 포트 반영)
-    base_url = f"https://{pod_id}-8000.proxy.runpod.net"
-    
-    print("\n" + "=" * 60)
-    print("🎉 Pod Deployment Successful!")
-    print(f"🆔 Pod ID       : {pod_id}")
-    print(f"🌐 VLLM_BASE_URL: {base_url}")
-    print(f"🔑 VLLM_API_KEY : {api_key}")
-    print("=" * 60)
 
-    # 8. api/.env 파일에 환경변수 자동 업데이트
-    updates = {
-        "VLLM_API_KEY": api_key,
-        "VLLM_BASE_URL": base_url
+def _put_state(values: dict[str, str], environment: str) -> None:
+    for key, value in values.items():
+        _aws(["ssm", "put-parameter", "--name", _parameter(key, environment), "--value", value, "--type", "String", "--overwrite"])
+
+
+def _local_env_path() -> Path:
+    return Path(__file__).resolve().parents[2] / "api" / ".env"
+
+
+def _local_state() -> dict[str, str]:
+    path = _local_env_path()
+    if not path.exists():
+        return {}
+    values = {
+        key.strip(): value.strip().strip("'\"")
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if "=" in line and not line.lstrip().startswith("#")
+        for key, _, value in (line.partition("="),)
     }
-    update_env_file(env_file, updates)
-    print(f"\n✅ Updated {env_file.relative_to(repo_root)} with new VLLM_API_KEY and VLLM_BASE_URL.")
+    base_url = values.get("VLLM_BASE_URL", "")
+    pod_id = base_url.removeprefix("https://").split("-8000.proxy.runpod.net", 1)[0]
+    if not pod_id or "-8000.proxy.runpod.net" not in base_url:
+        return {}
+    return {
+        "pod-id": pod_id,
+        "base-url": base_url,
+        "model-id": values.get("LLM_MODEL", ""),
+        "api-key": values.get("VLLM_API_KEY", ""),
+    }
+
+
+def _update_local_env(values: dict[str, str]) -> None:
+    path = _local_env_path()
+    lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+    remaining = [line for line in lines if line.partition("=")[0].strip() not in values]
+    path.write_text("\n".join([*remaining, *(f"{k}='{v}'" for k, v in values.items())]) + "\n", encoding="utf-8")
+
+
+def _runpod_json(command: list[str]) -> dict[str, Any]:
+    result = subprocess.run(command, check=True, capture_output=True, text=True)
+    return json.loads(result.stdout)
+
+
+def _pod_is_usable(runpodctl: str, pod_id: str) -> bool:
+    try:
+        body = _runpod_json([runpodctl, "pod", "get", pod_id, "-o", "json"])
+    except (subprocess.CalledProcessError, json.JSONDecodeError):
+        return False
+    return str(body.get("desiredStatus") or body.get("status") or "").upper() == "RUNNING"
+
+
+def _wait_ready(base_url: str, api_key: str, timeout: int) -> str:
+    import urllib.error
+    import urllib.request
+
+    deadline = time.monotonic() + timeout
+    delay = 2.0
+    while time.monotonic() < deadline:
+        request = urllib.request.Request(f"{base_url}/v1/models", headers={"Authorization": f"Bearer {api_key}"})
+        try:
+            with urllib.request.urlopen(request, timeout=10) as response:
+                body = json.loads(response.read())
+            models = body.get("data", [])
+            if models and models[0].get("id"):
+                try:
+                    urllib.request.urlopen(f"{base_url}/v1/models", timeout=10)
+                except urllib.error.HTTPError as error:
+                    if error.code in (401, 403):
+                        return str(models[0]["id"])
+                    raise RuntimeError(f"vLLM 무인증 요청이 {error.code}으로 거부되었습니다.") from error
+                raise RuntimeError("vLLM 무인증 요청이 허용되었습니다.")
+        except Exception:
+            time.sleep(delay)
+            delay = min(delay * 2, 15)
+    raise TimeoutError("vLLM readiness timeout")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--model", default="qwen3.5-9B-FP8-dynamic", choices=MODEL_PRESETS)
+    parser.add_argument("--gpu", default="NVIDIA A40")
+    parser.add_argument("--output", choices=("text", "json"), default="text")
+    parser.add_argument("--state-backend", choices=("local", "aws"), default="local")
+    parser.add_argument("--environment", default="prod")
+    parser.add_argument("--name", default="workshield-prod-llm")
+    parser.add_argument("--custom-args", default="", help="프리셋 대신 사용할 vLLM Docker 실행 인자")
+    parser.add_argument("--no-env-file", action="store_true")
+    parser.add_argument("--wait", action="store_true")
+    parser.add_argument("--timeout-seconds", type=int, default=900)
+    args = parser.parse_args()
+    runpodctl = shutil.which("runpodctl")
+    if not runpodctl:
+        print("runpodctl을 찾을 수 없습니다.", file=sys.stderr)
+        return 2
+    state = _get_state(args.environment) if args.state_backend == "aws" else _local_state()
+    api_key = os.getenv("VLLM_API_KEY") or state.get("api-key", "")
+    if state.get("pod-id") and _pod_is_usable(runpodctl, state["pod-id"]):
+        model_id = state.get("model-id", "")
+        if args.wait:
+            if not api_key:
+                print("기존 vLLM Pod readiness 확인에 VLLM_API_KEY가 필요합니다.", file=sys.stderr)
+                return 2
+            try:
+                model_id = _wait_ready(state.get("base-url", ""), api_key, args.timeout_seconds)
+            except Exception:
+                print("기존 vLLM Pod가 readiness 검증을 통과하지 못했습니다.", file=sys.stderr)
+                return 1
+        output = {"pod_id": state["pod-id"], "base_url": state.get("base-url", ""), "model_id": model_id, "created": False}
+        print(json.dumps(output) if args.output == "json" else f"기존 Pod 재사용: {output['pod_id']}")
+        return 0
+    api_key = api_key or secrets.token_hex(32)
+    docker_args = args.custom_args or MODEL_PRESETS[args.model]
+    command = [runpodctl, "pod", "create", "--template-id", TEMPLATE_ID, "--gpu-id", args.gpu, "--name", args.name, "--env", json.dumps({"VLLM_API_KEY": api_key}), "--docker-args", docker_args, "-o", "json"]
+    pod_id: str | None = None
+    try:
+        payload = _runpod_json(command)
+        pod_id = str(payload["id"])
+        base_url = f"https://{pod_id}-8000.proxy.runpod.net"
+        model_id = args.model
+        if args.wait:
+            model_id = _wait_ready(base_url, api_key, args.timeout_seconds)
+        state_values = {
+            "pod-id": pod_id,
+            "base-url": base_url,
+            "model-id": model_id,
+            "template-id": TEMPLATE_ID,
+            "last-provision-run-id": os.getenv("GITHUB_RUN_ID", "manual"),
+        }
+        if args.state_backend == "aws":
+            _put_state(state_values, args.environment)
+        elif not args.no_env_file:
+            _update_local_env({"VLLM_BASE_URL": base_url, "VLLM_API_KEY": api_key, "LLM_MODEL": model_id})
+        output = {"pod_id": pod_id, "base_url": base_url, "model_id": model_id, "created": True}
+        print(json.dumps(output) if args.output == "json" else f"Pod 생성 완료: {pod_id}")
+        return 0
+    except Exception:
+        if pod_id:
+            # 기존 상태는 건드리지 않고, 이번 실행에서 만든 Pod만 정리한다.
+            subprocess.run([runpodctl, "pod", "delete", pod_id], capture_output=True, text=True)
+        print("vLLM Pod 생성 실패", file=sys.stderr)
+        return 1
+
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

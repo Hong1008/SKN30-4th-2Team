@@ -1,87 +1,83 @@
 #!/usr/bin/env python3
-import sys
-import os
+"""명시 Pod ID 또는 AWS 상태로 vLLM Pod을 멱등 삭제한다."""
+
+from __future__ import annotations
+
+import argparse
+import json
 import re
-import subprocess
 import shutil
+import subprocess
+import sys
 from pathlib import Path
 
-def extract_pod_id(url: str) -> str:
-    """Extract pod ID from RunPod proxy URL (e.g. https://abc123xyz-8000.proxy.runpod.net -> abc123xyz)."""
-    clean_url = url.strip().strip("'\"")
-    match = re.search(r"https?://([a-zA-Z0-9]+)", clean_url)
-    if match:
-        return match.group(1)
-    return ""
+PREFIX = "/workshield/{environment}/runpod/llm"
 
-def read_env_var(env_path: Path, key: str) -> str:
-    """Read a specific key value from .env file."""
-    if not env_path.exists():
-        return ""
-    for line in env_path.read_text(encoding="utf-8").splitlines():
-        stripped = line.strip()
-        if stripped and not stripped.startswith("#") and "=" in line:
-            k, v = line.split("=", 1)
-            if k.strip() == key:
-                return v.strip().strip("'\"")
-    return ""
 
-def remove_env_keys(env_path: Path, keys_to_remove: list):
-    """Remove target keys from .env file."""
-    if not env_path.exists():
-        return
-    lines = env_path.read_text(encoding="utf-8").splitlines()
-    new_lines = []
-    for line in lines:
-        stripped = line.strip()
-        if stripped and not stripped.startswith("#") and "=" in line:
-            key = line.split("=", 1)[0].strip()
-            if key in keys_to_remove:
-                continue
-        new_lines.append(line)
-    env_path.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
+def _aws(args: list[str]) -> str:
+    return subprocess.run(["aws", *args], check=True, capture_output=True, text=True).stdout.strip()
 
-def main():
-    repo_root = Path(__file__).resolve().parent.parent.parent
-    env_file = repo_root / "api" / ".env"
 
-    print("=" * 60)
-    print("🗑️  RunPod LLM Pod Removal")
-    print("=" * 60)
-
-    base_url = read_env_var(env_file, "VLLM_BASE_URL")
-    if not base_url:
-        print("⚠️  No VLLM_BASE_URL found in api/.env. Nothing to delete.")
-        sys.exit(0)
-
-    print(f"📌 Found VLLM_BASE_URL: {base_url}")
-    pod_id = extract_pod_id(base_url)
-    if not pod_id:
-        print(f"❌ Error: Could not parse Pod ID from VLLM_BASE_URL: '{base_url}'")
-        sys.exit(1)
-
-    print(f"🆔 Extracted Pod ID  : {pod_id}")
-
-    runpodctl_bin = shutil.which("runpodctl")
-    if not runpodctl_bin:
-        print("❌ Error: 'runpodctl' CLI was not found in your PATH.")
-        print("Please install runpodctl or run 'just install-runpod'.")
-        sys.exit(1)
-
-    cmd = [runpodctl_bin, "pod", "delete", pod_id]
-    print(f"\n🛠️ Executing command:\n  {' '.join(cmd)}\n")
-
+def _state_id(environment: str) -> str | None:
     try:
-        subprocess.run(cmd, check=True)
-        print(f"✅ Successfully deleted Pod: {pod_id}")
-    except subprocess.CalledProcessError as e:
-        print(f"❌ Error deleting pod {pod_id}:")
-        sys.exit(1)
+        body = json.loads(_aws(["ssm", "get-parameter", "--name", f"{PREFIX.format(environment=environment)}/pod-id", "--output", "json"]))
+        return body["Parameter"]["Value"]
+    except (subprocess.CalledProcessError, KeyError, json.JSONDecodeError):
+        return None
 
-    # Clean up api/.env
-    remove_env_keys(env_file, ["VLLM_BASE_URL", "VLLM_API_KEY"])
-    print(f"🧹 Removed VLLM_BASE_URL and VLLM_API_KEY from {env_file.relative_to(repo_root)}.")
-    print("=" * 60)
+
+def _local_id() -> str | None:
+    path = Path(__file__).resolve().parents[2] / "api" / ".env"
+    if not path.exists():
+        return None
+    match = re.search(r"^VLLM_BASE_URL=['\"]?https?://([A-Za-z0-9]+)-8000\\.proxy\\.runpod\\.net", path.read_text(encoding="utf-8"), re.MULTILINE)
+    return match.group(1) if match else None
+
+
+def _clear_local_state() -> None:
+    path = Path(__file__).resolve().parents[2] / "api" / ".env"
+    if not path.exists():
+        return
+    keys = {"VLLM_BASE_URL", "VLLM_API_KEY", "LLM_MODEL"}
+    lines = path.read_text(encoding="utf-8").splitlines()
+    path.write_text(
+        "\n".join(line for line in lines if line.partition("=")[0].strip() not in keys) + "\n",
+        encoding="utf-8",
+    )
+
+
+def _not_found(result: subprocess.CompletedProcess[str]) -> bool:
+    return "not found" in f"{result.stdout}\n{result.stderr}".lower()
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--pod-id")
+    parser.add_argument("--state-backend", choices=("local", "aws"), default="local")
+    parser.add_argument("--environment", default="prod")
+    parser.add_argument("--ignore-not-found", action="store_true")
+    parser.add_argument("--wait", action="store_true")
+    args = parser.parse_args()
+    pod_id = args.pod_id or (_state_id(args.environment) if args.state_backend == "aws" else _local_id())
+    if not pod_id:
+        # 상태 파일이 없거나 이미 수동으로 삭제된 경우도 멱등 성공으로 취급한다.
+        return 0
+    runpodctl = shutil.which("runpodctl")
+    if not runpodctl:
+        print("runpodctl을 찾을 수 없습니다.", file=sys.stderr)
+        return 2
+    result = subprocess.run([runpodctl, "pod", "delete", pod_id], capture_output=True, text=True)
+    if result.returncode and not (args.ignore_not_found and _not_found(result)):
+        print(result.stderr or result.stdout, file=sys.stderr)
+        return result.returncode
+    if args.state_backend == "aws":
+        for key in ("pod-id", "base-url", "model-id", "template-id", "last-provision-run-id"):
+            subprocess.run(["aws", "ssm", "delete-parameter", "--name", f"{PREFIX.format(environment=args.environment)}/{key}"], capture_output=True)
+    else:
+        _clear_local_state()
+    print(json.dumps({"pod_id": pod_id, "deleted": result.returncode == 0}))
+    return 0
+
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
