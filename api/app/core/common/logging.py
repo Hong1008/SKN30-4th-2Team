@@ -25,6 +25,7 @@ def log_event(
     review_id: str | None = None,
     category: str | None = None,
     state: str | int | None = None,
+    reason: str | None = None,
     error_type: str | None = None,
     sources: list[str] | None = None,
     duration_ms: float | None = None,
@@ -42,6 +43,8 @@ def log_event(
         fields.append(("category", category))
     if state is not None:
         fields.append(("state", state))
+    if reason is not None:
+        fields.append(("reason", reason))
     if error_type is not None:
         fields.append(("error_type", error_type))
     if sources is not None:

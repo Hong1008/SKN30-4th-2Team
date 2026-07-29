@@ -11,6 +11,7 @@ import json
 import httpx
 import pytest
 from fastapi import FastAPI
+from langchain_core.messages import HumanMessage
 from pypdf import PdfWriter
 
 from app.api.v1.router import router as v1_router
@@ -42,7 +43,7 @@ class FakeStructuredRunnable:
         self._schema = schema
         self._calls = calls
 
-    async def ainvoke(self, _prompt: str):
+    async def ainvoke(self, _prompt: object):
         call_name = (
             "chat_completion"
             if self._schema.__name__ == "ChatStructuredOutput"
@@ -51,9 +52,12 @@ class FakeStructuredRunnable:
         self._calls[call_name] = self._calls.get(call_name, 0) + 1
         await asyncio.sleep(0.02)
         if self._schema.__name__ == "ChatStructuredOutput":
-            context = json.loads(_prompt.split("\n", 1)[1])
+            assert isinstance(_prompt, list)
+            user_message = _prompt[-1]
+            assert isinstance(user_message, HumanMessage)
+            context = json.loads(str(user_message.content).split("\n", 1)[1])
             clause = (
-                context.get("focused_clause")
+                context.get("current_clause_context")
                 or context["review_result"]["clause_results"][0]
             )
             return {
@@ -62,7 +66,7 @@ class FakeStructuredRunnable:
                 "sources": [
                     {
                         "type": "USER_CLAUSE",
-                        "id": clause["user_clause_id"],
+                        "id": clause["source_key"],
                     }
                 ],
                 "limitations": ["법률 자문이 아닙니다."],

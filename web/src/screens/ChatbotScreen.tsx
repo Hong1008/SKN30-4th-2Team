@@ -111,7 +111,7 @@ export default function ChatbotScreen({ reviewId, focusClauseId, focusClauseName
         return <div key={message.id} className={message.role === 'user' ? 'flex justify-end' : 'flex justify-start'}><div className={message.role === 'user' ? 'max-w-[85%] rounded-xl bg-blue-600 px-3 py-2.5 text-sm text-white' : 'max-w-[90%] rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800'}>
         {message.refused && <p className="mb-2 text-xs font-semibold text-amber-700">{outcomePresentation?.message || '현재 검토 근거로는 답변이 제한됩니다. 질문 범위를 조정해 주세요.'}</p>}
         <p className="whitespace-pre-line leading-6">{message.text}</p>
-        {message.toolStatus && message.toolStatus !== 'OK' && <p className="mt-2 text-xs text-amber-700">법령 조회: {toolPresentation?.message || '법령 원문을 확인하지 못했습니다. 법령이 존재하지 않는다는 의미는 아닙니다.'}</p>}
+        {message.toolStatus && !['OK', 'NOT_REQUESTED', 'LLM_OUTPUT_INVALID'].includes(message.toolStatus) && <p className="mt-2 text-xs text-amber-700">법령 조회: {toolPresentation?.message || '법령 원문을 확인하지 못했습니다. 법령이 존재하지 않는다는 의미는 아닙니다.'}</p>}
         {message.sources?.length ? <div className="mt-3 border-t border-slate-200 pt-2"><p className="mb-1 text-xs font-semibold text-slate-500">답변 출처</p>{message.sources.map((source, i) => <span key={`${source.label}-${i}`} className="mr-1 inline-flex items-center gap-1 text-xs text-slate-600"><BookOpen className="size-3" />{source.label}</span>)}</div> : null}
         {message.limitations?.length ? <p className="mt-2 text-xs text-slate-500">제한: {message.limitations.join(', ')}</p> : null}
         {message.disclaimer && <p className="mt-2 text-xs text-slate-500">{message.disclaimer}</p>}
