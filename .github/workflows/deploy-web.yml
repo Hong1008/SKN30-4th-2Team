@@ -1,0 +1,112 @@
+name: Deploy web release
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: Git ref to build
+        required: true
+        default: main
+        type: string
+      web_release_tag:
+        description: Immutable Web release tag
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: workshield-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+      WEB_BUCKET: ${{ vars.WEB_BUCKET }}
+      CLOUDFRONT_DISTRIBUTION_ID: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}
+      WEB_RELEASE_TAG: ${{ inputs.web_release_tag }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.source_ref }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '24.18.0'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Validate release coordinates
+        run: |
+          set -euo pipefail
+          [[ "$WEB_RELEASE_TAG" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]]
+          [[ "$WEB_BUCKET" =~ ^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$ ]]
+          [[ "$CLOUDFRONT_DISTRIBUTION_ID" =~ ^[A-Z0-9]+$ ]]
+          test -n "$AWS_REGION"
+          test -n "$AWS_DEPLOY_ROLE_ARN"
+      - name: Build Web release
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
+      - name: Create release manifest
+        id: manifest
+        run: |
+          set -euo pipefail
+          source_sha="$(git rev-parse HEAD)"
+          artifact_sha="$(cd web/dist && find . -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -d ' ' -f 1)"
+          jq -n \
+            --arg release_tag "$WEB_RELEASE_TAG" \
+            --arg source_sha "$source_sha" \
+            --arg artifact_sha256 "$artifact_sha" \
+            '{release_tag:$release_tag,source_sha:$source_sha,artifact_sha256:$artifact_sha256}' \
+            > "$RUNNER_TEMP/web-release-manifest.json"
+          printf 'source_sha=%s\n' "$source_sha" >> "$GITHUB_OUTPUT"
+          printf 'artifact_sha=%s\n' "$artifact_sha" >> "$GITHUB_OUTPUT"
+      - name: Configure short-lived AWS credentials through OIDC
+        uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4.0.1
+        with:
+          aws-region: ${{ vars.AWS_REGION }}
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          role-session-name: workshield-web-${{ github.run_id }}
+          mask-aws-account-id: true
+      - name: Publish immutable release artifact
+        env:
+          SOURCE_SHA: ${{ steps.manifest.outputs.source_sha }}
+          ARTIFACT_SHA: ${{ steps.manifest.outputs.artifact_sha }}
+        run: |
+          set -euo pipefail
+          release_uri="s3://${WEB_BUCKET}/releases/${WEB_RELEASE_TAG}"
+          existing_manifest="$RUNNER_TEMP/existing-web-release-manifest.json"
+          if aws s3 cp "${release_uri}/manifest.json" "$existing_manifest" --only-show-errors 2>/dev/null; then
+            test "$(jq -er '.release_tag' "$existing_manifest")" = "$WEB_RELEASE_TAG"
+            test "$(jq -er '.source_sha' "$existing_manifest")" = "$SOURCE_SHA"
+            test "$(jq -er '.artifact_sha256' "$existing_manifest")" = "$ARTIFACT_SHA"
+            echo "Release artifact already exists and matches: $WEB_RELEASE_TAG"
+          else
+            aws s3 sync web/dist "${release_uri}/site/" --delete --only-show-errors
+            aws s3 cp "$RUNNER_TEMP/web-release-manifest.json" "${release_uri}/manifest.json" --only-show-errors
+          fi
+      - name: Activate release and invalidate CloudFront
+        run: |
+          set -euo pipefail
+          aws s3 sync \
+            "s3://${WEB_BUCKET}/releases/${WEB_RELEASE_TAG}/site/" \
+            "s3://${WEB_BUCKET}/live/" \
+            --delete \
+            --only-show-errors
+          invalidation_id="$(aws cloudfront create-invalidation \
+            --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" \
+            --paths '/*' \
+            --query 'Invalidation.Id' \
+            --output text)"
+          aws cloudfront wait invalidation-completed \
+            --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" \
+            --id "$invalidation_id"
+          printf 'Activated Web release %s\n' "$WEB_RELEASE_TAG"

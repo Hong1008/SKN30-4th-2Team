@@ -1,0 +1,3 @@
+{
+  "app": "env PYTHONPATH=src ./.venv/bin/python -m workshield_infra.cdk_app"
+}

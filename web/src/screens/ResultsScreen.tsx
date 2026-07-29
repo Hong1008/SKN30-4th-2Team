@@ -540,19 +540,20 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot, onRe
               표준계약서에서 확인해 볼 항목을 체크리스트로 정리했습니다. 문서에 포함되어 있는지 직접 확인해 주세요.
             </p>
             <div className="space-y-2">
-              {resultsData.missing_standard_clauses.map((item) => {
-                const open = expandedMissing === item.standard.clause_id
+              {resultsData.missing_standard_clauses.map((item, index) => {
+                const missingKey = `${item.standard.category.code}:${item.standard.title}:${index}`
+                const open = expandedMissing === missingKey
                 return (
-                  <div key={item.standard.clause_id} className="bg-slate-50 border border-slate-300 rounded-xl overflow-hidden">
+                  <div key={missingKey} className="bg-slate-50 border border-slate-300 rounded-xl overflow-hidden">
                     <button
-                      onClick={() => setExpandedMissing(open ? null : item.standard.clause_id)}
+                      onClick={() => setExpandedMissing(open ? null : missingKey)}
                       className="flex min-h-11 w-full items-center gap-3 px-5 py-4 text-left transition-colors hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-blue-500/15"
                       aria-expanded={open}
                     >
                       <div className="w-4 h-4 rounded border-2 border-[#94A3B8] shrink-0 flex items-center justify-center" aria-hidden="true" />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-slate-900">{item.standard.title}</p>
-                        <p className="mt-1 text-xs text-slate-600">{item.standard.source}</p>
+                        <p className="mt-1 text-xs text-slate-600">{item.standard.standard_contract_label}</p>
                       </div>
                       {open ? <ChevronUp className="w-4 h-4 text-slate-500 shrink-0" /> : <ChevronDown className="w-4 h-4 text-slate-500 shrink-0" />}
                     </button>

@@ -66,7 +66,7 @@ export default function ClauseDetailScreen({ clause, reviewId, onBack, onChatbot
   }
 
   const createSuggestion = async () => {
-    if (!reviewId || clause.matchStatus !== 'CANDIDATE_SELECTED' || !clause.standardClauseId) return
+    if (!reviewId || clause.matchStatus !== 'CANDIDATE_SELECTED' || !clause.standardText) return
     setLoadingSuggestion(true)
     setSuggestionError('')
     setSuggestion(null)
@@ -95,33 +95,20 @@ export default function ClauseDetailScreen({ clause, reviewId, onBack, onChatbot
     clause.status,
   )
   const canCreateSuggestion = clause.matchStatus === 'CANDIDATE_SELECTED'
-    && Boolean(clause.standardClauseId && clause.standardText)
+    && Boolean(clause.standardText)
   const suggestionInputFields = suggestion
     ? Array.from(new Map<string, string>([
         ...suggestion.required_confirmations.map(item => [item.field, item.placeholder] as [string, string]),
         ...suggestion.missing_inputs.map(field => [field, field] as [string, string]),
       ]).entries())
     : []
-  const suggestionSources: SourceReference[] = suggestion ? [
-    ...(suggestion.user_clause_ids.length > 0 ? [{
-      type: 'USER_CLAUSE' as const,
-      clause_number: clause.article,
-      category: clause.category,
-    }] : []),
-    ...(suggestion.standard_clause_ids.length > 0 ? [{
-      type: 'STANDARD_CLAUSE' as const,
-      title: clause.standardTitle,
-      category: clause.category,
-    }] : []),
-    ...suggestion.grounding_source_ids.map(sourceId => {
-      const basis = legalBasis.find(item => item.source_id === sourceId)
-      return {
-        type: 'LAW' as const,
-        law_name: basis?.law_name,
-        article: basis?.article,
-      }
-    }),
-  ] : []
+  const suggestionSources: SourceReference[] = suggestion?.sources.map(source => ({
+    type: source.type,
+    display_label: source.display_label,
+    standard_contract_label: source.standard_contract_label,
+    law_name: source.law_name,
+    article: source.article,
+  })) ?? []
 
   return (
     <div className="space-y-6 animate-fade-up">
@@ -188,11 +175,9 @@ export default function ClauseDetailScreen({ clause, reviewId, onBack, onChatbot
           <pre className="flex-1 whitespace-pre-wrap break-words px-5 py-5 font-sans text-sm leading-7 text-slate-800">
             {clause.standardText || '매칭된 표준 조항이 없습니다.'}
           </pre>
-          {clause.standardClauseId && (
+          {clause.standardContractLabel && (
             <div className="border-t border-blue-100 px-5 py-3 text-xs leading-5 text-slate-500">
-              <p>표준조항 ID: {clause.standardClauseId}</p>
-              {clause.standardVersion && <p>버전: {clause.standardVersion}</p>}
-              {clause.standardSource && <p>출처: {clause.standardSource}</p>}
+              <p>{clause.standardContractLabel}</p>
             </div>
           )}
         </div>

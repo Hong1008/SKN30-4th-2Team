@@ -8,6 +8,7 @@ export interface SourceReference {
   clause_number?: string | null
   title?: string | null
   category?: string | null
+  standard_contract_label?: string | null
   law_name?: string | null
   article?: string | null
 }
@@ -19,11 +20,14 @@ function safeText(value: string | null | undefined): string | null {
 
 export function getSourceLabel(source: SourceReference): string {
   const displayLabel = safeText(source.display_label)
-  if (displayLabel) return displayLabel
   if (source.type === 'LAW') {
     const lawLabel = [safeText(source.law_name), safeText(source.article)].filter(Boolean).join(' ')
     return lawLabel || '법령 근거'
   }
+  if (source.type === 'STANDARD_CLAUSE' && displayLabel) {
+    return [safeText(source.standard_contract_label), displayLabel].filter(Boolean).join(' · ')
+  }
+  if (displayLabel) return displayLabel
   const clauseLabel = [
     safeText(source.clause_number),
     safeText(source.title),

@@ -144,14 +144,14 @@ def build_runpod_serverless_model(
 ) -> BaseChatModel:
     if not settings.llm_model:
         raise LLMConfigurationError("LLM_MODEL이 필요합니다.")
-    if settings.runpod_api_key is None:
-        raise LLMConfigurationError("RUNPOD_API_KEY가 필요합니다.")
+    if settings.runpod_serverless_api_key is None:
+        raise LLMConfigurationError("RUNPOD_SERVERLESS_API_KEY가 필요합니다.")
     if not settings.runpod_ollama_endpoint_id:
         raise LLMConfigurationError("RUNPOD_OLLAMA_ENDPOINT_ID가 필요합니다.")
     return RunPodServerlessChatModel(
         model=settings.llm_model,
         endpoint_id=settings.runpod_ollama_endpoint_id,
-        api_key=settings.runpod_api_key,
+        api_key=settings.runpod_serverless_api_key,
         reasoning=reasoning is ReasoningMode.ON,
         request_timeout_seconds=policy.timeout_seconds,
     )

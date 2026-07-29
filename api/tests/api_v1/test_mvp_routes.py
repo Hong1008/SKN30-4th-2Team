@@ -11,6 +11,7 @@ import json
 import httpx
 import pytest
 from fastapi import FastAPI
+from langchain_core.messages import HumanMessage
 from pypdf import PdfWriter
 
 from app.api.v1.router import router as v1_router
@@ -42,7 +43,7 @@ class FakeStructuredRunnable:
         self._schema = schema
         self._calls = calls
 
-    async def ainvoke(self, _prompt: str):
+    async def ainvoke(self, _prompt: object):
         call_name = (
             "chat_completion"
             if self._schema.__name__ == "ChatStructuredOutput"
@@ -51,9 +52,12 @@ class FakeStructuredRunnable:
         self._calls[call_name] = self._calls.get(call_name, 0) + 1
         await asyncio.sleep(0.02)
         if self._schema.__name__ == "ChatStructuredOutput":
-            context = json.loads(_prompt.split("\n", 1)[1])
+            assert isinstance(_prompt, list)
+            user_message = _prompt[-1]
+            assert isinstance(user_message, HumanMessage)
+            context = json.loads(str(user_message.content).split("\n", 1)[1])
             clause = (
-                context.get("focused_clause")
+                context.get("current_clause_context")
                 or context["review_result"]["clause_results"][0]
             )
             return {
@@ -62,7 +66,7 @@ class FakeStructuredRunnable:
                 "sources": [
                     {
                         "type": "USER_CLAUSE",
-                        "id": clause["user_clause_id"],
+                        "id": clause["source_key"],
                     }
                 ],
                 "limitations": ["법률 자문이 아닙니다."],
@@ -81,7 +85,7 @@ class FakeChatModel:
     def __init__(self, calls: dict[str, int]) -> None:
         self._calls = calls
 
-    def with_structured_output(self, schema: type):
+    def with_structured_output(self, schema: type, **_kwargs: object):
         return FakeStructuredRunnable(schema, self._calls)
 
 
@@ -286,6 +290,15 @@ async def test_full_mvp_flow_and_browser_isolation(tmp_path: Path) -> None:
             "code": "LIABILITY",
             "label": "LIABILITY",
         }
+        assert clause_result["match"]["standard"][
+            "standard_contract_label"
+        ] == "SW 프리랜서 용역 표준계약서"
+        assert set(clause_result["match"]["standard"]) == {
+            "standard_contract_label",
+            "category",
+            "title",
+            "text",
+        }
         assert "score" not in clause_result["match"]
         assert "result" not in result_data
         grounding = await owner.get(
@@ -417,9 +430,7 @@ async def test_full_mvp_flow_and_browser_isolation(tmp_path: Path) -> None:
             for line in cancelled_events.text.splitlines()
             if line.startswith("data: ")
         )
-        cancelled_event = json.loads(
-            cancelled_data_line.removeprefix("data: ")
-        )
+        cancelled_event = json.loads(cancelled_data_line.removeprefix("data: "))
         assert cancelled_progress["sequence"] == 3
         assert cancelled_event["review_state"] == "CANCELLED"
         assert cancelled_event["sequence"] == cancelled_progress["sequence"]
@@ -595,8 +606,7 @@ async def test_metadata_cache_and_etag(tmp_path: Path) -> None:
         {"code": "RESULT_ASSEMBLY", "label": "결과 정리"},
     ]
     contract_type_labels = {
-        item["code"]: item["label"]
-        for item in first.json()["data"]["contract_types"]
+        item["code"]: item["label"] for item in first.json()["data"]["contract_types"]
     }
     assert contract_type_labels["SW_FREELANCE"] == "SW 프리랜서 용역"
     assert contract_type_labels["SI_SUBCONTRACT"] == "SI 하도급"

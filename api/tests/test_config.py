@@ -37,6 +37,21 @@ def test_production_accepts_vllm_provider() -> None:
     assert settings.selected_provider_key() is settings.vllm_api_key
 
 
+def test_runpod_serverless_uses_call_only_api_key() -> None:
+    settings = Settings(
+        app_env="local",
+        llm_provider="runpod_serverless",
+        llm_model="configured-model",
+        runpod_serverless_api_key="serverless-secret",
+        runpod_ollama_endpoint_id="endpoint-id",
+    )
+
+    assert (
+        settings.selected_provider_key()
+        is settings.runpod_serverless_api_key
+    )
+
+
 def test_mcp_transport_defaults_to_stdio() -> None:
     settings = Settings(
         app_env="local",

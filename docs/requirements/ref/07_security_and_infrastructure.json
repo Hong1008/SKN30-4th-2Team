@@ -22,7 +22,7 @@
       "구현 주체"
     ]
   },
-  "requirements_count": 10,
+  "requirements_count": 11,
   "requirements": [
     {
       "major_category": "클라우드 배포",
@@ -55,9 +55,9 @@
       "subcategory": "LLM 우선순위",
       "id": "FR-7-3",
       "description": "기본 LLM은 자체 호스팅 모델을 사용한다.",
-      "details": "클라우드 GPU와 Ollama 기반 자체 모델을 기본 공급자로 사용하고 품질·속도 기준을 충족하지 못할 때만 외부 관리형 LLM 사용을 제안한다.",
+      "details": "RunPod Pod에서 vLLM으로 서빙하는 RedHatAI/Qwen3.5-9B-FP8-dynamic 모델을 기본 공급자로 사용한다. 외부 관리형 LLM으로 자동 전환하지 않는다.",
       "scope": "MVP",
-      "notes": "기능 요구사항보다 아키텍처 결정 또는 ADR 성격. '실용 속도 미달'의 기준 시간, 품질 기준, 대상 기능별 모델을 확정해야 함.\n[MCP 명세 검토] 자체 호스팅 LLM/Ollama 및 외부 모델 폴백 우선순위는 아키텍처 결정이며 MCP 명세에 없음.",
+      "notes": "기능 요구사항보다 아키텍처 결정 또는 ADR 성격. 운영 provider·모델은 0728 vLLM 모델 선정 ADR을 따른다.\n[MCP 명세 검토] 자체 호스팅 vLLM 및 외부 모델 폴백 우선순위는 아키텍처 결정이며 MCP 명세에 없음.",
       "mcp_included": "미포함",
       "mcp_spec_status": "MCP 대상 아님",
       "runtime_validation": "백엔드 단위/통합 테스트",
@@ -133,9 +133,9 @@
       "subcategory": "보안",
       "id": "FR-7-9",
       "description": "업로드 크기와 요청 빈도를 제한한다.",
-      "details": "허용 파일 크기는 10MB, 동시 검토 수는 2건으로 제한한다. 세션 및 임시 파일 TTL은 마지막 사용자 액션 후 30분이다.",
+      "details": "허용 파일 크기는 10MB, 업로드 동시성은 2로 제한한다. 검토는 단일 worker와 5건의 제한 대기열을 사용하고, LLM 생성 동시성은 1, 대기열은 5건으로 제한한다. 용량 초과 요청에는 429와 Retry-After를 반환한다. 세션 및 임시 파일 TTL은 마지막 사용자 액션 후 30분이다.",
       "scope": "MVP",
-      "notes": "최대 파일 크기 10MB, 동시 검토 수 2건, 세션 TTL 30분(마지막 사용자 액션 기준)으로 확정한다.\n[MCP 명세 검토] 파일 크기·동시성·요청 빈도 제한 입력 또는 오류 스키마가 없음. 게이트웨이·백엔드 제한값과 성능 테스트로 확정 필요.",
+      "notes": "파일 10MB, 업로드 동시성 2, review worker 1·대기열 5, LLM 동시성 1·대기열 5, 세션 TTL 30분으로 확정한다.\n[MCP 명세 검토] 파일 크기·동시성·요청 빈도 제한 입력 또는 오류 스키마가 없음. 게이트웨이·백엔드 제한값과 성능 테스트로 확인한다.",
       "mcp_included": "미포함",
       "mcp_spec_status": "명세 확인 불가",
       "runtime_validation": "백엔드 단위/통합 테스트",
@@ -153,6 +153,19 @@
       "mcp_spec_status": "부분 확인",
       "runtime_validation": "MCP 통합 테스트",
       "implementation_owner": "백엔드·인프라"
+    },
+    {
+      "major_category": "클라우드 배포",
+      "subcategory": "보안",
+      "id": "FR-7-11",
+      "description": "개인정보 자동 마스킹 미지원 사실을 업로드 전에 안내하고 사용자의 확인을 받는다.",
+      "details": "주민등록번호, 계좌번호, 연락처, 주소 등 계약 검토에 불필요한 개인정보를 사용자가 업로드 전에 삭제하거나 가리도록 안내한다. 필수 체크박스 확인값은 업로드 요청마다 백엔드에서 검증하며 별도 확인 이력은 저장하지 않는다.",
+      "scope": "MVP",
+      "notes": "안내 확인은 개인정보 포함 여부 검사나 개인정보 처리 동의를 대신하지 않는다. 파일을 교체하면 프론트의 확인 상태를 초기화한다.",
+      "mcp_included": "미포함",
+      "mcp_spec_status": "MCP 대상 아님",
+      "runtime_validation": "프론트·백엔드 통합 테스트",
+      "implementation_owner": "프론트·백엔드"
     }
   ]
 }

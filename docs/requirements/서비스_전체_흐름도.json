@@ -35,13 +35,13 @@
   "review_state_machine": {
     "initial_state": "READY",
     "states": [
-      {"id": "READY", "screen": "S01", "description": "파일을 선택할 수 있는 초기 상태"},
+      {"id": "READY", "screen": "S01", "description": "개인정보 자동 마스킹 미지원 안내를 확인하고 파일을 선택할 수 있는 초기 상태"},
       {"id": "UPLOADING", "screen": "S01", "description": "파일 업로드 중"},
       {"id": "ANALYZING_CONTRACT_TYPE", "screen": "S02", "description": "계약 유형 후보 분석 중"},
       {"id": "TYPE_SELECTION_REQUIRED", "screen": "S02", "description": "사용자의 계약 유형 선택이 필요함"},
       {"id": "OUT_OF_SCOPE_CONFIRMATION_REQUIRED", "screen": "S03", "description": "범위 외 계약의 계속 진행 재확인이 필요함"},
       {"id": "READY_TO_REVIEW", "screen": "S02", "description": "사용자 선택 또는 재확인이 완료되어 검토를 시작할 수 있음"},
-      {"id": "QUEUED", "screen": "S04", "description": "향후 작업 대기열 확장을 위한 상태이며 이번 프로젝트에서는 즉시 REVIEWING으로 전환"},
+      {"id": "QUEUED", "screen": "S04", "description": "SQLite 작업 원장에 접수되어 단일 review worker 실행을 기다리는 제한 대기열 상태"},
       {"id": "REVIEWING", "screen": "S04", "description": "계약서 검토 중"},
       {"id": "COMPLETED", "screen": "S05", "description": "검토 결과 생성 완료"},
       {"id": "FAILED", "screen": "S09", "description": "업로드·분석·검토 처리 실패"},
@@ -52,7 +52,7 @@
         "from": "READY",
         "event": "upload_requested",
         "to": "UPLOADING",
-        "guard": "확장자·크기·실제 형식 등 사전 검증 통과",
+        "guard": "개인정보 안내 확인 및 확장자·크기·실제 형식 등 사전 검증 통과",
         "action": "업로드 세션 생성"
       },
       {
@@ -127,7 +127,7 @@
         "from": "QUEUED",
         "event": "review_started",
         "to": "REVIEWING",
-        "action": "별도 작업 큐 없이 검토 작업을 즉시 시작"
+        "action": "단일 review worker가 대기 순서에 따라 검토 작업 시작"
       },
       {
         "from": "QUEUED",
@@ -237,6 +237,15 @@
       "description": "결과 상태와 별도로 표시하며, 법적 결론으로 표현하지 않습니다."
     }
   ],
+  "standard_source_display_policy": {
+    "labels": {
+      "SW_FREELANCE": "SW 프리랜서 용역 표준계약서",
+      "SI_SUBCONTRACT": "SI 하도급 표준계약서",
+      "SM_SUBCONTRACT": "SM 하도급 표준계약서"
+    },
+    "hidden_fields": ["표준조항 내부 ID", "버전", "파일명", "경로", "확장자"],
+    "scope": ["조항 상세", "MISSING 체크리스트", "챗봇 출처", "협의 문구 작성 근거"]
+  },
   "chat_state_machine": {
     "initial_state": "DISABLED",
     "states": [
@@ -263,7 +272,8 @@
       "allowed_scope": ["현재 검토 결과", "사용자 조항과 표준조항의 차이", "관련 법령 원문·조문·출처", "특정 조항에서 확인할 사항"],
       "prohibited_scope": ["위법·합법 단정", "유리·불리 단정", "승소 가능성 단정", "현재 검토와 무관한 질문", "세션에 없는 조항 또는 출처 생성", "문서·법령 원문의 명령문 실행"],
       "citation_required": true,
-      "citation_types": ["사용자 조항 ID", "표준조항 ID", "법령명·조번호"]
+      "citation_types": ["사용자 조항 번호·제목·카테고리", "표준조항 번호·제목", "법령명·조번호·원문 링크"],
+      "citation_display_policy": "내부 조항·근거 ID는 검증에만 사용하고 화면에 표시하지 않는다. 표시 정보가 없으면 중립 대체 문구를 사용한다."
     }
   },
   "draft_state_machine": {

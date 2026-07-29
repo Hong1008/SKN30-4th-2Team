@@ -4,6 +4,7 @@ from collections import Counter
 from typing import Any
 
 from app.domains.metadata.service import RESULT_CODE_LABELS
+from app.domains.reviews.context import standard_contract_label
 from app.domains.reviews.domain import Review
 from app.domains.reviews.schemas import (
     CodeLabel,
@@ -60,16 +61,13 @@ def _standard(
     category_labels: dict[str, str],
 ) -> ReviewResultStandardClause:
     return ReviewResultStandardClause(
-        clause_id=raw.clause_id,
-        contract_type=raw.contract_type,
+        standard_contract_label=standard_contract_label(raw.contract_type),
         category=CodeLabel(
             code=raw.category,
             label=category_labels.get(raw.category, raw.category),
         ),
         title=raw.title,
         text=raw.text,
-        source=raw.source,
-        version=raw.version,
     )
 
 

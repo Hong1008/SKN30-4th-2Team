@@ -41,7 +41,7 @@ describe('챗봇 요청 상태', () => {
         retryable: false,
         sources: [
           { type: 'USER_CLAUSE', id: 'usr_internal_123' },
-          { type: 'STANDARD_CLAUSE', id: 'std_internal_456', display_label: '제5조 · 대금 지급' },
+          { type: 'STANDARD_CLAUSE', id: 'std_internal_456', display_label: '제5조 · 대금 지급', standard_contract_label: 'SW 프리랜서 표준계약서' },
           { type: 'LAW', id: 'law_internal_789', law_name: '민법', article: '제390조' },
         ],
       },
@@ -50,7 +50,7 @@ describe('챗봇 요청 상태', () => {
     await userEvent.type(screen.getByPlaceholderText('검토 결과에 대해 질문해 주세요'), '근거를 알려줘')
     await userEvent.click(screen.getByRole('button', { name: '질문 전송' }))
     expect(await screen.findByText('현재 검토 조항')).toBeInTheDocument()
-    expect(screen.getByText('제5조 · 대금 지급')).toBeInTheDocument()
+    expect(screen.getByText('SW 프리랜서 표준계약서 · 제5조 · 대금 지급')).toBeInTheDocument()
     expect(screen.getByText('민법 제390조')).toBeInTheDocument()
     expect(screen.queryByText(/internal_/)).not.toBeInTheDocument()
   })

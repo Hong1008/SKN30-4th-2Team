@@ -4,7 +4,26 @@ from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
 from app.domains.reviews.domain import MCPReviewStatus, Review, ReviewState
-from app.domains.reviews.presentation import present_review_results
+from app.domains.reviews.presentation import (
+    present_review_results,
+    standard_contract_label,
+)
+
+
+def test_standard_contract_label_uses_safe_user_facing_names() -> None:
+    assert (
+        standard_contract_label("SW_FREELANCE")
+        == "SW 프리랜서 용역 표준계약서"
+    )
+    assert (
+        standard_contract_label("SI_SUBCONTRACT")
+        == "SI 하도급 표준계약서"
+    )
+    assert (
+        standard_contract_label("SM_SUBCONTRACT")
+        == "SM 하도급 표준계약서"
+    )
+    assert standard_contract_label("UNKNOWN_INTERNAL_TYPE") == "표준계약서"
 
 
 def test_result_presentation_uses_metadata_labels_and_separates_missing() -> None:
@@ -88,6 +107,32 @@ def test_result_presentation_uses_metadata_labels_and_separates_missing() -> Non
         "toxic_pattern_candidates": 1,
     }
     assert result.clause_results[0].match.standard is not None
-    assert result.clause_results[0].match.standard.category.label == "책임·손해배상"
+    matched_standard = result.clause_results[0].match.standard
+    assert matched_standard.category.label == "책임·손해배상"
+    assert (
+        matched_standard.standard_contract_label
+        == "SW 프리랜서 용역 표준계약서"
+    )
+    assert set(matched_standard.model_dump()) == {
+        "standard_contract_label",
+        "category",
+        "title",
+        "text",
+    }
     assert result.clause_results[0].toxic_patterns[0].label == "과도한 손해배상 표현"
-    assert result.missing_standard_clauses[0].standard.category.label == "대금 지급"
+    missing_standard = result.missing_standard_clauses[0].standard
+    assert missing_standard.category.label == "대금 지급"
+    assert (
+        missing_standard.standard_contract_label
+        == "SW 프리랜서 용역 표준계약서"
+    )
+    assert set(missing_standard.model_dump()) == {
+        "standard_contract_label",
+        "category",
+        "title",
+        "text",
+    }
+    stored_standard = review.result["clause_results"][0]["match"]["standard"]
+    assert stored_standard["clause_id"] == "std_1"
+    assert stored_standard["source"] == "표준계약서"
+    assert stored_standard["version"] == "2026"

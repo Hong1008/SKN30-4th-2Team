@@ -34,17 +34,16 @@ export function mapClauseResult(item: ReviewClauseResultData): ClauseResult {
     toxic_patterns: item.toxic_patterns,
     standardTitle: standard?.title,
     standardText: standard?.text,
-    standardSource: standard?.source,
-    standardClauseId: standard?.clause_id,
-    standardVersion: standard?.version,
+    standardContractLabel: standard?.standard_contract_label,
     matchStatus: item.match.status,
   }
 }
 
 export function mapMissingClause(item: MissingStandardClauseData): MissingClauseResult {
   return {
-    id: item.standard.clause_id,
+    id: `${item.standard.category.code}:${item.standard.title}`,
     category: item.standard.category.label,
+    standardContractLabel: item.standard.standard_contract_label,
     title: item.standard.title,
     text: item.standard.text,
     explanation: item.explanation,

@@ -15,3 +15,12 @@ api/**/*.py[cod]
 api/data/
 .test-tmp/
 .tmp/
+
+# 로컬 인프라 control plane 산출물과 운영 전용 설정
+infra/cdk.out/
+infra/.venv/
+infra/node_modules/
+infra/cdk.context.json
+infra/config/prod.json
+infra/config/prod.secrets.env
+infra/.state/
