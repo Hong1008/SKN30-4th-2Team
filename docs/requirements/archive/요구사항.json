@@ -1,5 +1,7 @@
 {
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
+  "document_status": "current_baseline",
+  "revision_note": "사용자 요구사항과 구현 세부사항을 분리하고, 세션별 챗봇 초기화 요구를 반영함.",
   "document_type": "functional_requirements",
   "source": {
     "file_name": "요구사항_정의서_4차_운영위험반영본.xlsx",
@@ -936,9 +938,9 @@
       "subcategory": "연동",
       "id": "FR-8-3",
       "description": "FastAPI는 MCP 진행 이벤트를 클라이언트에 전달할 수 있어야 한다.",
-      "details": "상태 조회 API를 2~3초 간격으로 호출하는 폴링을 기본으로 사용한다. SSE는 같은 상태 데이터를 보조 전달하며, 끊겨도 폴링을 계속한다. 폴링은 QUEUED·REVIEWING에서만 실행하고 COMPLETED·FAILED·EXPIRED에서 종료한다.",
+      "details": "검토 단계와 진행 상태를 사용자에게 제공한다. 구체적인 전달 방식(SSE, 상태 조회 등)은 별도 기술 결정 및 API 명세에서 관리한다.",
       "scope": "MVP",
-      "notes": "폴링을 기본 구현으로 확정하고 SSE는 보조 수단으로 둔다.\n[MCP 명세 검토] FastAPI의 SSE 전달·폴링은 애플리케이션 전송 계층 책임. mcp-spec.json으로 구현 여부를 확인할 수 없음.",
+      "notes": "진행 상태 전달 방식은 별도 기술 결정 및 API 명세에서 관리한다.\n[MCP 명세 검토] FastAPI의 SSE 전달·상태 조회는 애플리케이션 전송 계층 책임. mcp-spec.json으로 구현 여부를 확인할 수 없음.",
       "mcp_included": "미포함",
       "mcp_spec_status": "MCP 대상 아님",
       "runtime_validation": "백엔드 단위/통합 테스트",
