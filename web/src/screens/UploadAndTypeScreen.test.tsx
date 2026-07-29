@@ -21,7 +21,7 @@ vi.mock("../contexts/MetadataContext", () => ({
         allowed_mime_types: [],
         encrypted_file_allowed: false,
       },
-      contract_types: [{ code: "SW_FREELANCER", label: "SW 프리랜서", description: "설명", enabled_for_mvp: true }],
+      contract_types: [{ code: "SW_FREELANCE", label: "SW 프리랜서", description: "설명", enabled_for_mvp: true }],
     },
   }),
 }))
@@ -97,9 +97,9 @@ describe("계약서 업로드", () => {
     vi.mocked(api.getSession).mockResolvedValue({
       data: {
         upload: { file_name: "out-of-scope.pdf", size_bytes: 5 },
-        selected_contract_type: "SW_FREELANCER",
-        suggested_contract_type: "SW_FREELANCER",
-        candidates: [{ contract_type: "SW_FREELANCER" }],
+        selected_contract_type: "SW_FREELANCE",
+        suggested_contract_type: "SW_FREELANCE",
+        candidates: [{ contract_type: "SW_FREELANCE" }],
         expires_at: "2099-01-01T00:00:00Z",
         review_state: "OUT_OF_SCOPE_CONFIRMATION_REQUIRED",
       },
