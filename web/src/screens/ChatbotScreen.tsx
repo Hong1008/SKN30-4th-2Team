@@ -1,3 +1,4 @@
+import { createClientId } from '../utils/clientId'
 import { useEffect, useRef, useState } from 'react'
 import { BookOpen, RotateCcw, Send, X } from 'lucide-react'
 import { api } from '../api/api'
@@ -70,12 +71,12 @@ export default function ChatbotScreen({ reviewId, focusClauseId, focusClauseName
       // 본문 없는 제한 응답은 API의 history 최소 길이 검증(1자 이상)에 실패하므로 제외한다.
       .filter(({ content }) => content.trim().length > 0)
       .slice(-10)
-    setMessages(previous => [...previous, { id: crypto.randomUUID(), role: 'user', text }])
+    setMessages(previous => [...previous, { id: createClientId(), role: 'user', text }])
     setInput(''); setIsSending(true)
     try {
-      const { data } = await api.chat(reviewId, text, crypto.randomUUID(), focusClauseId, history)
+      const { data } = await api.chat(reviewId, text, createClientId(), focusClauseId, history)
       setMessages(previous => [...previous, {
-        id: crypto.randomUUID(), role: 'assistant', text: data.answer ?? data.limitations.join('\n'),
+        id: createClientId(), role: 'assistant', text: data.answer ?? data.limitations.join('\n'),
         refused: data.refused, disclaimer: data.disclaimer, limitations: data.limitations,
         outcome: data.outcome, toolStatus: data.tool_status, retryable: data.retryable,
         sources: data.sources.map(source => ({

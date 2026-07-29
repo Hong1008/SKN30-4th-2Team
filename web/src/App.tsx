@@ -1,3 +1,4 @@
+import { createClientId } from './utils/clientId'
 import { useState, useEffect, useRef } from 'react'
 import { BrowserRouter, Routes, Route, useNavigate, useLocation, useParams, Navigate } from 'react-router-dom'
 import type { Screen, ClauseResult } from './types'
@@ -172,7 +173,7 @@ function MainApp() {
     setIsStartingNewReview(true)
     try {
       if (reviewId && metadata?.features.server_side_cancel) {
-        const key = discardRequestKey.current ?? crypto.randomUUID()
+        const key = discardRequestKey.current ?? createClientId()
         discardRequestKey.current = key
         await api.deleteReview(reviewId, key)
       }
