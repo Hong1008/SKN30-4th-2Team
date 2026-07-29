@@ -2350,6 +2350,24 @@
             ],
             "title": "Message",
             "description": "상태 관련 메시지"
+          },
+          "retryable": {
+            "type": "boolean",
+            "title": "Retryable",
+            "description": "동일 조회를 재시도할 수 있는지 여부",
+            "default": false
+          },
+          "next_action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Action",
+            "description": "권장 후속 행동 코드"
           }
         },
         "type": "object",
@@ -2372,6 +2390,45 @@
         ],
         "title": "GroundingStatus",
         "description": "법령 근거 조회 상태."
+      },
+      "GroundingStatusGuidance": {
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/GroundingStatus"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "retryable": {
+            "type": "boolean",
+            "title": "Retryable"
+          },
+          "next_action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Action"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "label",
+          "message",
+          "retryable"
+        ],
+        "title": "GroundingStatusGuidance",
+        "description": "법령 조회 상태별 사용자 안내와 후속 행동."
       },
       "MCPCandidateSelected": {
         "properties": {
@@ -2637,6 +2694,14 @@
             "title": "Grounding Statuses",
             "description": "법령 근거 조회 상태 코드 목록"
           },
+          "grounding_status_details": {
+            "items": {
+              "$ref": "#/components/schemas/GroundingStatusGuidance"
+            },
+            "type": "array",
+            "title": "Grounding Status Details",
+            "description": "법령 근거 조회 상태별 사용자 안내"
+          },
           "chat_outcomes": {
             "items": {
               "$ref": "#/components/schemas/ChatOutcome"
@@ -2699,6 +2764,7 @@
           "progress_stages",
           "progress_stage_details",
           "grounding_statuses",
+          "grounding_status_details",
           "chat_outcomes",
           "draft_outcomes",
           "error_codes",

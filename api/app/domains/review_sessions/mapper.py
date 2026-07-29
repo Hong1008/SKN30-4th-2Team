@@ -40,6 +40,9 @@ def review_session_to_row(entity: ReviewSession) -> ReviewSessionRow:
         original_file_name=entity.original_file_name,
         file_size_bytes=entity.file_size_bytes,
         storage_key=entity.storage_key,
+        # 레거시 DB가 storage_path NOT NULL 제약을 가진 경우가 있으므로
+        # 새 레코드에는 storage_key 값을 storage_path에 복사해 삽입한다.
+        storage_path=entity.storage_key,
         created_at=entity.created_at,
         updated_at=entity.updated_at,
         expires_at=entity.expires_at,
@@ -64,6 +67,11 @@ def update_review_session_row(
     row.original_file_name = entity.original_file_name
     row.file_size_bytes = entity.file_size_bytes
     row.storage_key = entity.storage_key
+    # legacy compatibility: keep storage_path in sync when present
+    try:
+        setattr(row, "storage_path", entity.storage_key)
+    except Exception:
+        pass
     row.created_at = entity.created_at
     row.updated_at = entity.updated_at
     row.expires_at = entity.expires_at

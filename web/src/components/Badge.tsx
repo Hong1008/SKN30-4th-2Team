@@ -9,9 +9,9 @@ interface Props {
 const CONFIG: Record<ResultCode, { dot: string; bg: string; text: string; border: string }> = {
   NONE: {
     dot: 'bg-emerald-500',
-    bg: 'bg-emerald-50',
-    text: 'text-emerald-700',
-    border: 'border-emerald-200',
+    bg: 'bg-white',
+    text: 'text-slate-700',
+    border: 'border-slate-200',
   },
   EXTRA: {
     dot: 'bg-amber-500',
@@ -21,9 +21,9 @@ const CONFIG: Record<ResultCode, { dot: string; bg: string; text: string; border
   },
   NO_MATCH: {
     dot: 'bg-rose-400',
-    bg: 'bg-rose-50',
-    text: 'text-rose-700',
-    border: 'border-rose-200',
+    bg: 'bg-white',
+    text: 'text-slate-700',
+    border: 'border-slate-200',
   },
   MISSING: {
     dot: 'bg-slate-400',

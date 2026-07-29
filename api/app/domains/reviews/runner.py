@@ -29,6 +29,16 @@ class InvalidMCPReviewResultError(ValueError):
     """MCP 전체 검토 응답이 공개 DTO를 위반했음을 나타낸다."""
 
 
+_PROGRESS_STAGE_RANGES: dict[str, tuple[float, float]] = {
+    "PREPARE": (0.0, 5.0),
+    "BATCH_SEARCH": (5.0, 25.0),
+    "RERANK": (25.0, 65.0),
+    "CLAUSE_REVIEW": (65.0, 85.0),
+    "MISSING_DETECTION": (85.0, 95.0),
+    "RESULT_ASSEMBLY": (95.0, 99.0),
+}
+
+
 def _mcp_status(payload: dict[str, Any]) -> MCPReviewStatus:
     raw = str(payload.get("status", "PIPELINE_ERROR")).upper()
     try:
@@ -95,6 +105,24 @@ def _progress_message(
     return previous_stage, message
 
 
+def _weighted_progress(
+    stage: str,
+    current: float,
+    total: float | None,
+) -> tuple[float, float | None]:
+    """MCP 단계 내부 진행량을 화면용 전체 진행률 구간으로 변환한다."""
+    stage_range = _PROGRESS_STAGE_RANGES.get(stage)
+    if stage_range is None:
+        return current, total
+
+    start, end = stage_range
+    ratio = 0.0
+    if total is not None and total > 0:
+        ratio = min(max(current / total, 0.0), 1.0)
+    weighted_current = start + ((end - start) * ratio)
+    return weighted_current, 100.0
+
+
 class ReviewProgressRecorder:
     """MCP progress를 review별 단조 증가 이벤트로 DB에 기록한다."""
 
@@ -119,10 +147,15 @@ class ReviewProgressRecorder:
                     message,
                     str(previous.get("stage", "PREPARE")),
                 )
+                weighted_current, weighted_total = _weighted_progress(
+                    stage,
+                    progress,
+                    total,
+                )
                 if not review.record_progress(
                     stage=stage,
-                    current=progress,
-                    total=total,
+                    current=weighted_current,
+                    total=weighted_total,
                     message=display_message,
                 ):
                     return

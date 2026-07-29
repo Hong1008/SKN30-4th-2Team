@@ -42,7 +42,12 @@
 .animate-fade-in-down { animation: fadeSlideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1) both; }
 
 @media (prefers-reduced-motion: reduce) {
-  .animate-page-enter {
+  .animate-page-enter,
+  .animate-fade-up,
+  .animate-fade-in-down,
+  .animate-spin-slow,
+  .animate-pulse-dot,
+  .shimmer-bg {
     animation: none;
   }
 }

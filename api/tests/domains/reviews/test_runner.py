@@ -16,6 +16,7 @@ from app.domains.reviews.domain import Review, ReviewState
 from app.domains.reviews.repository import SqlAlchemyReviewRepository
 from app.domains.reviews.runner import (
     _progress_message,
+    _weighted_progress,
     ReviewProgressRecorder,
     execute_review,
     normalize_review_result,
@@ -182,6 +183,28 @@ def test_structured_progress_separates_stage_and_display_message() -> None:
         "RERANK",
         "알 수 없는 이전 MCP 문구",
     )
+
+
+@pytest.mark.parametrize(
+    ("stage", "current", "total", "expected"),
+    [
+        ("PREPARE", 0, 10, (0.0, 100.0)),
+        ("BATCH_SEARCH", 0, 10, (5.0, 100.0)),
+        ("RERANK", 0, 10, (25.0, 100.0)),
+        ("RERANK", 1, 3, (38.33333333333333, 100.0)),
+        ("RERANK", 2, 3, (51.666666666666664, 100.0)),
+        ("RERANK", 3, 3, (65.0, 100.0)),
+        ("CLAUSE_REVIEW", 3, 10, (71.0, 100.0)),
+        ("MISSING_DETECTION", 10, 10, (95.0, 100.0)),
+    ],
+)
+def test_progress_uses_stage_weighted_percent(
+    stage: str,
+    current: float,
+    total: float,
+    expected: tuple[float, float],
+) -> None:
+    assert _weighted_progress(stage, current, total) == expected
 
 
 @pytest.mark.asyncio
@@ -357,7 +380,7 @@ async def test_execute_review_uses_monotonic_mcp_progress(
         review_id=review.id,
     )
 
-    assert progress_session.percents == [20, 70, 70]
+    assert progress_session.percents == [69, 79, 79]
     with database.session() as db_session:
         completed = SqlAlchemyReviewRepository(db_session).get(review.id)
     assert completed is not None

@@ -23,6 +23,8 @@ from app.core.common.logging import log_event
 from app.core.common.request_id import REQUEST_ID_HEADER, get_request_id
 from app.core.common.responses import ApiError, ApiErrorResponse, api_meta
 
+from app.config import get_settings
+
 
 APP_ERROR_STATUS: tuple[tuple[type[AppError], int], ...] = (
     (AppValidationError, status.HTTP_422_UNPROCESSABLE_CONTENT),
@@ -142,13 +144,30 @@ async def unexpected_error_handler(
     request: Request,
     _error: Exception,
 ) -> JSONResponse:
-    """예상하지 못한 오류의 본문·메시지·스택 트레이스를 기록하지 않는다."""
+    """예상하지 못한 오류의 본문·메시지·스택 트레이스를 기록하지 않는다.
+    이유: 보안상의 이유로 예외 정보를 외부에 노출하지 않는다.
+
+    .env에 APP_DEBUG=true로 설정하면 로컬에서만 디버깅 목적으로 로그를 남긴다.
+
+    클라이언트에게는 기존의 일반화된 500 응답만 반환한다.
+    """
+    # 공통 이벤트 로그(요청 ID 포함)
     log_event(
         event="api.unexpected_error",
         request_id=get_request_id(request),
         state="failed",
+        error_type=type(_error).__name__,
         level=logging.ERROR,
     )
+
+    # APP_DEBUG=true일 경우에만 예외 상세(타입, 메시지, 스택 트레이스)를 서버 로그에 남긴다.
+    if get_settings().app_debug:
+        import traceback
+
+        tb = "".join(traceback.format_exception(type(_error), _error, _error.__traceback__))
+        logging.getLogger("uvicorn.error").error("%s", tb)
+
+
     return _error_response(
         request,
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

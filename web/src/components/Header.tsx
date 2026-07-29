@@ -1,42 +1,40 @@
-import { ShieldCheck } from 'lucide-react'
+import { Plus, ShieldCheck } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import type { Screen } from '../types'
 
 interface Props {
   currentScreen: Screen
   onNavigate: (s: Screen) => void
+  expiresAt: string | null
+  canStartNewReview: boolean
+  onStartNewReview: () => void
+  isStartingNewReview: boolean
 }
 
-export default function Header({ currentScreen, onNavigate }: Props) {
-  const isReview = ['upload', 'contract-type', 'out-of-scope', 'processing'].includes(currentScreen)
+export default function Header({
+  currentScreen,
+  onNavigate,
+  expiresAt,
+  canStartNewReview,
+  onStartNewReview,
+  isStartingNewReview,
+}: Props) {
+  const isReview = ['upload-and-type', 'out-of-scope', 'processing'].includes(currentScreen)
   const isResult = ['results', 'clause-detail', 'chatbot'].includes(currentScreen)
 
-  const [timeLeft, setTimeLeft] = useState(1800) // 30 minutes in seconds
+  const secondsUntilExpiry = () => expiresAt
+    ? Math.max(0, Math.ceil((new Date(expiresAt).getTime() - Date.now()) / 1000))
+    : null
+  const [timeLeft, setTimeLeft] = useState<number | null>(secondsUntilExpiry)
 
   useEffect(() => {
-    // throttle the reset to avoid excessive state updates
-    let timeoutId: number | null = null;
-    const resetTimer = () => {
-      if (!timeoutId) {
-        setTimeLeft(1800)
-        timeoutId = window.setTimeout(() => { timeoutId = null }, 1000)
-      }
-    }
-    
-    window.addEventListener('keydown', resetTimer)
-    window.addEventListener('click', resetTimer)
-
+    setTimeLeft(secondsUntilExpiry())
     const interval = setInterval(() => {
-      setTimeLeft(prev => (prev > 0 ? prev - 1 : 0))
+      setTimeLeft(secondsUntilExpiry())
     }, 1000)
 
-    return () => {
-      window.removeEventListener('keydown', resetTimer)
-      window.removeEventListener('click', resetTimer)
-      clearInterval(interval)
-      if (timeoutId) clearTimeout(timeoutId)
-    }
-  }, [])
+    return () => clearInterval(interval)
+  }, [expiresAt])
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60)
@@ -51,36 +49,30 @@ export default function Header({ currentScreen, onNavigate }: Props) {
         <button
           onClick={() => onNavigate('upload-and-type')}
           className="
-            group flex shrink-0 items-center gap-2.5 rounded-xl
+            group flex shrink-0 items-center gap-2.5 rounded-xl px-1 py-1
             focus-visible:outline-none
             focus-visible:ring-4 focus-visible:ring-blue-500/15
           "
         >
           <span className="
-            grid size-9 place-items-center rounded-[11px]
-            bg-gradient-to-br from-blue-500 to-blue-700
-            shadow-[0_4px_12px_rgba(37,99,235,0.24)]
-            ring-1 ring-blue-700/10
+            grid size-9 place-items-center rounded-[10px]
+            bg-gradient-to-br from-blue-500 to-blue-700 text-white
+            shadow-[0_4px_12px_rgba(37,99,235,0.22)]
+            ring-1 ring-inset ring-white/15
+            transition-transform duration-150 group-hover:-translate-y-px
           ">
             <ShieldCheck
-              className="size-[19px] text-white"
-              strokeWidth={2.25}
+              className="size-5 text-white"
+              strokeWidth={2.15}
             />
           </span>
 
-          <span className="flex flex-col items-start">
+          <span className="flex items-baseline">
             <span className="
-              text-[17px] font-semibold leading-[19px]
-              tracking-[-0.025em] text-slate-950
+              text-[18px] font-bold leading-5
+              tracking-[-0.035em] text-slate-950
             ">
-              Work<span className="text-blue-600">shield</span>
-            </span>
-
-            <span className="
-              mt-[3px] text-[8px] font-medium leading-none
-              tracking-[0.16em] text-slate-400/80
-            ">
-              CONTRACT REVIEW
+              Work<span className="font-semibold text-blue-600">Shield</span>
             </span>
           </span>
         </button>
@@ -111,12 +103,24 @@ export default function Header({ currentScreen, onNavigate }: Props) {
 
         {/* Right: session */}
         <div className="ml-auto flex items-center gap-4">
-          <div className="hidden items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 sm:flex">
+          {canStartNewReview && (
+            <button
+              type="button"
+              onClick={onStartNewReview}
+              disabled={isStartingNewReview}
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            >
+              <Plus className="size-4" />
+              {isStartingNewReview ? '정리 중' : '새 검토'}
+            </button>
+          )}
+          {timeLeft !== null && <div className="hidden items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 sm:flex">
             <span className={`size-1.5 rounded-full ${timeLeft > 300 ? 'bg-emerald-500' : 'bg-red-500 animate-pulse'}`} />
             <span className="text-[11px] font-medium text-slate-600 font-mono tracking-tight">
-              세션 유지 중 <span className="ml-0.5">{formatTime(timeLeft)}</span>
+              {timeLeft > 0 ? '세션 유지 중' : '세션 만료'}
+              <span className="ml-0.5">{formatTime(timeLeft)}</span>
             </span>
-          </div>
+          </div>}
         </div>
       </div>
     </header>
