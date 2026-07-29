@@ -108,7 +108,7 @@ export default function Header({
 
         {/* Right: session */}
         <div className="ml-auto flex items-center gap-4">
-          {canStartNewReview && !navigationLocked && (
+          {canStartNewReview && (
             <button
               type="button"
               onClick={onStartNewReview}

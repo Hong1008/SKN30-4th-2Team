@@ -290,16 +290,20 @@ function MainApp() {
         {showNewReviewConfirm && (
           <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-4" role="dialog" aria-modal="true" aria-labelledby="new-review-title">
             <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
-              <h2 id="new-review-title" className="text-lg font-bold text-slate-950">새 검토를 시작할까요?</h2>
+              <h2 id="new-review-title" className="text-lg font-bold text-slate-950">
+                {screen === 'processing' ? '진행 중인 검토를 중단할까요?' : '새 검토를 시작할까요?'}
+              </h2>
               <p className="mt-2 text-sm leading-6 text-slate-600">
-                현재 검토 결과와 서버에 임시 저장된 파일을 폐기한 뒤 새 계약서를 업로드합니다.
+                {screen === 'processing'
+                  ? '분석을 중단하면 업로드한 계약서와 현재까지 생성된 결과가 삭제됩니다.'
+                  : '현재 검토 결과와 서버에 임시 저장된 파일을 폐기한 뒤 새 계약서를 업로드합니다.'}
               </p>
               <div className="mt-6 flex justify-end gap-2">
                 <button type="button" onClick={() => setShowNewReviewConfirm(false)} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700">
-                  계속 보기
+                  {screen === 'processing' ? '아니요, 계속 검토' : '계속 보기'}
                 </button>
                 <button type="button" onClick={startNewReview} className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white">
-                  폐기하고 새 검토
+                  {screen === 'processing' ? '예, 중단하고 새 검토' : '폐기하고 새 검토'}
                 </button>
               </div>
             </div>
