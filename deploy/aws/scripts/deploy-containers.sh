@@ -162,6 +162,10 @@ activate_release() {
   docker compose --project-name workshield-prod --env-file "$stage/runtime.env" -f "$stage/compose.prod.yaml" config --quiet
   docker compose --project-name workshield-prod --env-file "$stage/runtime.env" -f "$stage/compose.prod.yaml" pull --quiet
   docker compose --project-name workshield-prod --env-file "$stage/runtime.env" -f "$stage/compose.prod.yaml" up -d --remove-orphans
+  for service in api mcp nginx; do
+    docker compose --project-name workshield-prod --env-file "$stage/runtime.env" -f "$stage/compose.prod.yaml" \
+      ps --status running --services | grep -qx "$service"
+  done
   wait_for_api "$stage"
   install -m 0600 "$stage/api.env" "${SECRET_DIR}/api.env"
   install -m 0600 "$stage/mcp.env" "${SECRET_DIR}/mcp.env"

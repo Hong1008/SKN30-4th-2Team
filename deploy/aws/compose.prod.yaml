@@ -66,6 +66,8 @@ services:
       MCP_TRANSPORT: streamable-http
       MCP_HOST: 0.0.0.0
       MCP_PORT: "8000"
+      # API container가 Docker service name으로 연결할 때만 Host 검증을 허용한다.
+      MCP_ALLOWED_HOSTS: mcp:8000
     volumes:
       - type: bind
         source: ${WORKSHIELD_DATA_DIR:-/opt/workshield/data}/mcp-uploads

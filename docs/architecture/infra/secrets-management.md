@@ -27,8 +27,6 @@ AWS_REGION
 AWS_ACCOUNT_ID
 AWS_AVAILABILITY_ZONE
 ORIGIN_DOMAIN
-HOSTED_ZONE_ID
-HOSTED_ZONE_NAME
 CLOUDFRONT_ORIGIN_PREFIX_LIST_ID
 NGINX_IMAGE
 ```
@@ -69,6 +67,7 @@ secret 하나를 environment 접근 규칙으로 통제할 수도 있다. 어느
 /workshield/prod/vllm
 /workshield/prod/embed
 /workshield/prod/origin-header
+/workshield/prod/duckdns
 /workshield/prod/ghcr-read          # private package일 때만
 /workshield/prod/huggingface        # 필요할 때만
 ```
@@ -114,6 +113,7 @@ secret JSON 예:
 | `VLLM_API_KEY` | 무작위 32-byte 값 생성 | Secrets Manager·vLLM Pod | API·vLLM |
 | Embedder API key | 무작위 32-byte 값 생성 | Secrets Manager·Embedder Pod | MCP·Embedder |
 | origin header | 무작위 32-byte 이상 값 생성 | Secrets Manager | CloudFront·Nginx |
+| `DUCKDNS_TOKEN` | DuckDNS 계정에서 발급 | Secrets Manager | origin A·DNS-01 갱신 |
 | `GHCR_READ_TOKEN` | PAT classic, `read:packages`만 | Secrets Manager | EC2, private package일 때만 |
 | `HUGGING_FACE_TOKEN` | Hugging Face 계정에서 발급 | Secrets Manager | 모델 pull이 필요할 때만 |
 | TLS private key | DNS-01 인증 과정에서 생성 | 암호화 EBS root 전용 경로 | Nginx |
@@ -216,9 +216,9 @@ classic을 발급한다.
 
 ### TLS 인증서
 
-origin domain의 공인 인증서는 DNS-01로 발급한다. Route 53을 사용할 경우
-EC2 instance role에 해당 hosted zone의 DNS challenge record 변경 권한만
-부여한다.
+origin domain의 공인 인증서는 DNS-01로 발급한다. DuckDNS token은
+`/workshield/prod/duckdns`의 `DUCKDNS_TOKEN` 키로만 저장하고, DNS challenge
+자동화가 해당 secret을 읽어 TXT record를 갱신한다.
 
 private key:
 

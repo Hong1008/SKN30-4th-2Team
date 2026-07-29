@@ -196,8 +196,13 @@ class ServiceStack(Stack):
         data_id = foundation.data_volume.ref
         corpus_id = foundation.corpus_volume.ref
         return [
-            "dnf install -y docker awscli docker-compose-plugin",
+            # Amazon Linux 기본 awscli/curl 패키지와 충돌하지 않도록 Docker만 설치한다.
+            "dnf install -y docker",
             "systemctl enable --now docker",
+            "install -d -m 0755 /usr/local/lib/docker/cli-plugins",
+            "curl --fail --location --silent --show-error https://github.com/docker/compose/releases/download/v5.1.2/docker-compose-linux-x86_64 --output /usr/local/lib/docker/cli-plugins/docker-compose",
+            "chmod 0755 /usr/local/lib/docker/cli-plugins/docker-compose",
+            "docker compose version",
             "usermod -aG docker ec2-user",
             "mkdir -p /opt/workshield/{data,mcp-corpus,certificates,secrets,releases}",
             "mkdir -p /opt/workshield/runtime/nginx",

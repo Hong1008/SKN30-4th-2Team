@@ -4,7 +4,7 @@ umask 077
 
 usage() {
   cat <<'EOF'
-Usage: put-secrets.sh --secret <vllm|embed|origin-header|law> [--environment prod] [--stdin|--generate] [--dry-run]
+Usage: put-secrets.sh --secret <vllm|embed|origin-header|law|duckdns> [--environment prod] [--stdin|--generate] [--dry-run]
 
 비밀값을 command argument로 받지 않습니다. 기본값은 숨김 대화형 입력이며,
 --stdin은 안전한 stdin pipe, --generate는 vllm/embed/origin-header의 새 32-byte key만
@@ -34,10 +34,11 @@ case "$secret_name" in
   embed) key="RUNPOD_EMBED_API_KEY" ;;
   origin-header) key="ORIGIN_HEADER" ;;
   law) key="LAW_OC" ;;
+  duckdns) key="DUCKDNS_TOKEN" ;;
   *) usage >&2; exit 2 ;;
 esac
-if [[ "$input_mode" == "generate" && "$secret_name" == "law" ]]; then
-  printf '%s\n' 'error: LAW_OC는 사용자가 발급한 값을 입력해야 합니다.' >&2
+if [[ "$input_mode" == "generate" && ( "$secret_name" == "law" || "$secret_name" == "duckdns" ) ]]; then
+  printf '%s\n' 'error: LAW_OC와 DUCKDNS_TOKEN은 사용자가 발급한 값을 입력해야 합니다.' >&2
   exit 2
 fi
 

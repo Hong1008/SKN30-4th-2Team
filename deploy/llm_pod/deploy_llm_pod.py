@@ -196,10 +196,20 @@ def main() -> int:
         output = {"pod_id": pod_id, "base_url": base_url, "model_id": model_id, "created": True}
         print(json.dumps(output) if args.output == "json" else f"Pod 생성 완료: {pod_id}")
         return 0
-    except Exception:
+    except subprocess.CalledProcessError as error:
         if pod_id:
             # 기존 상태는 건드리지 않고, 이번 실행에서 만든 Pod만 정리한다.
             subprocess.run([runpodctl, "pod", "delete", pod_id], capture_output=True, text=True)
+        detail = (error.stderr or error.stdout or "").strip()
+        if detail:
+            print(detail, file=sys.stderr)
+        print("vLLM Pod 생성 실패", file=sys.stderr)
+        return 1
+    except Exception as error:
+        if pod_id:
+            # 기존 상태는 건드리지 않고, 이번 실행에서 만든 Pod만 정리한다.
+            subprocess.run([runpodctl, "pod", "delete", pod_id], capture_output=True, text=True)
+        print(str(error), file=sys.stderr)
         print("vLLM Pod 생성 실패", file=sys.stderr)
         return 1
 

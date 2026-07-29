@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from aws_cdk import CfnDeletionPolicy, CfnTag, Duration, RemovalPolicy, Stack
+from aws_cdk import CfnDeletionPolicy, CfnOutput, CfnTag, Duration, RemovalPolicy, Stack
 from aws_cdk import aws_cloudwatch as cloudwatch
 from aws_cdk import aws_ec2 as ec2
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_logs as logs
-from aws_cdk import aws_route53 as route53
 from aws_cdk import aws_secretsmanager as secretsmanager
 from aws_cdk import aws_ssm as ssm
 from constructs import Construct
@@ -72,7 +71,7 @@ class FoundationStack(Stack):
             self,
             "OriginSecurityGroup",
             vpc=self.vpc,
-            description="CloudFront만 WorkShield origin HTTPS에 접근 가능",
+            description="Allow CloudFront access to WorkShield origin HTTPS only",
             allow_all_outbound=True,
         )
         self.security_group.add_ingress_rule(
@@ -99,18 +98,6 @@ class FoundationStack(Stack):
             iam.PolicyStatement(
                 actions=["ssm:GetParameter", "ssm:GetParameters", "ssm:PutParameter"],
                 resources=[f"arn:{self.partition}:ssm:{self.region}:{self.account}:parameter/workshield/prod/*"],
-            )
-        )
-        self.instance_role.add_to_policy(
-            iam.PolicyStatement(
-                actions=["route53:ChangeResourceRecordSets"],
-                resources=[f"arn:{self.partition}:route53:::hostedzone/{config.hosted_zone_id}"],
-            )
-        )
-        self.instance_role.add_to_policy(
-            iam.PolicyStatement(
-                actions=["route53:GetChange", "route53:ListResourceRecordSets"],
-                resources=["*"],
             )
         )
 
@@ -141,20 +128,9 @@ class FoundationStack(Stack):
         self.elastic_ip = ec2.CfnEIP(self, "OriginElasticIp", domain="vpc")
         self.elastic_ip.cfn_options.deletion_policy = CfnDeletionPolicy.DELETE
 
-        zone = route53.HostedZone.from_hosted_zone_attributes(
-            self,
-            "OriginHostedZone",
-            hosted_zone_id=config.hosted_zone_id,
-            zone_name=config.hosted_zone_name,
-        )
-        route53.ARecord(
-            self,
-            "OriginRecord",
-            zone=zone,
-            record_name=config.origin_domain,
-            target=route53.RecordTarget.from_ip_addresses(self.elastic_ip.attr_public_ip),
-            ttl=Duration.minutes(5),
-        )
+        # DuckDNS는 Route 53 hosted zone으로 위임할 수 없다. Foundation 배포 뒤
+        # sync-duckdns-local.sh가 이 고정 Elastic IP를 DuckDNS A 레코드에 반영한다.
+        CfnOutput(self, "OriginElasticIpOutput", key="OriginElasticIp", value=self.elastic_ip.attr_public_ip)
 
         self.log_group = logs.LogGroup(
             self,
@@ -178,7 +154,7 @@ class FoundationStack(Stack):
 
         # 실제 값은 6단계의 안전한 stdin script가 입력한다. stack 삭제 시에는
         # 즉시 폐기하지 않고 destroy script가 7일 복구 기간을 예약한다.
-        for name in ("vllm", "embed", "origin-header", "law"):
+        for name in ("vllm", "embed", "origin-header", "law", "duckdns"):
             secret = secretsmanager.CfnSecret(self, f"{name.title().replace('-', '')}Secret", name=f"/workshield/prod/{name}")
             secret.cfn_options.deletion_policy = CfnDeletionPolicy.RETAIN
             secret.cfn_options.update_replace_policy = CfnDeletionPolicy.RETAIN

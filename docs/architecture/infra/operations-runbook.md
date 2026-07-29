@@ -18,7 +18,7 @@ workflow 계약은 [CI/CD](ci-cd.md), 값별 보안 규칙은
 - GHCR package owner
 - AWS account와 region
 - GitHub `production` Environment 사용 가능 여부
-- origin domain과 Route 53 hosted zone
+- DuckDNS origin domain과 DuckDNS token 준비 여부
 - GitHub `production-destroy` Environment 사용 가능 여부
 
 현재 checkout의 `origin`과 `upstream`이 다르므로 OIDC trust에는 실제 배포를
@@ -33,7 +33,7 @@ workflow 계약은 [CI/CD](ci-cd.md), 값별 보안 규칙은
 
 - AWS CLI 로그인 계정
 - 대상 account ID와 region
-- Route 53 hosted zone
+- DuckDNS origin domain
 - CDK v2 CLI
 - Python과 프로젝트 dependency
 
@@ -61,8 +61,6 @@ AWS_REGION
 AWS_DEPLOY_ROLE_ARN
 AWS_AVAILABILITY_ZONE
 ORIGIN_DOMAIN
-HOSTED_ZONE_ID
-HOSTED_ZONE_NAME
 CLOUDFRONT_ORIGIN_PREFIX_LIST_ID
 NGINX_IMAGE
 ```
@@ -164,7 +162,7 @@ CDK foundation stack으로 다음을 만든다.
 - security group
 - EBS volumes
 - Elastic IP
-- Route 53 origin record
+- DuckDNS 동기화용 Elastic IP output
 - EC2와 SSM 관리 연결
 - log group과 Parameter Store namespace
 
@@ -172,8 +170,8 @@ EC2가 SSM managed node로 표시되는지 확인한다. SSH inbound는 열지 �
 
 ### 5.2 인증서 준비
 
-1. origin DNS가 Elastic IP를 가리키는지 확인한다.
-2. EC2에서 Route 53 DNS-01로 공인 인증서를 발급한다.
+1. `just duckdns-sync-local`로 DuckDNS origin이 Elastic IP를 가리키게 한다.
+2. DuckDNS TXT API를 이용한 DNS-01으로 공인 인증서를 발급한다.
 3. Nginx에 인증서와 key를 연결한다.
 4. Nginx가 origin header를 검증하도록 설정한다.
 5. SSM session에서 `curl --resolve <origin-domain>:443:127.0.0.1`과 같은

@@ -16,8 +16,6 @@ class DeploymentConfig:
     aws_region: str
     availability_zone: str
     origin_domain: str
-    hosted_zone_id: str
-    hosted_zone_name: str
     cloudfront_origin_prefix_list_id: str
     instance_type: str
 
@@ -31,8 +29,6 @@ class DeploymentConfig:
             "aws_region",
             "availability_zone",
             "origin_domain",
-            "hosted_zone_id",
-            "hosted_zone_name",
             "cloudfront_origin_prefix_list_id",
             "instance_type",
         }

@@ -26,8 +26,8 @@ Python을 사용하므로 전역 CDK·Python 설치에 의존하지 않는다.
 
 CDK는 기본적으로 `config/prod.example.json`을 사용해 계정 없이 synth한다.
 실제 배포 전에는 이를 복사한 Git 비추적 `config/prod.json`에 account, region,
-단일 availability zone, origin domain, hosted zone, CloudFront origin-facing
-managed prefix list ID를 입력하고 다음처럼 실행한다.
+단일 availability zone, DuckDNS origin domain, CloudFront origin-facing managed
+prefix list ID를 입력하고 다음처럼 실행한다.
 
 ```bash
 cd deploy/aws/iac
@@ -65,3 +65,28 @@ deploy/aws/scripts/put-secrets.sh --secret law
 `runtime-parameters.example.json`은 형식 예시다. `NGINX_IMAGE`에는 실제
 공식 Nginx immutable digest를 사용해야 하며, workflow는 GHCR owner·origin
 domain과 함께 `set-runtime-parameters.sh`로 값을 갱신한다.
+
+## GitHub Environment 로컬 동기화
+
+`env/prod.env`에 적은 비밀 아닌 AWS·DNS 식별자는 다음 명령으로 GitHub
+`production` Environment Variables에 동기화할 수 있다. `GH_TOKEN` 또는
+`GITHUB_TOKEN`에는 해당 repository의 Environment를 관리할 권한이 있어야 한다.
+토큰과 `RUNPOD_API_KEY`, `ORIGIN_HEADER`, `LAW_OC` 등 비밀값은 이 파일이나
+동기화 대상에 넣지 않는다.
+
+```bash
+export GH_TOKEN='GitHub token은 셸 환경 변수로만 설정'
+just github-env-sync-local
+```
+
+동기화는 `AWS_ACCOUNT_ID`, `AWS_REGION`, `AWS_AVAILABILITY_ZONE`,
+`AWS_DEPLOY_ROLE_ARN`, `ORIGIN_DOMAIN`, `CLOUDFRONT_ORIGIN_PREFIX_LIST_ID`,
+`NGINX_IMAGE`만 허용한다.
+
+Foundation 배포와 `/workshield/prod/duckdns` secret 등록 후에는 다음 명령으로
+Elastic IP를 `workshield.duckdns.org`에 반영한다. DuckDNS token을 로컬 환경에
+둘 필요 없이 Secrets Manager에서만 읽는다.
+
+```bash
+just duckdns-sync-local
+```

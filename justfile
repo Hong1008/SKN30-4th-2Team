@@ -26,3 +26,15 @@ aws-build-api:
 
 aws-build-mcp:
     docker build --tag workshield-mcp:local mcp
+
+# 로컬 prod.env의 비밀 아닌 배포 식별자를 GitHub Environment Variables로 동기화
+github-env-sync-local env_file="deploy/aws/env/prod.env" environment="production" repository="Hong1008/SKN30-4th-2Team":
+    bash deploy/aws/scripts/sync-github-environment-local.sh --env-file "{{env_file}}" --environment "{{environment}}" --repository "{{repository}}"
+
+# Foundation Elastic IP를 DuckDNS origin A 레코드로 동기화
+duckdns-sync-local profile="4th-student":
+    bash deploy/aws/scripts/sync-duckdns-local.sh --profile "{{profile}}"
+
+# DuckDNS DNS-01 origin TLS 인증서 발급 및 EC2 갱신 timer 설치
+duckdns-tls-provision-local email profile="4th-student":
+    bash deploy/aws/scripts/provision-duckdns-tls-local.sh "{{email}}" --profile "{{profile}}"

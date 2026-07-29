@@ -302,30 +302,72 @@ GHCR public 사용은 승인됐다. package를 public으로 바꾸면 다시 pri
 | trigger | 운영 변경은 수동 실행, main push 자동 배포 없음 |
 | GHCR | owner만 workflow 입력, public package |
 | AWS | account ID는 설정 파일, region은 `ap-northeast-2` |
-| DNS | Route 53 사용 |
+| DNS | DuckDNS (`workshield.duckdns.org`)를 CloudFront origin domain으로 사용 |
 | reviewer | 정상 배포 선택, 폐기는 `Hong1008` 승인 |
 | Embedder·Reranker | Pod base URL |
 | vLLM | workflow가 URL·model ID를 자동 바인딩, API key는 안전한 secret 등록 script로 생성 |
 | LAW_OC | 보유 |
 | 폐기 | 생성한 project AWS·RunPod 자원 자동 삭제 |
 
-## 9. 지금 사용자에게 필요한 조치
+## 2026-07-29 실제 연결 진행 기록
 
-저장소 구현은 계속할 수 있다. 실제 배포 전 사용자 조치는 다음과 같다.
+- AWS profile `4th-student`로 account `182116415809`, region `ap-northeast-2`를 확인했다.
+- GitHub OIDC provider, `workshield-prod-github-deploy` role, CDKToolkit bootstrap을 생성했다. OIDC trust는 `Hong1008/SKN30-4th-2Team`의 `production`, `production-destroy` Environment만 허용한다.
+- GitHub `production` Environment에 AWS account, AZ, deploy role ARN, DuckDNS origin, CloudFront prefix list, Nginx digest 변수를 동기화했다. 동기화 script는 GitHub Environment Variables API의 POST/PATCH 계약으로 보완했다.
+- Route 53 기반 origin 레코드 구성을 DuckDNS로 전환했다. Foundation은 `OriginElasticIp`를 출력하고, `sync-duckdns-local.sh`가 Secrets Manager의 `DUCKDNS_TOKEN`으로 DuckDNS A 레코드를 갱신한다.
+- `workshield.duckdns.org`은 Foundation Elastic IP `43.200.136.32`로 해석되는 것을 확인했다.
+- Foundation 최초 배포 중 CDK execution policy의 IAM role 권한과 Security Group description ASCII 제약으로 실패했다. `WorkShield*` role/instance profile 범위에 필요한 IAM 권한을 보완하고 실패 stack 및 빈 placeholder secret을 정리한 뒤 Foundation을 `CREATE_COMPLETE`로 배포했다.
+- `vllm`, `embed`, `origin-header`, `law`, `duckdns` runtime secret은 사용자 terminal에서 등록했다. vLLM·Embedder key는 새로 생성했다.
+- Service stack은 S3 auto-delete custom resource Lambda 생성 권한이 없어 실패했다. Lambda action은 `WorkShieldService-*` ARN에만 제한해 생성·조회·수정·삭제·태그·permission 연결 권한으로 보완했다.
+- 재배포 중 Custom Resource가 Lambda를 호출할 때 `lambda:InvokeFunction` 누락으로 다시 rollback 됐다. 같은 `WorkShieldService-*` 범위에 `lambda:InvokeFunction`을 추가하고 실패 stack을 정리한 뒤 `WorkShieldService`를 `CREATE_COMPLETE`로 배포했다. CloudFront distribution은 `E1NGL2RMJYFTTW`, web bucket은 `workshieldservice-webbucket12880f5b-kdtscsxdlwa1`이며, origin EC2 `i-06acbf8835c342dcb`의 SSM 상태는 `Online`이다.
+- `provision-duckdns-tls-local.sh`와 `just duckdns-tls-provision-local <ACME 이메일>`을 추가했다. 이 도구는 인스턴스에서 DuckDNS DNS-01 hook, origin 인증서 반영 hook, 일일 Certbot 갱신 timer를 구성한다.
+- 첫 TLS provisioning 실행은 Amazon Linux의 `curl-minimal`과 전체 `curl` 패키지 충돌로 Certbot 실행 전에 실패했다. 기본 제공 `curl`·`python3`·`aws`를 재설치하지 않고 존재 여부만 확인하도록 수정해 재시도했다.
+- `workshield.duckdns.org` Let’s Encrypt DNS-01 인증서를 성공적으로 발급했다. 인증서 만료일은 `2026-10-27`이며, `/opt/workshield/certificates/{fullchain.pem,privkey.pem}`은 `0600` 권한으로 배치됐다. `workshield-certbot-renew.timer`는 `enabled`·`active` 상태로 매일 갱신을 확인한다.
+- EC2에 secret 없는 Compose·Nginx template·container deployment/rollback script runtime asset을 SSM으로 설치했다 (`edb42b06-ff0d-4571-8830-b48187206e4a`).
+- 기존 로컬 `workshield-api:local`, `workshield-mcp:local` 이미지를 `ghcr.io/hong1008/skn30-4th-2team/{api,mcp}:dd992d0e64eb2818c9a61b85840c456cc8292325`로 게시하고 두 manifest digest를 확인했다. API는 `sha256:9abf06e94d356e6357b6aaec13707e8dde7841adc40718700e220ef32e6a969d`, MCP는 `sha256:b952e1cf689a4790d1ecf213057ea00d8ac735b644b62911bce7947e3062ae1e`이다.
+- EC2 배포 전 익명 GHCR pull을 확인한 결과 두 image 모두 `401`이었다. runtime parameter는 모두 존재하지만 package가 private여서 EC2가 인증 없이 pull할 수 없다.
+- 사용자 PAT는 GHCR image publish와 package metadata 조회에 성공했다. 그러나 GitHub REST Packages API에는 package visibility 변경 endpoint가 제공되지 않아 두 PATCH 요청은 `404`로 거부됐고, package visibility는 변경되지 않았다.
+- 사용자가 GitHub package 설정 화면에서 API·MCP package를 public으로 전환한 뒤 Docker 익명 bearer 흐름으로 다시 확인했으며, 두 manifest 모두 인증 없이 pull 가능했다. 최초 `curl`의 `401`은 registry bearer challenge로 판명됐다.
+- release `dd992d0e64eb2818c9a61b85840c456cc8292325`를 SSM deployment document로 배포했으나 `/workshield/prod/vllm/base-url`이 `__UNSET__`이라 실패했다 (`962ce567-bd62-4a1f-8422-63fe9a3ff790`). RunPod LLM/Embed state와 vLLM model parameter도 전부 `__UNSET__`이므로 실제 Pod endpoint 연결이 선행돼야 한다.
+- RunPod CLI 인증과 local `RUNPOD_API_KEY` 존재를 확인한 뒤 LLM Pod를 생성했다 (`zga31ktbiwsu5j`, `RUNNING`). vLLM server는 최초 readiness 확인에서 `502`로 모델 초기화 중이었고, endpoint/model Parameter Store 기록은 readiness 완료 후 처리해야 한다.
+- Embed Pod는 기본 GPU `NVIDIA RTX 2000 Ada`가 현재 RunPod 가용 목록에 없어 생성되지 않았다. `NVIDIA A40`, `NVIDIA GeForce RTX 3090`, `NVIDIA GeForce RTX 4090`, `NVIDIA RTX A5000` 등은 가용 상태다. Pod 생성 scripts는 RunPod CLI 상세 오류를 출력하도록 보완했다.
+- 사용자 선택 `NVIDIA RTX A5000`으로 Embed Pod `2aa2ny8b7kyog6`를 생성해 `RUNNING`을 확인했다. 갱신된 AWS SSO 세션으로 health를 확인한 결과 인증 요청과 무인증 요청이 모두 `200`이었다. 운영 요구사항인 Bearer 인증 차단(`401`/`403`)을 충족하지 못하므로 `/workshield/prod/runpod/embed/base-url`에 endpoint를 기록하거나 container release를 재개하지 않았다. 현재 RunPod template image가 저장소의 인증 적용 `pod_server.py`와 일치하도록 갱신돼야 한다.
+- 사용자가 위험을 인지하고 "기록에만 남기고 컨테이너 배포"를 명시적으로 지시했다. 따라서 Embed authentication 검증 실패를 보안 부채로 유지한 채 endpoint를 runtime Parameter Store에 연결하고 container release를 진행한다. template image 교체와 무인증 차단 재검증은 배포 후 필수 후속 작업이다.
+- EC2에는 Docker가 없어 첫 container release가 실패했다. Docker Engine을 설치·기동하고 Docker Compose v2 plugin(`v5.1.2`)을 공식 Docker 배포 binary로 설치했다. Service stack bootstrap도 Amazon Linux package 충돌을 피하도록 Docker 설치와 Compose plugin 설치를 분리했다.
+- 초기 Nginx digest는 Docker Hub manifest에 존재하지 않아 container를 기동하지 못했다. 공식 `nginx:stable` manifest digest `sha256:f0dab47df05ce89c0e40ae9776ef829a1596c747409469a979a0283d1d73bb13`로 `prod.env`와 runtime parameter를 갱신했다. release script는 API/MCP/Nginx 세 서비스가 실제 running 상태인지 확인하도록 보완했다.
+- MCP는 healthy였으나 API의 `Host: mcp:8000` 요청이 FastMCP DNS rebinding protection에서 `421`로 거부돼 API가 재시작했다. FastMCP 생성 시 `MCP_ALLOWED_HOSTS`의 제한 allowlist를 적용하도록 수정했다. 이 수정은 새 MCP image build·versioned publish 후 재배포가 필요하다.
+- RunPod endpoint를 연결한 뒤 release를 다시 시도했으나 `/workshield/prod/runtime/ghcr-owner` parameter 누락으로 실패했다 (`917bc470-6255-4bf5-b23c-b49a5c449b0d`). 누락 parameter를 보완한 다음 실행한 SSM command `7811f35f-30f9-475b-a0d7-e76fe5dc8cc2`는 release SHA를 활성화했지만, MCP의 `421` 응답으로 API가 재시작을 반복해 정상 운영 release로 판정할 수 없었다.
+- 환경 변수만으로 FastMCP의 이미 생성된 transport security 설정을 바꾸는 방식은 적용되지 않았다. `mcp/src/app.py`에서 `TransportSecuritySettings`를 명시적으로 전달하도록 로컬 코드를 수정했지만, 수정 image를 새 SHA로 build·publish·재배포하기 전에 테스트를 종료했다.
+- 따라서 container release 명령 자체는 실행됐고 활성 SHA parameter도 기록됐으나, API health와 end-to-end 요청이 통과한 유효한 production release는 없었다. web release와 CloudFront viewer 경로 검증도 수행하지 않았다.
 
-1. AWS CLI v2와 `jq` 설치
-2. 사용자 terminal에서 `docker info` 성공 확인
-3. RunPod 운영 전용 API key 발급 후 Pod create/get/list/delete 권한 확인
-4. GitHub `production`과 `production-destroy` Environment 생성
-5. `RUNPOD_API_KEY`를 Environment Secret으로 등록
-6. GitHub Environment에 account·AZ·domain·hosted zone·Nginx digest 변수를 입력
-7. 실제 origin domain과 Route 53 hosted zone ID 준비
-8. AWS SSO profile 준비
-9. Foundation stack 배포 후 `LAW_OC`와 생성한 runtime secret을 안전한 secret 등록 script로 AWS에 입력
+주의:
 
-`origin.workshield.com`은 예시이므로 실제 배포 설정으로 사용하지 않는다.
-RunPod URL, Pod ID, vLLM model ID와 vLLM API key는 사용자가 미리 준비할 필요가
-없다.
+- placeholder secret이 보존 정책으로 남은 상태에서 stack 생성이 실패하면 같은 이름의 secret이 재배포를 막는다. 실제 값을 아직 넣기 전인 빈 placeholder만 사용자가 명시적으로 승인한 뒤 즉시 삭제한다.
+- container release는 시도했지만 API 비정상으로 완료되지 않았고, web release는 실행하지 않았다. origin TLS 인증서와 자동 갱신은 구성 완료됐다.
+
+## 테스트 종료 시점의 미완료·실패 항목
+
+1. 현재 로컬의 인프라 변경을 검토·commit·push하여 GitHub Actions가 동일한 deployment workflow와 script를 사용할 수 있게 한다. 현재 local `main`은 remote보다 앞서 있으며, 추가 변경도 아직 working tree에 있다.
+2. Embed RunPod template image를 인증 적용 `pod_server.py` 버전으로 갱신하지 못했다. 마지막 확인에서 인증 요청과 무인증 요청이 모두 `200`이어서 Bearer 인증 요구사항을 충족하지 못했다.
+3. FastMCP Host allowlist 수정이 포함된 새 versioned MCP image를 build·publish하지 못했다. 그 결과 MCP 자체 health는 통과했지만 API→MCP 요청은 `421`이었고 API가 재시작을 반복했다.
+4. 정상 container release, web release, CloudFront viewer URL, origin health, SSE end-to-end 검증을 완료하지 못했다.
+5. GitHub Actions를 통한 동일 절차 재현, rollback, destroy workflow 검증을 수행하지 못했다.
+
+## 2026-07-29 테스트 종료 및 리소스 폐기
+
+- 사용자가 테스트 종료를 결정했다. 지금까지의 누락·실패를 위에 기록하고, 이후 비용이 발생하는 WorkShield 리소스만 폐기한다.
+- 폐기 대상은 RunPod LLM·Embed Pod, `WorkShieldService` stack의 EC2·CloudFront·S3 등 서비스 리소스, `WorkShieldFoundation` stack의 Elastic IP·EBS·VPC·CloudWatch Log Group 등 foundation 리소스, 그리고 stack 삭제 뒤 보존되는 Secrets Manager secret이다.
+- Secrets Manager secret은 즉시 영구 삭제하지 않고 7일 복구 유예로 삭제 예약한다.
+- GitHub OIDC provider·deploy role, GitHub Environments·GHCR package, DuckDNS record, CDK bootstrap처럼 연결 기반 또는 공유 성격의 리소스는 이번 폐기 범위에서 제외한다. DuckDNS record는 Elastic IP 반환 후 더 이상 유효한 origin을 가리키지 않으므로 재사용 전 반드시 갱신해야 한다.
+- RunPod LLM Pod `zga31ktbiwsu5j`와 Embed Pod `2aa2ny8b7kyog6`에 멱등 삭제 명령을 실행했다. 두 명령 모두 이미 존재하지 않는 Pod로 응답했으며, 최종 `runpodctl pod list` 결과가 빈 목록임을 확인했다.
+- `WorkShieldService`를 먼저 삭제하고 완료를 기다린 뒤 `WorkShieldFoundation`을 삭제했다. 두 stack 모두 더 이상 조회되지 않는다.
+- 삭제 후 실행·정지 상태 EC2는 없고, Elastic IP `eipalloc-0f14dde9d400e796f`, CloudFront distribution `E1NGL2RMJYFTTW`, web bucket `workshieldservice-webbucket12880f5b-kdtscsxdlwa1`, WorkShield EBS volume은 모두 `NotFound` 또는 빈 목록으로 확인됐다. `/workshield/prod` SSM parameter와 WorkShield NAT Gateway도 남지 않았다.
+- Resource Groups Tagging API에는 삭제된 EC2 `i-06acbf8835c342dcb`와 EBS volume의 과거 tag index가 남아 있었지만, 직접 조회 결과 EC2는 `terminated`, 두 EBS volume은 `NotFound`여서 과금 가능한 실행·저장 리소스가 아니다.
+- stack 보존 정책으로 남은 Secrets Manager secret 중 테스트용 `/workshield/prod/vllm`, `/workshield/prod/embed`, `/workshield/prod/origin-header`는 7일 복구 유예로 삭제 예약했다. 이어서 사용자의 명시적 승인에 따라 외부 서비스 자격정보인 `/workshield/prod/law`, `/workshield/prod/duckdns`도 같은 방식으로 삭제 예약했다. 다섯 secret의 예정 삭제일은 `2026-08-05`다.
+- 공유 CDK bootstrap은 유지했다. ECR bootstrap repository는 image `0`개이고, S3 bootstrap bucket에는 CDK asset `59,401` bytes가 남아 있어 소액 저장 비용이 발생할 수 있다.
+- GitHub OIDC provider·deploy role, GitHub Environments·GHCR public package와 DuckDNS record는 그대로 남겼다. DuckDNS는 반환된 `43.200.136.32`를 계속 가리킬 수 있으므로 현재 운영 endpoint로 사용하면 안 된다.
+
+DuckDNS는 Route 53 hosted zone을 사용하지 않으며, `workshield.duckdns.org`은 CloudFront의 viewer custom domain이 아니라 CloudFront→EC2 origin TLS domain이다.
 
 ## 공식 참고
 

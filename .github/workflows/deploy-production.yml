@@ -86,8 +86,6 @@ jobs:
       AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
       AWS_AVAILABILITY_ZONE: ${{ vars.AWS_AVAILABILITY_ZONE }}
       ORIGIN_DOMAIN: ${{ vars.ORIGIN_DOMAIN }}
-      HOSTED_ZONE_ID: ${{ vars.HOSTED_ZONE_ID }}
-      HOSTED_ZONE_NAME: ${{ vars.HOSTED_ZONE_NAME }}
       CLOUDFRONT_ORIGIN_PREFIX_LIST_ID: ${{ vars.CLOUDFRONT_ORIGIN_PREFIX_LIST_ID }}
       NGINX_IMAGE: ${{ vars.NGINX_IMAGE }}
       RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
@@ -105,8 +103,6 @@ jobs:
           test -n "$AWS_ACCOUNT_ID"
           test -n "$AWS_AVAILABILITY_ZONE"
           test -n "$ORIGIN_DOMAIN"
-          test -n "$HOSTED_ZONE_ID"
-          test -n "$HOSTED_ZONE_NAME"
           test -n "$CLOUDFRONT_ORIGIN_PREFIX_LIST_ID"
           test -n "$NGINX_IMAGE"
           test -n "$RUNPOD_API_KEY"
@@ -134,8 +130,6 @@ jobs:
             --region "$AWS_REGION" \
             --availability-zone "$AWS_AVAILABILITY_ZONE" \
             --origin-domain "$ORIGIN_DOMAIN" \
-            --hosted-zone-id "$HOSTED_ZONE_ID" \
-            --hosted-zone-name "$HOSTED_ZONE_NAME" \
             --cloudfront-prefix-list-id "$CLOUDFRONT_ORIGIN_PREFIX_LIST_ID"
       - name: Deploy foundation stack and verify runtime secret bootstrap
         working-directory: deploy/aws/iac

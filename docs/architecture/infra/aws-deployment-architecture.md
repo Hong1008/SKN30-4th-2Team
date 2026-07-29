@@ -68,7 +68,7 @@ response timeout보다 짧은 주기의 heartbeat를 유지한다.
 ### 네트워크
 
 - EC2에는 고정 Elastic IP를 연결한다.
-- origin 전용 DNS 이름을 Elastic IP로 연결한다.
+- DuckDNS origin 이름(`workshield.duckdns.org`)을 Elastic IP로 연결한다.
 - security group의 443 inbound는 AWS managed prefix list
   `com.amazonaws.global.cloudfront.origin-facing`에서만 허용한다.
 - SSH 22 inbound는 열지 않는다.
@@ -86,7 +86,7 @@ origin domain과 일치하는 공인 인증서를 설치하고 origin protocol p
 `HTTPS only`로 설정한다.
 
 ALB를 사용하지 않으므로 ACM public certificate를 Nginx에 직접 연결할 수
-없다. Route 53 DNS-01과 Certbot 등으로 인증서를 발급하고 다음 경로를
+없다. DuckDNS TXT API를 이용한 DNS-01으로 인증서를 발급하고 다음 경로를
 암호화된 EBS에 보관한다.
 
 ```text
@@ -223,7 +223,7 @@ CDK stack은 secret 값을 CloudFormation output, tag, context 또는 로그에
 | --- | --- | --- |
 | GitHub deploy role | GitHub OIDC | CDK deploy, S3 web, CloudFront invalidation, SSM command |
 | CloudFormation execution role | CloudFormation | 선언된 WorkShield AWS 리소스 생성·변경 |
-| EC2 instance role | EC2 | SSM, CloudWatch, 지정 secret·parameter 읽기, Route 53 DNS-01 |
+| EC2 instance role | EC2 | SSM, CloudWatch, 지정 secret·parameter 읽기 |
 
 GitHub OIDC trust는 실제 배포 저장소와 `production` Environment로 제한한다.
 저장소나 Environment 전체 wildcard는 사용하지 않는다.
