@@ -28,6 +28,7 @@ from app.domains.reviews.context import (
     match_data,
     standard_clause,
     standard_clause_id,
+    standard_contract_label,
 )
 from app.domains.reviews.domain import Review, ReviewState
 from app.domains.suggestions.schemas import (
@@ -127,6 +128,9 @@ def _response_sources(
                 display_label=clause_display_label(
                     standard.get("text"),
                     standard.get("title"),
+                ),
+                standard_contract_label=standard_contract_label(
+                    standard.get("contract_type")
                 ),
             )
         )

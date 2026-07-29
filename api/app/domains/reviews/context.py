@@ -8,6 +8,20 @@ from typing import Any
 ARTICLE_HEADING_PATTERN = re.compile(
     r"제\s*(\d+)\s*조(?:\s*[（(]\s*([^）)\n]+)\s*[）)])?"
 )
+STANDARD_CONTRACT_LABELS = {
+    "SW_FREELANCE": "SW 프리랜서 용역 표준계약서",
+    "SI_SUBCONTRACT": "SI 하도급 표준계약서",
+    "SM_SUBCONTRACT": "SM 하도급 표준계약서",
+}
+
+
+def standard_contract_label(contract_type: object) -> str:
+    """내부 계약 유형을 파일명과 무관한 안전한 사용자 표시명으로 변환한다."""
+    return (
+        STANDARD_CONTRACT_LABELS.get(contract_type, "표준계약서")
+        if isinstance(contract_type, str)
+        else "표준계약서"
+    )
 
 
 def clause_display_label(text: object, title: object = None) -> str | None:

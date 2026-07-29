@@ -65,7 +65,7 @@ export default function ClauseDetailScreen({ clause, reviewId, onBack, onChatbot
   }
 
   const createSuggestion = async () => {
-    if (!reviewId || clause.matchStatus !== 'CANDIDATE_SELECTED' || !clause.standardClauseId) return
+    if (!reviewId || clause.matchStatus !== 'CANDIDATE_SELECTED' || !clause.standardText) return
     setLoadingSuggestion(true)
     setSuggestionError('')
     setSuggestion(null)
@@ -94,7 +94,7 @@ export default function ClauseDetailScreen({ clause, reviewId, onBack, onChatbot
     clause.status,
   )
   const canCreateSuggestion = clause.matchStatus === 'CANDIDATE_SELECTED'
-    && Boolean(clause.standardClauseId && clause.standardText)
+    && Boolean(clause.standardText)
   const suggestionInputFields = suggestion
     ? Array.from(new Map<string, string>([
         ...suggestion.required_confirmations.map(item => [item.field, item.placeholder] as [string, string]),
@@ -167,10 +167,9 @@ export default function ClauseDetailScreen({ clause, reviewId, onBack, onChatbot
           <pre className="flex-1 whitespace-pre-wrap break-words px-5 py-5 font-sans text-sm leading-7 text-slate-800">
             {clause.standardText || '매칭된 표준 조항이 없습니다.'}
           </pre>
-          {(clause.standardVersion || clause.standardSource) && (
+          {clause.standardContractLabel && (
             <div className="border-t border-blue-100 px-5 py-3 text-xs leading-5 text-slate-500">
-              {clause.standardVersion && <p>버전: {clause.standardVersion}</p>}
-              {clause.standardSource && <p>출처: {clause.standardSource}</p>}
+              <p>{clause.standardContractLabel}</p>
             </div>
           )}
         </div>
@@ -329,7 +328,7 @@ export default function ClauseDetailScreen({ clause, reviewId, onBack, onChatbot
               <p className="font-semibold text-slate-600">참고 출처</p>
               {suggestion.sources.map((source, index) => {
                 const prefix = source.type === 'USER_CLAUSE' ? '사용자 조항'
-                  : source.type === 'STANDARD_CLAUSE' ? '표준조항'
+                  : source.type === 'STANDARD_CLAUSE' ? source.standard_contract_label || '표준계약서'
                     : '법령 근거'
                 const label = source.display_label
                   || [source.law_name, source.article].filter(Boolean).join(' ')

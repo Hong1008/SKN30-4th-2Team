@@ -38,6 +38,10 @@ class SuggestionSource(BaseModel):
     type: SuggestionSourceType = Field(description="출처 유형")
     id: str = Field(description="검증에 사용하는 내부 출처 식별자")
     display_label: str | None = Field(default=None, description="사용자용 출처 명칭")
+    standard_contract_label: str | None = Field(
+        default=None,
+        description="표준조항 출처의 사용자용 표준계약서 명칭",
+    )
     law_name: str | None = Field(default=None, description="법령 명칭")
     article: str | None = Field(default=None, description="법령 조항 번호")
     source_url: str | None = Field(default=None, description="검증된 법령 원문 URL")

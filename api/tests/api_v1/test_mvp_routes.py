@@ -290,6 +290,15 @@ async def test_full_mvp_flow_and_browser_isolation(tmp_path: Path) -> None:
             "code": "LIABILITY",
             "label": "LIABILITY",
         }
+        assert clause_result["match"]["standard"][
+            "standard_contract_label"
+        ] == "SW 프리랜서 용역 표준계약서"
+        assert set(clause_result["match"]["standard"]) == {
+            "standard_contract_label",
+            "category",
+            "title",
+            "text",
+        }
         assert "score" not in clause_result["match"]
         assert "result" not in result_data
         grounding = await owner.get(

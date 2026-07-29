@@ -27,6 +27,11 @@ describe("챗봇 답변 출처", () => {
           type: "USER_CLAUSE",
           id: "uc_rev_chat_1",
           display_label: "제1조 목적 및 업무 범위",
+        }, {
+          type: "STANDARD_CLAUSE",
+          id: "std_scope_1",
+          display_label: "제1조 업무 범위",
+          standard_contract_label: "SW 프리랜서 용역 표준계약서",
         }],
         limitations: [],
         tool_status: "NOT_REQUESTED",
@@ -50,7 +55,13 @@ describe("챗봇 답변 출처", () => {
     expect(
       await screen.findByText("사용자 조항 · 제1조 목적 및 업무 범위"),
     ).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        "SW 프리랜서 용역 표준계약서 · 제1조 업무 범위",
+      ),
+    ).toBeInTheDocument()
     expect(screen.queryByText(/uc_rev_chat_1/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/std_scope_1/)).not.toBeInTheDocument()
   })
 
   it("검증된 법령 출처 URL을 새 창 링크로 표시한다", async () => {

@@ -83,7 +83,7 @@ export default function ChatbotScreen({ reviewId, focusClauseId, focusClauseName
           type: source.type,
           sourceUrl: source.source_url,
           label: source.type === 'USER_CLAUSE' ? ['사용자 조항', source.display_label].filter(Boolean).join(' · ')
-            : source.type === 'STANDARD_CLAUSE' ? ['표준조항', source.display_label].filter(Boolean).join(' · ')
+            : source.type === 'STANDARD_CLAUSE' ? [source.standard_contract_label || '표준계약서', source.display_label].filter(Boolean).join(' · ')
               : source.display_label || [source.law_name, source.article].filter(Boolean).join(' ') || '법령 근거',
         })),
       }])

@@ -566,6 +566,9 @@ async def test_backend_resolves_compact_source_keys_to_actual_ids() -> None:
         "uc_rev_chat_1",
         "std_liability_1",
     ]
+    assert response.sources[1].standard_contract_label == (
+        "SW 프리랜서 용역 표준계약서"
+    )
     messages = model.runnable.prompts[0]
     context = json.loads(str(messages[1].content).split("\n", 1)[1])
     assert context["current_clause_context"]["source_key"] == "SRC_USER_1"

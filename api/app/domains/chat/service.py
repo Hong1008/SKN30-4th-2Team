@@ -41,6 +41,7 @@ from app.domains.reviews.context import (
     standard_clause,
     standard_clause_id,
     source_registry,
+    standard_contract_label,
     user_clause_id,
 )
 from app.domains.reviews.domain import Review, ReviewState
@@ -777,6 +778,28 @@ def _source_display_labels(
     return labels
 
 
+def _source_standard_contract_labels(
+    result: dict[str, object],
+) -> dict[str, str]:
+    labels: dict[str, str] = {}
+    candidates = clause_results(result)
+    missing = result.get("missing_standard_clauses")
+    if isinstance(missing, list):
+        candidates.extend(item for item in missing if isinstance(item, dict))
+    for item in candidates:
+        standard = standard_clause(item)
+        standard_id = standard_clause_id(item)
+        if standard is None or standard_id is None:
+            continue
+        raw_contract_type = standard.get("contract_type")
+        if not isinstance(raw_contract_type, str):
+            raw_contract_type = result.get("contract_type")
+        labels[standard_id] = standard_contract_label(
+            raw_contract_type
+        )
+    return labels
+
+
 def _required_source_ids(selection: ClauseSelection) -> set[str]:
     """근거 일관성 검증에는 직접 선별한 사용자/누락 표준조항만 사용한다."""
     if not selection.confident or selection.whole_review:
@@ -1005,6 +1028,7 @@ async def answer_review_question(
         return _invalid_response(review, "EMPTY_OUTPUT")
 
     source_labels = _source_display_labels(review.result)
+    standard_contract_labels = _source_standard_contract_labels(review.result)
     resolved_sources: list[ChatSource] = []
     for source in output.sources:
         mapped = source_map.get(source.id or "")
@@ -1029,6 +1053,7 @@ async def answer_review_question(
                     "law_name": law_source.law_name,
                     "article": law_source.article,
                     "source_url": law_source.source_url,
+                    "standard_contract_label": None,
                 }
             )
         elif not source.id or (
@@ -1040,6 +1065,11 @@ async def answer_review_question(
                 update={
                     "display_label": source_labels.get(
                         (str(source.type), source.id)
+                    ),
+                    "standard_contract_label": (
+                        standard_contract_labels.get(source.id)
+                        if source.type == "STANDARD_CLAUSE"
+                        else None
                     ),
                     "source_url": None,
                 }
@@ -1065,6 +1095,11 @@ async def answer_review_question(
                 type=source_type,
                 id=actual_id,
                 display_label=source_labels.get((source_type, actual_id)),
+                standard_contract_label=(
+                    standard_contract_labels.get(actual_id)
+                    if source_type == "STANDARD_CLAUSE"
+                    else None
+                ),
             )
         )
         cited_sources.add((source_type, actual_id))
@@ -1116,6 +1151,11 @@ async def answer_review_question(
                     type=source_type,
                     id=actual_id,
                     display_label=source_labels.get((source_type, actual_id)),
+                    standard_contract_label=(
+                        standard_contract_labels.get(actual_id)
+                        if source_type == "STANDARD_CLAUSE"
+                        else None
+                    ),
                 )
             )
     refused = output.outcome != "ANSWERED"

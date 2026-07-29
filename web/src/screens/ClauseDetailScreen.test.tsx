@@ -29,7 +29,7 @@ const clause: ClauseResult = {
   summary: "표준 대응 후보가 확인됐습니다.",
   standardTitle: "손해배상",
   standardText: "귀책사유가 있는 당사자는 발생한 손해를 배상한다.",
-  standardClauseId: "std_liability_1",
+  standardContractLabel: "SW 프리랜서 용역 표준계약서",
   matchStatus: "CANDIDATE_SELECTED",
 }
 
@@ -59,6 +59,7 @@ describe("협의문구 출처", () => {
             type: "STANDARD_CLAUSE",
             id: "std_liability_1",
             display_label: "제18조 손해배상",
+            standard_contract_label: "SW 프리랜서 용역 표준계약서",
           },
           {
             type: "LAW",
@@ -89,7 +90,11 @@ describe("협의문구 출처", () => {
 
     expect(await screen.findByText("사용자 조항 · 제1조 손해배상"))
       .toBeInTheDocument()
-    expect(screen.getByText("표준조항 · 제18조 손해배상"))
+    expect(
+      screen.getByText(
+        "SW 프리랜서 용역 표준계약서 · 제18조 손해배상",
+      ),
+    )
       .toBeInTheDocument()
     expect(screen.getByRole("link", { name: "법령 근거 · 민법 제390조" }))
       .toHaveAttribute(

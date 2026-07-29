@@ -2048,6 +2048,18 @@
             "title": "Display Label",
             "description": "내부 식별자를 노출하지 않는 사용자용 출처 명칭"
           },
+          "standard_contract_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Standard Contract Label",
+            "description": "표준조항 출처의 사용자용 표준계약서 명칭"
+          },
           "law_name": {
             "anyOf": [
               {
@@ -3481,15 +3493,10 @@
       },
       "ReviewResultStandardClause": {
         "properties": {
-          "clause_id": {
+          "standard_contract_label": {
             "type": "string",
-            "title": "Clause Id",
-            "description": "표준조항 식별자"
-          },
-          "contract_type": {
-            "type": "string",
-            "title": "Contract Type",
-            "description": "계약 유형 코드"
+            "title": "Standard Contract Label",
+            "description": "사용자용 표준계약서 명칭"
           },
           "category": {
             "$ref": "#/components/schemas/CodeLabel",
@@ -3504,30 +3511,17 @@
             "type": "string",
             "title": "Text",
             "description": "표준조항 본문"
-          },
-          "source": {
-            "type": "string",
-            "title": "Source",
-            "description": "표준조항 출처"
-          },
-          "version": {
-            "type": "string",
-            "title": "Version",
-            "description": "표준조항 버전"
           }
         },
         "type": "object",
         "required": [
-          "clause_id",
-          "contract_type",
+          "standard_contract_label",
           "category",
           "title",
-          "text",
-          "source",
-          "version"
+          "text"
         ],
         "title": "ReviewResultStandardClause",
-        "description": "결과 화면에 노출하는 표준조항과 출처."
+        "description": "내부 출처 메타데이터를 제외한 사용자용 표준조항."
       },
       "ReviewResultsResponse": {
         "properties": {
@@ -4079,6 +4073,18 @@
             ],
             "title": "Display Label",
             "description": "사용자용 출처 명칭"
+          },
+          "standard_contract_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Standard Contract Label",
+            "description": "표준조항 출처의 사용자용 표준계약서 명칭"
           },
           "law_name": {
             "anyOf": [
