@@ -37,7 +37,7 @@ just deploy_llm_pod EXAONE-3.5-7.8B-Instruct "NVIDIA A40"
 스크립트를 직접 실행할 수도 있습니다.
 
 ```bash
-python3 deploy/deploy_llm_pod.py \
+python3 deploy/llm_pod/deploy_llm_pod.py \
   --model qwen3.5-9B-FP8-dynamic \
   --gpu "NVIDIA A40"
 ```
@@ -57,14 +57,14 @@ VLLM_BASE_URL='https://<pod-id>-8000.proxy.runpod.net'
 VLLM_API_KEY='<자동 생성된 키>'
 ```
 
-API 서버에서 vLLM을 사용하려면 `api/.env`의 `LLM_PROVIDER=vllm` 설정과 `LLM_MODEL`도 해당 Pod가 제공하는 모델에 맞게 설정합니다. 자세한 API 설정은 [api/README.md](../api/README.md)를 참고하세요.
+API 서버에서 vLLM을 사용하려면 `api/.env`의 `LLM_PROVIDER=vllm` 설정과 `LLM_MODEL`도 해당 Pod가 제공하는 모델에 맞게 설정합니다. 자세한 API 설정은 [api/README.md](../../api/README.md)를 참고하세요.
 
 ### 사용자 정의 vLLM 실행 인자
 
 프리셋 대신 vLLM Docker 실행 인자를 직접 넘기려면 `--custom-args`를 사용합니다. 이 경우 `--model` 값은 사용되지 않습니다.
 
 ```bash
-python3 deploy/deploy_llm_pod.py \
+python3 deploy/llm_pod/deploy_llm_pod.py \
   --gpu "NVIDIA A40" \
   --custom-args "Qwen/Qwen2.5-7B-Instruct --host 0.0.0.0 --port 8000"
 ```

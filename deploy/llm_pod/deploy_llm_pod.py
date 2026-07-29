@@ -84,7 +84,7 @@ def update_env_file(env_path: Path, updates: dict):
     env_path.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
 
 def main():
-    repo_root = Path(__file__).resolve().parent.parent
+    repo_root = Path(__file__).resolve().parent.parent.parent
     env_file = repo_root / "api" / ".env"
 
     parser = argparse.ArgumentParser(description="Deploy RunPod vLLM Pod with model presets")

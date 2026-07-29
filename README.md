@@ -99,4 +99,4 @@ uv run python scripts/generate_openapi.py
 
 - **MCP 서버 세부 가이드**: [mcp/README.md](mcp/README.md) (FastMCP 도구 목록, 파이프라인 검토 규칙, 품질 기준)
 - **API 서버 세부 가이드**: [api/README.md](api/README.md) (FastAPI 구조, LLM Provider 설정, MCP Lifespan 연동)
-- **RunPod vLLM Pod 배포 가이드**: [deploy/README.md](deploy/README.md) (Pod 생성·삭제와 `api/.env` 연결 설정)
+- **RunPod vLLM Pod 배포 가이드**: [deploy/llm_pod/README.md](deploy/llm_pod/README.md) (Pod 생성·삭제와 `api/.env` 연결 설정)

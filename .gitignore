@@ -15,3 +15,12 @@ api/**/*.py[cod]
 api/data/
 .test-tmp/
 .tmp/
+
+# AWS 배포 도구의 로컬 산출물·운영 전용 설정과 인증서
+deploy/aws/iac/cdk.out/
+deploy/aws/iac/.venv/
+deploy/aws/iac/node_modules/
+deploy/aws/config/prod.json
+deploy/aws/env/*.env
+deploy/aws/env/*.local
+deploy/aws/certificates/

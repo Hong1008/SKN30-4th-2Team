@@ -42,7 +42,7 @@ def remove_env_keys(env_path: Path, keys_to_remove: list):
     env_path.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
 
 def main():
-    repo_root = Path(__file__).resolve().parent.parent
+    repo_root = Path(__file__).resolve().parent.parent.parent
     env_file = repo_root / "api" / ".env"
 
     print("=" * 60)

@@ -1,0 +1,12 @@
+{
+  "name": "workshield-aws-cdk",
+  "private": true,
+  "version": "0.1.0",
+  "description": "WorkShield AWS CDK CLI version pin",
+  "devDependencies": {
+    "aws-cdk": "2.169.0"
+  },
+  "scripts": {
+    "cdk": "cdk"
+  }
+}
