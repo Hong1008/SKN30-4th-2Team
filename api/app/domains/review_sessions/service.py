@@ -27,6 +27,10 @@ from app.domains.review_sessions.domain import (
     SelectionSource,
 )
 from app.domains.review_sessions.file_validation import validate_document_content
+from app.domains.review_sessions.policy import (
+    DEFAULT_REVIEW_SESSION_POLICY,
+    ReviewSessionPolicy,
+)
 from app.domains.review_sessions.repository import SqlAlchemyReviewSessionRepository
 from app.domains.review_sessions.scope_normalization import normalize_scope_result
 from app.core.security.session_tokens import issue_access_token
@@ -43,7 +47,7 @@ MVP_CONTRACT_TYPES = {
 def _validate_upload(
     file_name: str | None,
     content: bytes,
-    settings: Settings,
+    policy: ReviewSessionPolicy = DEFAULT_REVIEW_SESSION_POLICY,
 ) -> str:
     """업로드 전 확장자·크기·실제 형식을 검증한다."""
     if not file_name or "." not in file_name:
@@ -53,13 +57,13 @@ def _validate_upload(
             next_action="REUPLOAD",
         )
     extension = file_name.rsplit(".", 1)[1].lower()
-    if extension not in settings.supported_file_extensions:
+    if extension not in policy.supported_file_extensions:
         raise UnsupportedMediaTypeError(
             code="UNSUPPORTED_FILE_TYPE",
             message="지원하지 않는 파일 형식입니다.",
             next_action="REUPLOAD",
         )
-    if len(content) > settings.max_upload_size_bytes:
+    if len(content) > policy.max_upload_size_bytes:
         raise PayloadTooLargeError(
             code="FILE_TOO_LARGE",
             message="파일 크기가 제한을 초과했습니다.",
@@ -171,11 +175,12 @@ async def create_review_session(
     storage: FileStorage,
     runtime: WorkShieldMCPRuntime,
     settings: Settings,
+    policy: ReviewSessionPolicy = DEFAULT_REVIEW_SESSION_POLICY,
     file_name: str | None,
     content: bytes,
 ) -> tuple[ReviewSession, str]:
     """파일을 저장하고 범위 판별 결과와 익명 접근 자격을 만든다."""
-    extension = _validate_upload(file_name, content, settings)
+    extension = _validate_upload(file_name, content, policy)
     assert file_name is not None
     storage_key = storage.save(BytesIO(content), extension=extension)
     try:
@@ -205,7 +210,7 @@ async def create_review_session(
             storage_key=storage_key,
             created_at=now,
             updated_at=now,
-            expires_at=now + timedelta(seconds=settings.session_ttl_seconds),
+            expires_at=now + timedelta(seconds=policy.session_ttl_seconds),
             scope_status=scope_status,
             scope_result=scope_result,
             suggested_contract_type=scope_result.get("suggested_contract_type"),

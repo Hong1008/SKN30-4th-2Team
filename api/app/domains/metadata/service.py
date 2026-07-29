@@ -9,8 +9,8 @@ from typing import Any
 from fastapi import Request
 
 from app.core.common.errors import ExternalServiceError
-from app.config import Settings
 from app.core.llm.mcp.types import WorkShieldMCPRuntime
+from app.domains.metadata.policy import DEFAULT_METADATA_POLICY, MetadataPolicy
 from app.domains.metadata.schemas import (
     CategoryMetadata,
     FeatureFlags,
@@ -26,6 +26,10 @@ from app.domains.review_sessions.domain import (
     ReviewSessionState,
     ScopeStatus,
     SelectionSource,
+)
+from app.domains.review_sessions.policy import (
+    DEFAULT_REVIEW_SESSION_POLICY,
+    ReviewSessionPolicy,
 )
 from app.domains.review_sessions.service import MVP_CONTRACT_TYPES, _tool_payload
 from app.domains.reviews.domain import ReviewState
@@ -242,7 +246,8 @@ def _etag(payload: MetadataResponse) -> str:
 async def get_metadata(
     request: Request,
     runtime: WorkShieldMCPRuntime,
-    settings: Settings,
+    review_session_policy: ReviewSessionPolicy = DEFAULT_REVIEW_SESSION_POLICY,
+    metadata_policy: MetadataPolicy = DEFAULT_METADATA_POLICY,
 ) -> tuple[MetadataResponse, str, bool]:
     """유효 캐시를 우선 사용하고 MCP 장애 시 마지막 캐시를 제공한다."""
     now = datetime.now(UTC)
@@ -334,8 +339,8 @@ async def get_metadata(
                 "CONTACT_SUPPORT",
             ],
             file_policy=FilePolicy(
-                extensions=list(settings.supported_file_extensions),
-                max_size_bytes=settings.max_upload_size_bytes,
+                extensions=list(review_session_policy.supported_file_extensions),
+                max_size_bytes=review_session_policy.max_upload_size_bytes,
             ),
             features=FeatureFlags(),
         )
@@ -343,7 +348,8 @@ async def get_metadata(
         request.app.state.metadata_cache = {
             "payload": payload,
             "etag": etag,
-            "expires_at": now + timedelta(seconds=settings.metadata_cache_ttl_seconds),
+            "expires_at": now
+            + timedelta(seconds=metadata_policy.cache_ttl_seconds),
         }
         return payload, etag, False
     except Exception as error:

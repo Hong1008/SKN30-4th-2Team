@@ -6,6 +6,7 @@ import logging
 
 from langchain_core.language_models.chat_models import BaseChatModel
 
+from app.config import Settings
 from app.domains.chat.schemas import (
     ChatSource,
     ChatRequest,
@@ -18,7 +19,7 @@ from app.core.common.errors import (
     ExternalServiceTimeoutError,
 )
 from app.core.common.logging import log_event
-from app.config import Settings
+from app.core.llm.policy import DEFAULT_LLM_POLICY, LLMPolicy
 from app.domains.grounding.service import get_review_grounding
 from app.domains.grounding.schemas import (
     GROUNDING_STATUS_GUIDANCE,
@@ -97,6 +98,7 @@ async def answer_review_question(
     runtime: WorkShieldMCPRuntime,
     model: BaseChatModel,
     settings: Settings,
+    llm_policy: LLMPolicy = DEFAULT_LLM_POLICY,
 ) -> ChatResponse:
     if review.state is not ReviewState.COMPLETED or not review.result:
         raise ConflictError(
@@ -185,7 +187,7 @@ async def answer_review_question(
         structured = model.with_structured_output(ChatStructuredOutput)
         raw = await asyncio.wait_for(
             structured.ainvoke(prompt),
-            timeout=settings.llm_timeout_seconds,
+            timeout=llm_policy.timeout_seconds,
         )
         output = (
             raw

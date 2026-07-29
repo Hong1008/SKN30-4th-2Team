@@ -49,5 +49,3 @@ async def create_suggestion(
         model=model,
         settings=idem_ctx.settings,
     )
-
-

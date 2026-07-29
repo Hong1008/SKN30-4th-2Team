@@ -55,6 +55,55 @@ Router는 입력 검증, Dependency 주입, Service 호출, API DTO/공통 응�
 사용자 파일은 `app/core/storage/protocol.py`의 `FileStorage`로만 저장·열기·삭제한다.
 저장 루트 조합이나 `Path.unlink()` 직접 호출은 금지한다.
 
+## Settings와 기능 policy
+
+`app/config.py`의 `Settings`는 배포 환경이 애플리케이션에 제공하는 값만 관리한다.
+기능의 동작 규칙까지 `Settings`에 모으지 않는다.
+
+| 구분 | 위치 | 예 |
+| --- | --- | --- |
+| 비밀값 | `Settings`와 비추적 `.env` 또는 프로세스 환경 변수 | API key |
+| 환경별 접속·실행 정보 | `Settings`와 환경 변수 | DB URL, MCP URL·transport, LLM provider·model·endpoint |
+| 코드 리뷰와 배포로 변경할 기능 규칙 | 해당 도메인의 `policy.py` | 업로드 제한, 세션 TTL, LLM 생성·timeout, 정리 주기 |
+
+기능 policy는 Pydantic `BaseSettings`가 아닌 표준 라이브러리의
+`@dataclass(frozen=True, slots=True)`로 정의한다. 기본 policy 객체는 변경할 수
+없어야 하며 사용하는 Service, provider, scheduler 또는 lifespan 함수가
+매개변수로 받는다. 매개변수 기본값으로 운영 policy를 제공하고 테스트에서는
+작은 timeout·TTL·크기 제한을 가진 policy 객체를 주입한다. 환경 변수를
+변경하거나 모듈 전역 값을 monkeypatch해 기능 규칙을 시험하지 않는다.
+
+```python
+@dataclass(frozen=True, slots=True)
+class UploadPolicy:
+    max_size_bytes: int = 10 * 1024 * 1024
+    supported_extensions: tuple[str, ...] = ("hwp", "hwpx", "pdf", "docx")
+
+
+DEFAULT_UPLOAD_POLICY = UploadPolicy()
+
+
+def validate_upload(
+    content: bytes,
+    policy: UploadPolicy = DEFAULT_UPLOAD_POLICY,
+) -> None:
+    ...
+```
+
+하나의 `config_defaults.py`에 서로 다른 도메인의 값을 모으지 않는다. LLM 정책은
+`core/llm/policy.py`, 파일·세션 정책은 해당 domain의 `policy.py`, 저장소 정리
+정책은 `core/storage/policy.py`처럼 소비하는 코드 가까이에 둔다. 외부 접속
+timeout과 기능 수행 timeout도 구분한다. MCP client 연결·read timeout은
+환경별 네트워크 설정이므로 `Settings`에 두고, LLM 응답 생성 제한은 기능
+policy로 둔다.
+
+운영 근거가 확인되어 특정 policy를 환경별로 조정해야 할 때만 Settings로
+승격한다. 여러 값을 승격한다면 `settings.llm.timeout_seconds`처럼 중첩 모델로
+구분하고 Pydantic Settings의 `env_nested_delimiter="__"`를 사용한다. 환경 변수
+이름에는 점을 사용하지 않고 `LLM__TIMEOUT_SECONDS`처럼 이중 밑줄을 사용한다.
+승격한 값과 기본 policy의 병합 위치, 검증 규칙, 재시작 적용 여부를 ADR에
+기록한다.
+
 ## 멱등성(Idempotency)
 
 재요청이 작업을 중복 생성·실행하지 않도록 `Idempotency-Key`와

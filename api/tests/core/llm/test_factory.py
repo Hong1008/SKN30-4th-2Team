@@ -7,6 +7,7 @@ from pydantic import SecretStr
 
 from app.config import Settings
 from app.core.llm import LLMConfigurationError, ReasoningMode, create_chat_model
+from app.core.llm.policy import LLMPolicy
 
 
 def _settings(provider: str, **overrides: object) -> Settings:
@@ -28,10 +29,14 @@ def _settings(provider: str, **overrides: object) -> Settings:
 
 def test_factory_creates_selected_provider(monkeypatch: pytest.MonkeyPatch) -> None:
     expected = object()
-    calls: list[tuple[Settings, ReasoningMode]] = []
+    calls: list[tuple[Settings, ReasoningMode, LLMPolicy]] = []
 
-    def fake_builder(settings: Settings, reasoning: ReasoningMode) -> object:
-        calls.append((settings, reasoning))
+    def fake_builder(
+        settings: Settings,
+        reasoning: ReasoningMode,
+        policy: LLMPolicy,
+    ) -> object:
+        calls.append((settings, reasoning, policy))
         return expected
 
     monkeypatch.setattr("app.core.llm.factory.PROVIDER_BUILDERS", {"gemini": fake_builder})
@@ -40,7 +45,7 @@ def test_factory_creates_selected_provider(monkeypatch: pytest.MonkeyPatch) -> N
     result = create_chat_model(settings)
 
     assert result is expected
-    assert calls == [(settings, ReasoningMode.OFF)]
+    assert calls == [(settings, ReasoningMode.OFF, LLMPolicy())]
 
 
 def test_factory_requires_model_name() -> None:
@@ -108,7 +113,7 @@ def test_factory_returns_langchain_model_from_builder(
     model = SimpleNamespace(model="configured-model")
     monkeypatch.setattr(
         "app.core.llm.factory.PROVIDER_BUILDERS",
-        {"ollama": lambda settings, reasoning: model},
+        {"ollama": lambda settings, reasoning, policy: model},
     )
 
     assert create_chat_model(_settings("ollama")) is model

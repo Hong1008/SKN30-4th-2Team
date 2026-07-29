@@ -49,5 +49,3 @@ async def chat_message(
         model=model,
         settings=idem_ctx.settings,
     )
-
-

@@ -96,5 +96,5 @@ uv run ruff check app main.py tests
 ## 8. 참조 문서 및 스킬
 
 - **WorkShield MCP 스펙 및 서버 연동**: 프로젝트의 `workshield-mcp` 스킬 참조 (`.agents/skills/workshield-mcp/SKILL.md`)
-- **API 결정 기록**: [docs/adr/0723-api-setting.md](../docs/adr/0723-api-setting.md)
-- **요구사항 정의서**: [docs/requirements/요구사항.json](../docs/requirements/요구사항.json)
+- **요구사항 정의서**: [docs/requirements/요구사항.md](../docs/requirements/요구사항.md)
+- **백엔드 개발 가이드**: [docs/api/backend-development-guide.md](../docs/api/backend-development-guide.md)

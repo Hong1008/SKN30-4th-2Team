@@ -4,7 +4,6 @@ from datetime import UTC, datetime
 
 import pytest
 
-from app.config import Settings
 from app.core.common.errors import ConflictError
 from app.core.db.database import Database
 from app.domains.review_sessions.repository import SqlAlchemyReviewSessionRepository
@@ -43,11 +42,6 @@ def test_retry_creates_new_review_and_blocks_second_active_retry(
             db_session,
             source,
             idempotency_key="retry-one",
-            settings=Settings(
-                app_env="local",
-                llm_provider="ollama",
-                llm_model="test",
-            ),
         )
         db_session.commit()
 
@@ -63,11 +57,6 @@ def test_retry_creates_new_review_and_blocks_second_active_retry(
                 db_session,
                 source,
                 idempotency_key="retry-two",
-                settings=Settings(
-                    app_env="local",
-                    llm_provider="ollama",
-                    llm_model="test",
-                ),
             )
         assert error.value.code == "REVIEW_ALREADY_RUNNING"
 
@@ -126,11 +115,6 @@ def test_retry_unique_race_reconciles_same_operation_review(
             request,
             source,
             idempotency_key="same-operation",
-            settings=Settings(
-                app_env="local",
-                llm_provider="ollama",
-                llm_model="test",
-            ),
         )
 
     assert reconciled.id == winner.id

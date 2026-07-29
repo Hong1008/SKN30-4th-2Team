@@ -7,9 +7,12 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
 from app.core.common.errors import ConflictError, ExpiredError
-from app.config import Settings
 from app.domains.review_sessions.activity import touch_session
 from app.domains.review_sessions.domain import ReviewSession, ReviewSessionState
+from app.domains.review_sessions.policy import (
+    DEFAULT_REVIEW_SESSION_POLICY,
+    ReviewSessionPolicy,
+)
 from app.domains.reviews.domain import Review, ReviewState
 from app.domains.reviews.repository import SqlAlchemyReviewRepository
 
@@ -56,7 +59,7 @@ def create_review(
     session: ReviewSession,
     *,
     idempotency_key: str,
-    settings: Settings,
+    policy: ReviewSessionPolicy = DEFAULT_REVIEW_SESSION_POLICY,
 ) -> Review:
     """소유 세션에 대해 중복 없는 검토를 접수한다."""
     _ensure_startable(session)
@@ -81,7 +84,7 @@ def create_review(
         idempotency_key=idempotency_key,
         contract_type=session.selected_contract_type,
         created_at=now,
-        expires_at=now + timedelta(seconds=settings.session_ttl_seconds),
+        expires_at=now + timedelta(seconds=policy.session_ttl_seconds),
     )
     repository.add(entity)
     try:
@@ -101,7 +104,7 @@ def create_review(
     touch_session(
         db_session,
         session,
-        ttl_seconds=settings.session_ttl_seconds,
+        ttl_seconds=policy.session_ttl_seconds,
         now=now,
     )
     return entity
@@ -112,7 +115,7 @@ def retry_review(
     review: Review,
     *,
     idempotency_key: str,
-    settings: Settings,
+    policy: ReviewSessionPolicy = DEFAULT_REVIEW_SESSION_POLICY,
 ) -> Review:
     """재시도 가능한 실패에서 새 review_id를 발급한다."""
     if review.state is not ReviewState.FAILED or not review.error:
@@ -141,7 +144,7 @@ def retry_review(
         idempotency_key=idempotency_key,
         contract_type=review.contract_type,
         created_at=now,
-        expires_at=now + timedelta(seconds=settings.session_ttl_seconds),
+        expires_at=now + timedelta(seconds=policy.session_ttl_seconds),
         retry_of_review_id=review.id,
     )
     repository.add(retried)

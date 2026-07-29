@@ -27,6 +27,7 @@ from app.core.llm.evaluation import (
     resolve_evaluation_fixtures,
 )
 from app.core.llm.factory import create_chat_model
+from app.core.llm.policy import LLMPolicy
 from app.core.llm.provider.vllm import _api_base_url
 from app.domains.reviews.domain import MCPReviewStatus, Review, ReviewState
 from app.domains.suggestions.schemas import SuggestionRequest
@@ -583,10 +584,12 @@ async def _run(args: argparse.Namespace) -> Path:
         app_env="local",
         llm_provider="vllm",
         llm_model=args.model,
-        llm_temperature=0,
-        llm_top_p=1,
-        llm_seed=args.seed,
-        llm_max_completion_tokens=1000,
+    )
+    evaluation_policy = LLMPolicy(
+        temperature=0,
+        top_p=1,
+        seed=args.seed,
+        max_completion_tokens=1000,
     )
     if settings.vllm_base_url is None or settings.vllm_api_key is None:
         raise ValueError("VLLM_BASE_URL과 VLLM_API_KEY가 필요합니다.")
@@ -616,7 +619,9 @@ async def _run(args: argparse.Namespace) -> Path:
         encoding="utf-8",
     )
 
-    model = RecordingChatModel(create_chat_model(settings))
+    model = RecordingChatModel(
+        create_chat_model(settings, policy=evaluation_policy)
+    )
     results: list[dict[str, object]] = []
     started_at = datetime.now(UTC)
     for fixture in fixtures:
@@ -699,10 +704,10 @@ async def _run(args: argparse.Namespace) -> Path:
         "provider": "vllm",
         "vllm_version": version.get("version"),
         "generation": {
-            "temperature": settings.llm_temperature,
-            "top_p": settings.llm_top_p,
-            "seed": settings.llm_seed,
-            "max_completion_tokens": settings.llm_max_completion_tokens,
+            "temperature": evaluation_policy.temperature,
+            "top_p": evaluation_policy.top_p,
+            "seed": evaluation_policy.seed,
+            "max_completion_tokens": evaluation_policy.max_completion_tokens,
             "thinking": False,
             "repetitions": args.repetitions,
             "concurrency": 1,

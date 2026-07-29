@@ -7,9 +7,9 @@ from fastapi import Depends, Security
 from fastapi.security import APIKeyCookie
 
 from app.core.common.errors import ExpiredError, NotFoundError
-from app.config import SettingsDep
 from app.core.db.dependencies import DbSessionDep
 from app.domains.review_sessions.activity import touch_review, touch_session
+from app.domains.review_sessions.dependencies import ReviewSessionPolicyDep
 from app.domains.review_sessions.domain import ReviewSession
 from app.domains.review_sessions.repository import SqlAlchemyReviewSessionRepository
 from app.domains.reviews.domain import Review
@@ -93,7 +93,7 @@ def resolve_owned_review(
 def require_owned_review_session(
     session_id: str,
     db_session: DbSessionDep,
-    settings: SettingsDep,
+    policy: ReviewSessionPolicyDep,
     access_token: SessionCookie = None,
 ) -> ReviewSession:
     """Cookie 토큰이 소유한 미만료 검토 세션만 반환한다."""
@@ -101,7 +101,7 @@ def require_owned_review_session(
     touch_session(
         db_session,
         entity,
-        ttl_seconds=settings.session_ttl_seconds,
+        ttl_seconds=policy.session_ttl_seconds,
     )
     db_session.commit()
     return entity
@@ -116,7 +116,7 @@ OwnedReviewSessionDep = Annotated[
 def require_owned_review(
     review_id: str,
     db_session: DbSessionDep,
-    settings: SettingsDep,
+    policy: ReviewSessionPolicyDep,
     access_token: SessionCookie = None,
 ) -> Review:
     """Cookie 토큰이 소유한 미만료 검토만 반환한다."""
@@ -124,7 +124,7 @@ def require_owned_review(
     entity = touch_review(
         db_session,
         entity,
-        ttl_seconds=settings.session_ttl_seconds,
+        ttl_seconds=policy.session_ttl_seconds,
     )
     db_session.commit()
     return entity

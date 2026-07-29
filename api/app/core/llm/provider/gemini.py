@@ -6,6 +6,7 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 from app.config import Settings
+from app.core.llm.policy import DEFAULT_LLM_POLICY, LLMPolicy
 from app.core.llm.types import LLMConfigurationError, ReasoningMode
 
 
@@ -23,8 +24,10 @@ def _profile(model: BaseChatModel) -> dict[str, Any]:
 def build_gemini_model(
     settings: Settings,
     reasoning: ReasoningMode,
+    policy: LLMPolicy = DEFAULT_LLM_POLICY,
 ) -> BaseChatModel:
     """Gemini/Gemma chat model을 reasoning on/off 계약에 맞춰 생성한다."""
+    del policy
     if settings.gemini_api_key is None:
         raise LLMConfigurationError("GEMINI_API_KEY가 필요합니다.")
     if not settings.llm_model:

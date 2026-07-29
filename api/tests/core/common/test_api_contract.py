@@ -1,6 +1,7 @@
 """공통 API 성공·오류 응답과 안전한 요청 로그 계약을 검증한다."""
 
 import logging
+from types import SimpleNamespace
 from typing import Annotated
 
 import httpx
@@ -149,7 +150,12 @@ async def test_unknown_route_uses_common_error_response() -> None:
 
 async def test_unexpected_error_hides_internal_message(
     caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr(
+        "app.core.common.exception_handlers.get_settings",
+        lambda: SimpleNamespace(app_debug=False),
+    )
     caplog.set_level(logging.ERROR, logger="uvicorn.error")
     transport = httpx.ASGITransport(app=create_contract_test_app())
     async with httpx.AsyncClient(

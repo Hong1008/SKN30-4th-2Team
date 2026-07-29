@@ -6,6 +6,7 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_openai import ChatOpenAI
 
 from app.config import Settings
+from app.core.llm.policy import DEFAULT_LLM_POLICY, LLMPolicy
 from app.core.llm.types import LLMConfigurationError, ReasoningMode
 
 
@@ -32,6 +33,7 @@ def _api_base_url(raw_url: object) -> str:
 def build_vllm_model(
     settings: Settings,
     reasoning: ReasoningMode,
+    policy: LLMPolicy = DEFAULT_LLM_POLICY,
 ) -> BaseChatModel:
     """vLLM Chat Completions 모델을 Qwen thinking 설정과 함께 생성한다."""
     if not settings.llm_model:
@@ -45,11 +47,11 @@ def build_vllm_model(
         model=settings.llm_model,
         api_key=settings.vllm_api_key,
         base_url=_api_base_url(settings.vllm_base_url),
-        timeout=settings.llm_timeout_seconds,
-        temperature=settings.llm_temperature,
-        top_p=settings.llm_top_p,
-        seed=settings.llm_seed,
-        max_completion_tokens=settings.llm_max_completion_tokens,
+        timeout=policy.timeout_seconds,
+        temperature=policy.temperature,
+        top_p=policy.top_p,
+        seed=policy.seed,
+        max_completion_tokens=policy.max_completion_tokens,
         use_responses_api=False,
         extra_body={
             "chat_template_kwargs": {

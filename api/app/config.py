@@ -9,19 +9,11 @@ from typing import Annotated, Literal, cast
 
 from fastapi import Depends
 from pydantic import AnyHttpUrl, Field, SecretStr, field_validator, model_validator
-from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 API_ROOT = Path(__file__).resolve().parent.parent
 Environment = Literal["local", "prod"]
-DEFAULT_SUPPORTED_FILE_EXTENSIONS = (
-    "hwp",
-    "hwpx",
-    "pdf",
-    "docx",
-)
-
-
 class LLMProvider(StrEnum):
     """지원하는 LLM 공급자 식별자."""
 
@@ -86,21 +78,6 @@ class Settings(BaseSettings):
     workshield_mcp_project_dir: Path = API_ROOT.parent / "mcp"
     workshield_mcp_timeout: float = Field(default=30.0, gt=0)
     workshield_mcp_read_timeout: float = Field(default=300.0, gt=0)
-    max_upload_size_bytes: int = Field(default=10 * 1024 * 1024, gt=0)
-    supported_file_extensions: Annotated[tuple[str, ...], NoDecode] = (
-        DEFAULT_SUPPORTED_FILE_EXTENSIONS
-    )
-    temp_upload_dir: Path = Path("data/99_uploads")
-    session_ttl_seconds: int = Field(default=30 * 60, gt=0)
-    expired_tombstone_ttl_seconds: int = Field(default=24 * 60 * 60, gt=0)
-    storage_cleanup_interval_seconds: int = Field(default=60, gt=0)
-    metadata_cache_ttl_seconds: int = Field(default=5 * 60, gt=0)
-    llm_timeout_seconds: float = Field(default=60.0, gt=0)
-    llm_temperature: float = Field(default=0.0, ge=0, le=2)
-    llm_top_p: float = Field(default=1.0, gt=0, le=1)
-    llm_seed: int = 42
-    llm_max_completion_tokens: int = Field(default=512, gt=0, le=1000)
-
     @field_validator("cors_origins", mode="before")
     @classmethod
     def parse_cors_origins(cls, value: str | list[str]) -> list[str]:
@@ -113,27 +90,6 @@ class Settings(BaseSettings):
         ):
             raise ValueError("CORS_ORIGINS는 문자열 JSON 배열이어야 합니다.")
         return parsed
-
-    @field_validator("supported_file_extensions", mode="before")
-    @classmethod
-    def parse_supported_file_extensions(
-        cls, value: str | tuple[str, ...]
-    ) -> tuple[str, ...]:
-        """쉼표 구분 확장자 설정을 점 없는 소문자 튜플로 정규화한다."""
-        raw_extensions = value.split(",") if isinstance(value, str) else value
-        extensions = tuple(
-            extension.strip().lower().removeprefix(".")
-            for extension in raw_extensions
-            if extension.strip().removeprefix(".")
-        )
-        if not extensions:
-            raise ValueError("SUPPORTED_FILE_EXTENSIONS는 비어 있을 수 없습니다.")
-        unsupported = set(extensions) - set(DEFAULT_SUPPORTED_FILE_EXTENSIONS)
-        if unsupported:
-            raise ValueError(
-                "지원 파일 형식은 HWP, HWPX, PDF, DOCX로 제한됩니다."
-            )
-        return extensions
 
     @model_validator(mode="after")
     def validate_production_provider(self) -> "Settings":

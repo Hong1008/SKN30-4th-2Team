@@ -78,7 +78,7 @@ async def test_idempotent_returns_success_response_on_first_call(
         result = await handler(
             request=request,
             db_session=db_session,
-            settings=MagicMock(session_ttl_seconds=3600),
+            settings=MagicMock(),
             session_id="ses_deco",
             idempotency_key="key-001",
         )
@@ -113,7 +113,7 @@ async def test_idempotent_returns_replay_on_duplicate_key(
         call_count += 1
         return _FakeResponse(review_id="rev_once")
 
-    settings = MagicMock(session_ttl_seconds=3600)
+    settings = MagicMock()
     common_kwargs = dict(
         settings=settings,
         session_id="ses_deco",
@@ -161,7 +161,7 @@ async def test_idempotent_guard_serializes_concurrent_calls(
         await asyncio.sleep(0)
         return _FakeResponse(review_id="rev_guard")
 
-    settings = MagicMock(session_ttl_seconds=3600)
+    settings = MagicMock()
 
     async def call():
         with database.session() as db_session:
@@ -208,7 +208,7 @@ async def test_idempotent_without_guard_skips_lock(
         result = await handler(
             request=request,
             db_session=db_session,
-            settings=MagicMock(session_ttl_seconds=3600),
+            settings=MagicMock(),
             session_id="ses_deco",
             idempotency_key="key-noguard",
         )
@@ -250,7 +250,7 @@ async def test_idempotent_calls_post_commit_with_response_data(
         await handler(
             request=_fake_request(),
             db_session=db_session,
-            settings=MagicMock(session_ttl_seconds=3600),
+            settings=MagicMock(),
             session_id="ses_deco",
             idempotency_key="key-post",
         )
@@ -286,7 +286,7 @@ async def test_idempotent_post_commit_not_called_on_replay(
     ):
         return _FakeResponse(review_id="rev_no_replay_post")
 
-    settings = MagicMock(session_ttl_seconds=3600)
+    settings = MagicMock()
     common = dict(settings=settings, session_id="ses_deco")
 
     with database.session() as db_session:
@@ -338,7 +338,7 @@ async def test_idempotent_injects_key_into_request_state(
         await handler(
             request=request,
             db_session=db_session,
-            settings=MagicMock(session_ttl_seconds=3600),
+            settings=MagicMock(),
             session_id="ses_deco",
             idempotency_key="  my-key-123  ",
         )
@@ -370,7 +370,7 @@ async def test_idempotent_raises_on_missing_key(database: Database) -> None:
             await handler(
                 request=_fake_request(),
                 db_session=db_session,
-                settings=MagicMock(session_ttl_seconds=3600),
+                settings=MagicMock(),
                 session_id="ses_deco",
                 idempotency_key=None,
             )
@@ -397,7 +397,7 @@ async def test_idempotent_raises_on_empty_key(database: Database) -> None:
             await handler(
                 request=_fake_request(),
                 db_session=db_session,
-                settings=MagicMock(session_ttl_seconds=3600),
+                settings=MagicMock(),
                 session_id="ses_deco",
                 idempotency_key="   ",
             )
@@ -426,11 +426,10 @@ async def test_idempotent_supports_idempotency_context(
         idem_ctx = IdempotencyContext(
             request=request,
             db_session=db_session,
-            settings=MagicMock(session_ttl_seconds=3600),
+            settings=MagicMock(),
             idempotency_key="key-ctx-001",
         )
         result = await handler(idem_ctx=idem_ctx, session_id="ses_deco")
 
     assert result.data.review_id == "rev_context"
     assert request.state.idempotency_key == "key-ctx-001"
-

@@ -13,6 +13,7 @@ from app.config import Settings
 from app.core.db.database import Database
 from app.factory import create_app
 from app.core.llm.mcp.types import WorkShieldMCPRuntime
+from app.domains.review_sessions.policy import ReviewSessionPolicy
 from app.lifespan import lifespan
 from main import app
 
@@ -59,7 +60,7 @@ def test_production_can_disable_debug_and_openapi(
 ) -> None:
     settings = Settings(
         app_env="prod",
-        llm_provider="ollama",
+        llm_provider="vllm",
         app_debug=False,
         api_docs_enabled=False,
         database_echo=False,
@@ -105,8 +106,9 @@ async def test_lifespan_exposes_and_cleans_mcp_runtime(
     settings = SimpleNamespace(
         database_url=f"sqlite+pysqlite:///{database_path}",
         database_echo=False,
-        temp_upload_dir=tmp_path / "uploads",
-        storage_cleanup_interval_seconds=60,
+    )
+    app.state.review_session_policy = ReviewSessionPolicy(
+        temp_upload_dir=tmp_path / "uploads"
     )
     monkeypatch.setattr(lifespan_module, "get_settings", lambda: settings)
     monkeypatch.setattr(lifespan_module, "open_workshield_mcp", fake_open)
@@ -151,8 +153,9 @@ async def test_lifespan_awaits_review_tasks_before_mcp_runtime_closes(
     settings = SimpleNamespace(
         database_url=f"sqlite+pysqlite:///{tmp_path / 'ordered.db'}",
         database_echo=False,
-        temp_upload_dir=tmp_path / "uploads",
-        storage_cleanup_interval_seconds=60,
+    )
+    app.state.review_session_policy = ReviewSessionPolicy(
+        temp_upload_dir=tmp_path / "uploads"
     )
     monkeypatch.setattr(lifespan_module, "get_settings", lambda: settings)
     monkeypatch.setattr(lifespan_module, "open_workshield_mcp", fake_open)

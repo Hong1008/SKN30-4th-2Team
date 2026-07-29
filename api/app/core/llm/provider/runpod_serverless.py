@@ -15,6 +15,7 @@ from langchain_core.outputs import ChatGeneration, ChatResult
 from pydantic import SecretStr
 
 from app.config import Settings
+from app.core.llm.policy import DEFAULT_LLM_POLICY, LLMPolicy
 from app.core.llm.types import LLMConfigurationError, ReasoningMode
 
 
@@ -139,6 +140,7 @@ def _message_content(output: dict[str, object]) -> str:
 def build_runpod_serverless_model(
     settings: Settings,
     reasoning: ReasoningMode,
+    policy: LLMPolicy = DEFAULT_LLM_POLICY,
 ) -> BaseChatModel:
     if not settings.llm_model:
         raise LLMConfigurationError("LLM_MODEL이 필요합니다.")
@@ -151,5 +153,5 @@ def build_runpod_serverless_model(
         endpoint_id=settings.runpod_ollama_endpoint_id,
         api_key=settings.runpod_api_key,
         reasoning=reasoning is ReasoningMode.ON,
-        request_timeout_seconds=settings.llm_timeout_seconds,
+        request_timeout_seconds=policy.timeout_seconds,
     )

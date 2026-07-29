@@ -19,6 +19,7 @@ from app.core.db.dependencies import get_database
 from app.core.llm.mcp.dependencies import get_workshield_runtime
 from app.core.storage.dependencies import get_file_storage
 from app.core.storage.local import LocalFileStorage
+from app.domains.review_sessions.policy import ReviewSessionPolicy
 
 
 class FakeTool:
@@ -62,8 +63,6 @@ def create_test_app(
     settings = Settings(
         app_env="local",
         llm_provider="ollama",
-        temp_upload_dir=tmp_path / "uploads",
-        max_upload_size_bytes=max_upload_size_bytes,
         workshield_mcp_timeout=workshield_mcp_timeout,
     )
     fake_tool = FakeTool(scope_payload, delay=scope_delay)
@@ -80,6 +79,10 @@ def create_test_app(
     app.dependency_overrides[get_file_storage] = lambda: storage
     app.dependency_overrides[get_workshield_runtime] = lambda: runtime
     app.dependency_overrides[get_settings] = lambda: settings
+    app.state.review_session_policy = ReviewSessionPolicy(
+        max_upload_size_bytes=max_upload_size_bytes,
+        temp_upload_dir=tmp_path / "uploads",
+    )
     app.state.fake_scope_tool = fake_tool
     app.state.test_storage = storage
     return app

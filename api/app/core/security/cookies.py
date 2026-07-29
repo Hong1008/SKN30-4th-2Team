@@ -4,6 +4,10 @@ from fastapi import Response
 
 from app.config import Settings
 from app.core.security.session_tokens import SessionAccessToken, issue_access_token
+from app.domains.review_sessions.policy import (
+    DEFAULT_REVIEW_SESSION_POLICY,
+    ReviewSessionPolicy,
+)
 
 
 SESSION_ACCESS_COOKIE = "workshield_session"
@@ -13,10 +17,16 @@ def issue_session_access(
     response: Response,
     *,
     settings: Settings,
+    policy: ReviewSessionPolicy = DEFAULT_REVIEW_SESSION_POLICY,
 ) -> SessionAccessToken:
     """접근 토큰을 생성하고 원본은 HttpOnly Cookie로만 전달한다."""
     access = issue_access_token()
-    set_session_access_cookie(response, token=access.raw, settings=settings)
+    set_session_access_cookie(
+        response,
+        token=access.raw,
+        settings=settings,
+        policy=policy,
+    )
     return access
 
 
@@ -25,12 +35,13 @@ def set_session_access_cookie(
     *,
     token: str,
     settings: Settings,
+    policy: ReviewSessionPolicy = DEFAULT_REVIEW_SESSION_POLICY,
 ) -> None:
     """원본 접근 토큰을 응답 본문이 아닌 HttpOnly Cookie로만 전달한다."""
     response.set_cookie(
         key=SESSION_ACCESS_COOKIE,
         value=token,
-        max_age=settings.session_ttl_seconds,
+        max_age=policy.session_ttl_seconds,
         httponly=True,
         secure=settings.app_env == "prod",
         samesite="lax",

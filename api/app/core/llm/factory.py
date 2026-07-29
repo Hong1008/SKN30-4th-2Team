@@ -5,6 +5,7 @@ from collections.abc import Callable
 from langchain_core.language_models.chat_models import BaseChatModel
 
 from app.config import LLMProvider, Settings
+from app.core.llm.policy import DEFAULT_LLM_POLICY, LLMPolicy
 from app.core.llm.provider.gemini import build_gemini_model
 from app.core.llm.provider.ollama import build_ollama_model
 from app.core.llm.provider.openai import build_openai_model
@@ -13,7 +14,7 @@ from app.core.llm.provider.vllm import build_vllm_model
 from app.core.llm.types import LLMConfigurationError, ReasoningMode
 
 
-ProviderBuilder = Callable[[Settings, ReasoningMode], BaseChatModel]
+ProviderBuilder = Callable[[Settings, ReasoningMode, LLMPolicy], BaseChatModel]
 
 PROVIDER_BUILDERS: dict[str, ProviderBuilder] = {
     LLMProvider.OPENAI.value: build_openai_model,
@@ -27,6 +28,7 @@ PROVIDER_BUILDERS: dict[str, ProviderBuilder] = {
 def create_chat_model(
     settings: Settings,
     reasoning: ReasoningMode = ReasoningMode.OFF,
+    policy: LLMPolicy = DEFAULT_LLM_POLICY,
 ) -> BaseChatModel:
     """선택 provider의 chat model을 만들며 추론은 기본적으로 끈다."""
     try:
@@ -58,4 +60,4 @@ def create_chat_model(
     builder = PROVIDER_BUILDERS.get(provider)
     if builder is None:
         raise LLMConfigurationError(f"지원하지 않는 LLM provider입니다: {provider}")
-    return builder(settings, normalized_reasoning)
+    return builder(settings, normalized_reasoning, policy)
