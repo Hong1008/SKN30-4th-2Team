@@ -68,6 +68,17 @@ def test_database_defaults_to_file_sqlite() -> None:
     assert settings.database_url.startswith("sqlite+pysqlite:///")
     assert settings.database_url.replace("\\", "/").endswith("/data/workshield.db")
     assert settings.database_echo is False
+    assert settings.api_worker_count == 1
+    assert settings.sqlite_busy_timeout_ms == 5000
+
+
+def test_multiple_api_workers_are_rejected() -> None:
+    with pytest.raises(ValidationError, match="API_WORKER_COUNT=1"):
+        Settings(
+            app_env="local",
+            llm_provider="ollama",
+            api_worker_count=2,
+        )
 
 
 def test_settings_excludes_feature_policy_fields() -> None:

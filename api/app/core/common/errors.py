@@ -50,6 +50,18 @@ class ExpiredError(AppError):
     """세션 또는 임시 결과의 사용 기한이 지난 오류."""
 
 
+class OverCapacityError(AppError):
+    """작업 실행 또는 대기 용량을 초과한 오류."""
+
+    def __init__(self, *, retry_after_seconds: int, **kwargs: Any) -> None:
+        super().__init__(
+            retryable=True,
+            next_action="RETRY_LATER",
+            **kwargs,
+        )
+        self.retry_after_seconds = retry_after_seconds
+
+
 class ExternalServiceError(AppError):
     """MCP 또는 LLM 등 외부 서비스 처리 오류."""
 

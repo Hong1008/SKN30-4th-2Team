@@ -31,23 +31,48 @@ def _normalized_sqlite_url(database_url: str) -> str:
     )
 
 
-def _enable_sqlite_foreign_keys(
+def _configure_sqlite_connection(
     dbapi_connection: sqlite3.Connection,
     _connection_record: object,
+    *,
+    busy_timeout_ms: int,
 ) -> None:
-    """각 SQLite 연결에서 외래키 제약을 활성화한다."""
+    """각 SQLite 연결에 무결성·동시성 PRAGMA를 적용한다."""
     cursor = dbapi_connection.cursor()
     cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.execute(f"PRAGMA busy_timeout={busy_timeout_ms:d}")
+    cursor.execute("PRAGMA journal_mode=WAL")
     cursor.close()
 
 
 class Database:
     """애플리케이션 수명 동안 공유하는 Engine과 Session factory."""
 
-    def __init__(self, database_url: str, *, echo: bool = False) -> None:
+    def __init__(
+        self,
+        database_url: str,
+        *,
+        echo: bool = False,
+        busy_timeout_ms: int = 5000,
+    ) -> None:
+        if busy_timeout_ms <= 0:
+            raise ValueError("busy_timeout_ms는 양수여야 합니다.")
         self.url = _normalized_sqlite_url(database_url)
-        self.engine: Engine = create_engine(self.url, echo=echo)
-        event.listen(self.engine, "connect", _enable_sqlite_foreign_keys)
+        self.busy_timeout_ms = busy_timeout_ms
+        self.engine: Engine = create_engine(
+            self.url,
+            echo=echo,
+            connect_args={"timeout": busy_timeout_ms / 1000},
+        )
+        event.listen(
+            self.engine,
+            "connect",
+            lambda connection, record: _configure_sqlite_connection(
+                connection,
+                record,
+                busy_timeout_ms=busy_timeout_ms,
+            ),
+        )
         self.session_factory = sessionmaker(
             bind=self.engine,
             class_=Session,

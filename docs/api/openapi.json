@@ -95,6 +95,16 @@
               }
             }
           },
+          "429": {
+            "description": "작업 처리 또는 대기 용량 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
           "404": {
             "description": "리소스가 없거나 현재 익명 세션에서 접근할 수 없음",
             "content": {
@@ -183,6 +193,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiResponse_ReviewSessionResponse_"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "동시 업로드 처리 용량 초과 (UPLOAD_CAPACITY_EXCEEDED)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
                 }
               }
             }
@@ -305,6 +325,16 @@
               }
             }
           },
+          "429": {
+            "description": "작업 처리 또는 대기 용량 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
           "404": {
             "description": "리소스가 없거나 현재 익명 세션에서 접근할 수 없음",
             "content": {
@@ -413,6 +443,16 @@
               }
             }
           },
+          "429": {
+            "description": "작업 처리 또는 대기 용량 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
           "404": {
             "description": "리소스가 없거나 현재 익명 세션에서 접근할 수 없음",
             "content": {
@@ -517,6 +557,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiResponse_ReviewSessionResponse_"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "작업 처리 또는 대기 용량 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
                 }
               }
             }
@@ -638,6 +688,16 @@
               }
             }
           },
+          "429": {
+            "description": "작업 처리 또는 대기 용량 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
           "404": {
             "description": "리소스가 없거나 현재 익명 세션에서 접근할 수 없음",
             "content": {
@@ -731,6 +791,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiResponse_ReviewResultsResponse_"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "작업 처리 또는 대기 용량 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
                 }
               }
             }
@@ -833,6 +903,16 @@
               }
             }
           },
+          "429": {
+            "description": "작업 처리 또는 대기 용량 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
           "404": {
             "description": "리소스가 없거나 현재 익명 세션에서 접근할 수 없음",
             "content": {
@@ -930,6 +1010,16 @@
               }
             }
           },
+          "429": {
+            "description": "작업 처리 또는 대기 용량 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
           "404": {
             "description": "리소스가 없거나 현재 익명 세션에서 접근할 수 없음",
             "content": {
@@ -1022,6 +1112,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiResponse_ReviewCancelResponse_"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "작업 처리 또는 대기 용량 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
                 }
               }
             }
@@ -1141,6 +1241,16 @@
               }
             }
           },
+          "429": {
+            "description": "작업 처리 또는 대기 용량 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
           "404": {
             "description": "리소스가 없거나 현재 익명 세션에서 접근할 수 없음",
             "content": {
@@ -1244,6 +1354,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiResponse_GroundingResponse_"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "작업 처리 또는 대기 용량 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
                 }
               }
             }
@@ -1374,6 +1494,16 @@
               }
             }
           },
+          "429": {
+            "description": "작업 처리 또는 대기 용량 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
           "404": {
             "description": "리소스가 없거나 현재 익명 세션에서 접근할 수 없음",
             "content": {
@@ -1496,6 +1626,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiResponse_SuggestionResponse_"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "작업 처리 또는 대기 용량 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
                 }
               }
             }

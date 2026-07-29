@@ -2,7 +2,7 @@
 
 from typing import Protocol
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.core.db.models import ReviewRow
@@ -41,6 +41,12 @@ class ReviewRepository(Protocol):
     def has_active_for_session(self, session_id: str) -> bool: ...
 
     def list_active(self) -> list[Review]: ...
+
+    def count_queued(self) -> int: ...
+
+    def list_queued(self, *, limit: int | None = None) -> list[Review]: ...
+
+    def list_reviewing(self) -> list[Review]: ...
 
     def delete(self, review_id: str) -> bool: ...
 
@@ -139,6 +145,36 @@ class SqlAlchemyReviewRepository:
     def list_active(self) -> list[Review]:
         statement = select(ReviewRow).where(
             ReviewRow.state.in_(("QUEUED", "REVIEWING")),
+        )
+        return [
+            review_from_row(row)
+            for row in self._session.scalars(statement).all()
+        ]
+
+    def count_queued(self) -> int:
+        statement = select(func.count()).select_from(ReviewRow).where(
+            ReviewRow.state == "QUEUED"
+        )
+        return int(self._session.scalar(statement) or 0)
+
+    def list_queued(self, *, limit: int | None = None) -> list[Review]:
+        statement = (
+            select(ReviewRow)
+            .where(ReviewRow.state == "QUEUED")
+            .order_by(ReviewRow.created_at, ReviewRow.id)
+        )
+        if limit is not None:
+            statement = statement.limit(limit)
+        return [
+            review_from_row(row)
+            for row in self._session.scalars(statement).all()
+        ]
+
+    def list_reviewing(self) -> list[Review]:
+        statement = (
+            select(ReviewRow)
+            .where(ReviewRow.state == "REVIEWING")
+            .order_by(ReviewRow.created_at, ReviewRow.id)
         )
         return [
             review_from_row(row)

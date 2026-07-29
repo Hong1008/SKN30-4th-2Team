@@ -45,6 +45,7 @@ class ApiErrorResponse(BaseModel):
 
 
 COMMON_ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
+    429: {"model": ApiErrorResponse, "description": "작업 처리 또는 대기 용량 초과"},
     404: {
         "model": ApiErrorResponse,
         "description": "리소스가 없거나 현재 익명 세션에서 접근할 수 없음",
@@ -58,6 +59,10 @@ COMMON_ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
 
 
 UPLOAD_ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
+    429: {
+        "model": ApiErrorResponse,
+        "description": "동시 업로드 처리 용량 초과 (UPLOAD_CAPACITY_EXCEEDED)",
+    },
     422: {
         "model": ApiErrorResponse,
         "description": (
