@@ -29,7 +29,7 @@ export default function HorizontalStepper({ currentScreen, onNavigate }: Props) 
       <div className="mx-auto max-w-[1280px] px-4 sm:px-6 lg:px-8">
         <nav
           aria-label="계약서 검토 진행 단계"
-          className="grid h-16 sm:h-[88px] grid-cols-3"
+          className="grid h-20 grid-cols-3 sm:h-[88px]"
         >
           {STEPS.map((step, index) => {
             const done = step.id < currentStep
@@ -42,17 +42,17 @@ export default function HorizontalStepper({ currentScreen, onNavigate }: Props) 
                 disabled={ahead}
                 onClick={() => !ahead && onNavigate(step.nav)}
                 className={`
-                  group relative flex min-w-0 items-center justify-center gap-0 px-1 sm:justify-start sm:gap-3 sm:px-4 text-left
+                  group relative flex min-w-0 flex-col items-center justify-center gap-2 px-1 text-center sm:flex-row sm:justify-start sm:gap-3 sm:px-4 sm:text-left
                   focus-visible:z-10 focus-visible:outline-none
                   focus-visible:ring-4 focus-visible:ring-inset
                   focus-visible:ring-blue-500/15
-                  ${ahead ? 'cursor-default' : 'hover:bg-slate-50/80'}
+                  ${ahead ? 'cursor-default' : 'cursor-pointer'}
                 `}
               >
                 {index < STEPS.length - 1 && (
                   <span
                     aria-hidden="true"
-                    className={`absolute left-1/2 sm:left-[52px] right-[-50%] sm:right-[-12px] top-1/2 h-px -translate-x-1/2 sm:translate-x-0
+                    className={`absolute left-1/2 right-[-50%] top-[24px] h-px sm:left-[52px] sm:right-[-12px] sm:top-1/2
                       ${done ? 'bg-blue-300' : 'bg-slate-200'}`}
                   />
                 )}
@@ -72,9 +72,9 @@ export default function HorizontalStepper({ currentScreen, onNavigate }: Props) 
                   {done ? <Check className="size-4" strokeWidth={2.5} /> : step.id}
                 </span>
 
-                <span className={`relative z-10 min-w-0 bg-white sm:pr-3 hidden sm:block`}>
+                <span className="relative z-10 min-w-0 bg-white px-1 sm:pr-3">
                   <span
-                    className={`block truncate text-[13px] leading-5
+                    className={`block truncate text-[11px] leading-4 sm:text-[13px] sm:leading-5
                       ${current
                         ? 'font-semibold text-blue-700'
                         : done
@@ -85,13 +85,13 @@ export default function HorizontalStepper({ currentScreen, onNavigate }: Props) 
                     {step.label}
                   </span>
 
-                  <span className="mt-0.5 block truncate text-[10px] leading-4 text-slate-400">
+                  <span className="mt-0.5 hidden truncate text-xs leading-4 text-slate-400 sm:block">
                     {step.sub}
                   </span>
                 </span>
 
                 {current && (
-                  <span className="absolute inset-x-5 bottom-0 h-[2px] rounded-full bg-blue-600" />
+                  <span className="absolute inset-x-3 bottom-0 h-[2px] rounded-full bg-blue-600 sm:inset-x-5" />
                 )}
               </button>
             )

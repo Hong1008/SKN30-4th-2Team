@@ -1,5 +1,6 @@
 """MCP metadata 응답 정규화의 경계 조건을 검증한다."""
 
+from app.domains.grounding.schemas import GROUNDING_STATUS_GUIDANCE
 from app.domains.metadata.service import _categories, _items, _toxic_patterns
 
 
@@ -73,3 +74,19 @@ def test_string_metadata_values_remain_compatible() -> None:
         "category": None,
         "example_count": 0,
     }
+
+
+def test_grounding_status_guidance_distinguishes_user_actions() -> None:
+    assert GROUNDING_STATUS_GUIDANCE["OK"].retryable is False
+    assert GROUNDING_STATUS_GUIDANCE["NO_RESULT"].next_action is None
+    assert GROUNDING_STATUS_GUIDANCE["TIMEOUT"].next_action == "RELOAD_GROUNDING"
+    assert GROUNDING_STATUS_GUIDANCE["UPSTREAM_ERROR"].next_action == "RELOAD_GROUNDING"
+    assert (
+        len(
+            {
+                GROUNDING_STATUS_GUIDANCE[status].message
+                for status in ("OK", "NO_RESULT", "TIMEOUT", "UPSTREAM_ERROR")
+            }
+        )
+        == 4
+    )

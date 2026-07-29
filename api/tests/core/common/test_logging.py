@@ -29,3 +29,40 @@ def test_session_id_is_hashed_before_logging(
     assert "review_id=rev_test" in caplog.text
     assert "state=RUNNING" in caplog.text
     assert "duration_ms=12.34" in caplog.text
+
+
+def test_grounding_log_contains_category_status_and_sources(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.INFO, logger="uvicorn.error")
+
+    log_event(
+        event="mcp.grounding.completed",
+        request_id="req_test",
+        review_id="rev_test",
+        category="LIABILITY",
+        state="OK",
+        sources=["law_1", "law_2"],
+    )
+
+    assert "event=mcp.grounding.completed" in caplog.text
+    assert "category=LIABILITY" in caplog.text
+    assert "state=OK" in caplog.text
+    assert "sources=law_1,law_2" in caplog.text
+
+
+def test_failure_log_contains_exception_type_without_message(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.ERROR, logger="uvicorn.error")
+
+    log_event(
+        event="llm.suggestion.invalid_output",
+        review_id="rev_test",
+        state="LLM_OUTPUT_INVALID",
+        error_type="ValidationError",
+        level=logging.ERROR,
+    )
+
+    assert "error_type=ValidationError" in caplog.text
+    assert "event=llm.suggestion.invalid_output" in caplog.text

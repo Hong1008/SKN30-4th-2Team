@@ -62,7 +62,9 @@ export function MetadataProvider({ children }: { children: React.ReactNode }) {
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="text-center p-6 bg-white rounded-2xl shadow-sm border border-rose-200">
           <p className="text-sm text-rose-600 font-bold mb-2">설정 정보를 불러오지 못했습니다.</p>
-          <p className="text-xs text-slate-500 mb-4">{error.message}</p>
+          <p className="text-xs text-slate-500 mb-4">
+            서버 설정 정보를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.
+          </p>
           <button 
             onClick={() => window.location.reload()}
             className="px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800"

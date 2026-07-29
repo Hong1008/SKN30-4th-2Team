@@ -6,8 +6,10 @@ from typing import Any
 from urllib.parse import urlparse
 
 from app.core.common.errors import AppValidationError, ConflictError
+from app.core.common.logging import log_event
 from app.config import Settings
 from app.domains.grounding.schemas import (
+    GROUNDING_STATUS_GUIDANCE,
     GroundingCategory,
     GroundingItem,
     GroundingResponse,
@@ -25,6 +27,26 @@ GROUNDING_STATUSES = {
     "UPSTREAM_ERROR",
     "TIMEOUT",
 }
+
+
+def _log_grounding(review: Review, response: GroundingResponse) -> GroundingResponse:
+    """법령 본문 없이 category·상태·출처 식별자만 운영 로그에 남긴다."""
+    guidance = GROUNDING_STATUS_GUIDANCE[response.grounding_status]
+    response = response.model_copy(
+        update={
+            "message": guidance.message,
+            "retryable": guidance.retryable,
+            "next_action": guidance.next_action,
+        }
+    )
+    log_event(
+        event="mcp.get_category_grounding.completed",
+        review_id=review.id,
+        category=response.category.code,
+        state=response.grounding_status,
+        sources=[item.source_id for item in response.items],
+    )
+    return response
 
 
 def _safe_url(value: object) -> str | None:
@@ -89,17 +111,22 @@ def _normalize_items(payload: dict[str, Any]) -> list[GroundingItem]:
     for index, raw in enumerate(raw_items):
         if not isinstance(raw, dict):
             continue
-        text = raw.get("text") or raw.get("content") or raw.get("body")
+        text = (
+            raw.get("text") or raw.get("content") or raw.get("body") or raw.get("본문")
+        )
         if not isinstance(text, str) or not text.strip():
             continue
         source_id = raw.get("source_id") or raw.get("id") or f"law_{index + 1}"
+        law_name = raw.get("law_name") or raw.get("법령명")
+        article = raw.get("article") or raw.get("조번호")
+        source = raw.get("source") or raw.get("출처")
         items.append(
             GroundingItem(
                 source_id=str(source_id),
-                law_name=str(raw["law_name"]) if raw.get("law_name") else None,
-                article=str(raw["article"]) if raw.get("article") else None,
+                law_name=str(law_name) if law_name else None,
+                article=str(article) if article else None,
                 text=text,
-                source=str(raw["source"]) if raw.get("source") else None,
+                source=str(source) if source else None,
                 source_url=_safe_url(raw.get("source_url") or raw.get("url")),
             )
         )
@@ -123,15 +150,18 @@ async def get_review_grounding(
         None,
     )
     if tool is None:
-        return GroundingResponse(
-            grounding_status="UPSTREAM_ERROR",
-            category=GroundingCategory(
-                code=normalized_category,
-                label=normalized_category,
+        return _log_grounding(
+            review,
+            GroundingResponse(
+                grounding_status="UPSTREAM_ERROR",
+                category=GroundingCategory(
+                    code=normalized_category,
+                    label=normalized_category,
+                ),
+                contract_type=review.contract_type,
+                items=[],
+                message="법령 근거 조회 기능을 사용할 수 없습니다.",
             ),
-            contract_type=review.contract_type,
-            items=[],
-            message="법령 근거 조회 기능을 사용할 수 없습니다.",
         )
     try:
         result = await asyncio.wait_for(
@@ -157,36 +187,45 @@ async def get_review_grounding(
             label = str(raw_category.get("label") or normalized_category)
         elif isinstance(payload.get("category_label"), str):
             label = payload["category_label"]
-        return GroundingResponse(
-            grounding_status=grounding_status,
-            category=GroundingCategory(code=normalized_category, label=label),
-            contract_type=review.contract_type,
-            items=items,
-            message=(
-                str(payload["message"])
-                if payload.get("message") is not None
-                else None
+        return _log_grounding(
+            review,
+            GroundingResponse(
+                grounding_status=grounding_status,
+                category=GroundingCategory(code=normalized_category, label=label),
+                contract_type=review.contract_type,
+                items=items,
+                message=(
+                    str(payload["message"])
+                    if payload.get("message") is not None
+                    else None
+                ),
             ),
         )
     except (asyncio.TimeoutError, TimeoutError):
-        return GroundingResponse(
-            grounding_status="TIMEOUT",
-            category=GroundingCategory(
-                code=normalized_category,
-                label=normalized_category,
+        return _log_grounding(
+            review,
+            GroundingResponse(
+                grounding_status="TIMEOUT",
+                category=GroundingCategory(
+                    code=normalized_category,
+                    label=normalized_category,
+                ),
+                contract_type=review.contract_type,
+                items=[],
+                message="법령 근거 조회 시간이 초과되었습니다.",
             ),
-            contract_type=review.contract_type,
-            items=[],
-            message="법령 근거 조회 시간이 초과되었습니다.",
         )
     except Exception:
-        return GroundingResponse(
-            grounding_status="UPSTREAM_ERROR",
-            category=GroundingCategory(
-                code=normalized_category,
-                label=normalized_category,
+        return _log_grounding(
+            review,
+            GroundingResponse(
+                grounding_status="UPSTREAM_ERROR",
+                category=GroundingCategory(
+                    code=normalized_category,
+                    label=normalized_category,
+                ),
+                contract_type=review.contract_type,
+                items=[],
+                message="법령 근거를 조회하지 못했습니다.",
             ),
-            contract_type=review.contract_type,
-            items=[],
-            message="법령 근거를 조회하지 못했습니다.",
         )
