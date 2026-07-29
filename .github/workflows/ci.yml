@@ -1,9 +1,6 @@
 name: CI
 
 on:
-  pull_request:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 # PR과 main CI는 소스 읽기 외의 권한을 갖지 않는다.
