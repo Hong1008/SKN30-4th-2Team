@@ -285,6 +285,9 @@ export interface ChatSource {
   type: 'USER_CLAUSE' | 'STANDARD_CLAUSE' | 'LAW';
   id?: string | null;
   display_label?: string | null;
+  clause_number?: string | null;
+  title?: string | null;
+  category?: string | null;
   standard_contract_label?: string | null;
   law_name?: string | null;
   article?: string | null;

@@ -35,10 +35,13 @@ const clause: ClauseResult = {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  vi.mocked(api.getGrounding).mockResolvedValue({
+    data: { items: [], grounding_status: "NO_RESULT", retryable: false },
+  } as never)
 })
 
 describe("협의문구 출처", () => {
-  it("내부 ID 대신 표시용 출처와 법령 링크를 출력한다", async () => {
+  it("내부 ID와 URL 링크 없이 표시용 출처를 출력한다", async () => {
     vi.mocked(api.suggestions).mockResolvedValue({
       data: {
         outcome: "GENERATED",
@@ -88,7 +91,7 @@ describe("협의문구 출처", () => {
       screen.getByRole("button", { name: /협의 문구 제안 보기/ }),
     )
 
-    expect(await screen.findByText("사용자 조항 · 제1조 손해배상"))
+    expect(await screen.findByText("제1조 손해배상"))
       .toBeInTheDocument()
     expect(
       screen.getByText(
@@ -96,11 +99,8 @@ describe("협의문구 출처", () => {
       ),
     )
       .toBeInTheDocument()
-    expect(screen.getByRole("link", { name: "법령 근거 · 민법 제390조" }))
-      .toHaveAttribute(
-        "href",
-        "https://www.law.go.kr/법령/민법/제390조",
-      )
+    expect(screen.getByText("민법 제390조")).toBeInTheDocument()
+    expect(screen.queryByRole("link")).not.toBeInTheDocument()
     expect(screen.queryByText(/uc_rev_suggestion_1/)).not.toBeInTheDocument()
     expect(screen.queryByText(/std_liability_1/)).not.toBeInTheDocument()
     expect(screen.queryByText(/law_1/)).not.toBeInTheDocument()

@@ -7,6 +7,7 @@ import { api } from '../api/api'
 import { useMetadata } from '../contexts/MetadataContext'
 import { getMetadataLabel, getStatusPresentation } from '../utils/metadata'
 import { getErrorMessage, getSafeKoreanMessage } from '../utils/apiErrors'
+import SourceReferences, { type SourceReference } from '../components/SourceReferences'
 
 interface Props {
   clause: ClauseResult
@@ -101,6 +102,13 @@ export default function ClauseDetailScreen({ clause, reviewId, onBack, onChatbot
         ...suggestion.missing_inputs.map(field => [field, field] as [string, string]),
       ]).entries())
     : []
+  const suggestionSources: SourceReference[] = suggestion?.sources.map(source => ({
+    type: source.type,
+    display_label: source.display_label,
+    standard_contract_label: source.standard_contract_label,
+    law_name: source.law_name,
+    article: source.article,
+  })) ?? []
 
   return (
     <div className="space-y-6 animate-fade-up">
@@ -323,22 +331,7 @@ export default function ClauseDetailScreen({ clause, reviewId, onBack, onChatbot
               </button>
             </div>
           )}
-          {suggestion.sources.length > 0 && (
-            <div className="text-xs leading-5 text-slate-500">
-              <p className="font-semibold text-slate-600">참고 출처</p>
-              {suggestion.sources.map((source, index) => {
-                const prefix = source.type === 'USER_CLAUSE' ? '사용자 조항'
-                  : source.type === 'STANDARD_CLAUSE' ? source.standard_contract_label || '표준계약서'
-                    : '법령 근거'
-                const label = source.display_label
-                  || [source.law_name, source.article].filter(Boolean).join(' ')
-                  || prefix
-                return source.source_url
-                  ? <a key={`${source.type}-${source.id}-${index}`} href={source.source_url} target="_blank" rel="noreferrer" className="block text-blue-700 underline">{prefix} · {label}</a>
-                  : <p key={`${source.type}-${source.id}-${index}`}>{prefix} · {label}</p>
-              })}
-            </div>
-          )}
+          <SourceReferences sources={suggestionSources} title="협의 문구 출처" />
           {suggestion.outcome === 'GENERATED' && suggestion.grounding_source_ids.length === 0 && (
             <p className="text-xs text-amber-700">법령 근거 없이 표준조항을 기준으로 작성된 초안입니다.</p>
           )}

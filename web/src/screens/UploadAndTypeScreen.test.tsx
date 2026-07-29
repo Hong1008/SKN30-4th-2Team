@@ -48,6 +48,27 @@ beforeEach(() => {
 })
 
 describe("계약서 업로드", () => {
+  it("검토 시작을 빠르게 눌러도 요청을 한 번만 실행한다", async () => {
+    vi.mocked(api.getSession).mockResolvedValue({
+      data: {
+        upload: { file_name: "contract.pdf", size_bytes: 5 },
+        selected_contract_type: "SW_FREELANCE",
+        suggested_contract_type: "SW_FREELANCE",
+        candidates: [],
+        expires_at: "2099-01-01T00:00:00Z",
+      },
+    } as never)
+    vi.mocked(api.selectContractType).mockResolvedValue({
+      data: { review_state: "READY_TO_REVIEW", can_start_review: true, allowed_actions: ["START_REVIEW"], expires_at: "2099-01-01T00:00:00Z" },
+    } as never)
+    vi.mocked(api.startReview).mockReturnValue(new Promise(() => {}))
+    render(<UploadAndTypeScreen {...props} sessionId="session-1" />)
+    const startButton = await screen.findByRole("button", { name: /선택한 유형으로 검토 시작/ })
+    await userEvent.dblClick(startButton)
+    await waitFor(() => expect(api.selectContractType).toHaveBeenCalledTimes(1))
+    expect(api.startReview).toHaveBeenCalledTimes(1)
+    expect(startButton).toBeDisabled()
+  })
   it("정확히 최대 허용 크기인 파일은 서버로 전송한다", async () => {
     vi.mocked(api.uploadContract).mockResolvedValue({
       data: { can_start_review: false, allowed_actions: ["REUPLOAD"] },

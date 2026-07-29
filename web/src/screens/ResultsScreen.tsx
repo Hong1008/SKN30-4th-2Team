@@ -41,9 +41,10 @@ interface Props {
   reviewId: string | null;
   onClauseClick: (clause: ClauseResult) => void
   onChatbot: () => void
+  onReviewInProgress?: () => void
 }
 
-export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Props) {
+export default function ResultsScreen({ reviewId, onClauseClick, onChatbot, onReviewInProgress }: Props) {
   const { metadata } = useMetadata()
   const resultCodeDetails = metadata?.result_code_details ?? []
   const categories = ['전체', ...(metadata?.categories.map(c => c.label) || [])]
@@ -70,6 +71,7 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
 
   useEffect(() => {
     let isSubscribed = true
+    const controller = new AbortController()
     setIsLoading(true)
     setErrorMessage('')
 
@@ -78,7 +80,7 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
       return
     }
 
-    api.getResults(reviewId).then(res => {
+    api.getResults(reviewId, controller.signal).then(res => {
       if (!isSubscribed) return
       if (res.data.review.mcp_review_status !== 'OK') {
         throw new Error('검토가 정상 완료 상태가 아니어서 결과를 표시할 수 없습니다.')
@@ -98,13 +100,16 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
         localStorage.removeItem(REVIEW_ID_KEY)
         setErrorMessage('검토 결과를 찾을 수 없거나 보관 기간이 만료되었습니다.')
       } else if (error?.status === 409) {
-        setErrorMessage('검토가 아직 완료되지 않았습니다. 진행 화면에서 상태를 확인해 주세요.')
+        onReviewInProgress?.()
       } else {
         setErrorMessage(getErrorMessage(error, '검토 결과를 불러오지 못했습니다.'))
       }
     })
 
-    return () => { isSubscribed = false }
+    return () => {
+      isSubscribed = false
+      controller.abort()
+    }
   }, [reviewId])
 
   const filtered = clauses.filter(c => {
@@ -333,7 +338,7 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
 
       <section aria-label="조항별 검토 결과" className="space-y-4">
           {/* Filter bar */}
-          <div className="sticky top-[84px] z-20 space-y-3 border-y border-slate-200/80 bg-[#F6F8FA]/95 py-4 backdrop-blur-xl">
+          <div className="space-y-3 border-y border-slate-200/80 py-4">
             {/* Search */}
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />

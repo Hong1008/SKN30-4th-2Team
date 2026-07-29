@@ -8,6 +8,13 @@ import type {
 
 const CLAUSE_RESULT_CODES: ResultCode[] = ['NONE', 'EXTRA', 'NO_MATCH']
 
+export function extractClauseArticle(text: string): string {
+  const normalized = text.trim()
+  const match = normalized.match(/^제\s*(\d+(?:-\d+)?)\s*조(?:\s*의\s*(\d+))?/)
+  if (!match) return normalized.split(/\s+/)[0] || '조항'
+  return `제${match[1]}조${match[2] ? `의${match[2]}` : ''}`
+}
+
 export function mapClauseResult(item: ReviewClauseResultData): ClauseResult {
   const code = item.deviation.code as ResultCode
   if (!CLAUSE_RESULT_CODES.includes(code)) {
@@ -18,7 +25,7 @@ export function mapClauseResult(item: ReviewClauseResultData): ClauseResult {
 
   return {
     id: item.user_clause_id,
-    article: item.user_clause.split(' ')[0] || '조항',
+    article: extractClauseArticle(item.user_clause),
     excerpt: item.user_clause,
     status,
     category: standard?.category.label || '기타',

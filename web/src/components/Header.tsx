@@ -9,6 +9,7 @@ interface Props {
   canStartNewReview: boolean
   onStartNewReview: () => void
   isStartingNewReview: boolean
+  navigationLocked?: boolean
 }
 
 export default function Header({
@@ -18,6 +19,7 @@ export default function Header({
   canStartNewReview,
   onStartNewReview,
   isStartingNewReview,
+  navigationLocked = false,
 }: Props) {
   const isReview = ['upload-and-type', 'out-of-scope', 'processing'].includes(currentScreen)
   const isResult = ['results', 'clause-detail', 'chatbot'].includes(currentScreen)
@@ -48,6 +50,7 @@ export default function Header({
         {/* Logo */}
         <button
           onClick={() => onNavigate('upload-and-type')}
+          disabled={navigationLocked}
           className="
             group flex shrink-0 items-center gap-2.5 rounded-xl px-1 py-1
             focus-visible:outline-none
@@ -81,6 +84,7 @@ export default function Header({
         <nav className="ml-10 hidden items-center gap-1 md:flex">
           <button
             onClick={() => onNavigate('upload-and-type')}
+            disabled={navigationLocked}
             className={`flex h-9 items-center rounded-lg px-3.5 text-[13px] font-semibold transition-colors ${
               isReview
                 ? 'border border-blue-200/80 bg-blue-50 text-blue-700'
@@ -91,6 +95,7 @@ export default function Header({
           </button>
           <button
             onClick={() => onNavigate('results')}
+            disabled={navigationLocked}
             className={`flex h-9 items-center rounded-lg px-3.5 text-[13px] font-semibold transition-colors ${
               isResult
                 ? 'border border-blue-200/80 bg-blue-50 text-blue-700'

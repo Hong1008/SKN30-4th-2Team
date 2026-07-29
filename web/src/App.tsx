@@ -30,14 +30,15 @@ function ProcessingRoute({ fallbackReviewId, onDone, onRetry, onStartNewReview }
     : <Navigate to="/review" replace />
 }
 
-function ResultsRoute({ fallbackReviewId, onClauseClick, onChatbot }: {
+function ResultsRoute({ fallbackReviewId, onClauseClick, onChatbot, onReviewInProgress }: {
   fallbackReviewId: string | null
   onClauseClick: (clause: ClauseResult, reviewId: string) => void
   onChatbot: (reviewId: string) => void
+  onReviewInProgress: (reviewId: string) => void
 }) {
   const { id } = useParams()
   const reviewId = id ?? fallbackReviewId
-  return reviewId ? <ResultsScreen reviewId={reviewId} onClauseClick={(clause) => onClauseClick(clause, reviewId)} onChatbot={() => onChatbot(reviewId)} /> : <Navigate to="/review" replace />
+  return reviewId ? <ResultsScreen reviewId={reviewId} onClauseClick={(clause) => onClauseClick(clause, reviewId)} onChatbot={() => onChatbot(reviewId)} onReviewInProgress={() => onReviewInProgress(reviewId)} /> : <Navigate to="/review" replace />
 }
 
 function ClauseRoute({ fallbackReviewId, selectedClause, onBack, onChatbot }: {
@@ -201,6 +202,7 @@ function MainApp() {
   else if (path.includes('/chatbot')) screen = 'chatbot'
   else if (path.includes('/results')) screen = 'results'
   else if (path.includes('/out-of-scope')) screen = 'out-of-scope'
+  const navigationLocked = screen === 'processing'
 
   const nav = (s: Screen) => {
     switch (s) {
@@ -225,10 +227,11 @@ function MainApp() {
           )}
           onStartNewReview={() => setShowNewReviewConfirm(true)}
           isStartingNewReview={isStartingNewReview}
+          navigationLocked={navigationLocked}
         />
 
         {/* ── Stepper ── */}
-        <HorizontalStepper currentScreen={screen} onNavigate={nav} />
+        <HorizontalStepper currentScreen={screen} onNavigate={nav} navigationLocked={navigationLocked} />
 
         {/* ── Body ── */}
         <main className="flex-1 px-4 py-7 sm:px-6 lg:px-8 lg:py-9">
@@ -272,7 +275,7 @@ function MainApp() {
                 <ResultsRoute fallbackReviewId={reviewId} onClauseClick={(clause, id) => {
                     setSelectedClause(clause)
                     navigate(`/review/${id}/results/clause/${clause.id}`)
-                  }} onChatbot={(id) => openChat(id)} />
+                  }} onChatbot={(id) => openChat(id)} onReviewInProgress={(id) => navigate(`/review/${id}/progress`, { replace: true })} />
               } />
               <Route path="/review/:id/results/clause/:clauseId" element={<ClauseRoute fallbackReviewId={reviewId} selectedClause={selectedClause} onBack={(id) => navigate(`/review/${id}/results`)} onChatbot={openChat} />} />
               <Route path="/review/:id/chatbot" element={<Navigate to="../results" replace />} />
@@ -286,17 +289,21 @@ function MainApp() {
         </main>
         {showNewReviewConfirm && (
           <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-4" role="dialog" aria-modal="true" aria-labelledby="new-review-title">
-            <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
-              <h2 id="new-review-title" className="text-lg font-bold text-slate-950">새 검토를 시작할까요?</h2>
+            <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
+              <h2 id="new-review-title" className="text-lg font-bold text-slate-950">
+                {screen === 'processing' ? '검토를 중단하고 새로 시작할까요?' : '새 검토를 시작할까요?'}
+              </h2>
               <p className="mt-2 text-sm leading-6 text-slate-600">
-                현재 검토 결과와 서버에 임시 저장된 파일을 폐기한 뒤 새 계약서를 업로드합니다.
+                {screen === 'processing'
+                  ? '중단하면 계약서와 분석 내용이 삭제됩니다.'
+                  : '현재 계약서와 검토 결과가 삭제됩니다.'}
               </p>
               <div className="mt-6 flex justify-end gap-2">
-                <button type="button" onClick={() => setShowNewReviewConfirm(false)} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700">
-                  계속 보기
+                <button type="button" onClick={() => setShowNewReviewConfirm(false)} className="min-w-20 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50">
+                  아니요
                 </button>
-                <button type="button" onClick={startNewReview} className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white">
-                  폐기하고 새 검토
+                <button type="button" onClick={startNewReview} className="min-w-20 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 transition-colors hover:bg-rose-100">
+                  예
                 </button>
               </div>
             </div>

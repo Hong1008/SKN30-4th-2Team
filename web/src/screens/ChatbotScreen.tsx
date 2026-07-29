@@ -1,10 +1,11 @@
 import { createClientId } from '../utils/clientId'
 import { useEffect, useRef, useState } from 'react'
-import { BookOpen, RotateCcw, Send, X } from 'lucide-react'
+import { RotateCcw, Send, X } from 'lucide-react'
 import { api } from '../api/api'
 import { useMetadata } from '../contexts/MetadataContext'
 import { getStatusPresentation } from '../utils/metadata'
 import { getErrorMessage } from '../utils/apiErrors'
+import SourceReferences, { type SourceReference } from '../components/SourceReferences'
 
 interface Props {
   reviewId: string
@@ -26,10 +27,11 @@ interface Message {
   refused?: boolean
   disclaimer?: string
   limitations?: string[]
-  sources?: Array<{ label: string; type: string; sourceUrl?: string | null }>
+  sources?: SourceReference[]
   outcome?: string
   toolStatus?: string
   retryable?: boolean | null
+  retryPrompt?: string
 }
 
 export default function ChatbotScreen({ reviewId, focusClauseId, focusClauseName, focusClauseTitle, focusClauseStatus, focusClauseCategory, onClose, onClearFocus, onReviewUnavailable, isOpen }: Props) {
@@ -52,7 +54,7 @@ export default function ChatbotScreen({ reviewId, focusClauseId, focusClauseName
   useEffect(() => { if (isOpen) inputRef.current?.focus() }, [isOpen])
   // scrollIntoView의 반환값(Promise일 수 있음)이 React effect의 cleanup으로 전달되지 않게 한다.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    bottomRef.current?.scrollIntoView?.({ behavior: 'smooth' })
   }, [messages])
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose() }
@@ -61,8 +63,8 @@ export default function ChatbotScreen({ reviewId, focusClauseId, focusClauseName
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [isOpen, onClose])
 
-  const send = async () => {
-    const text = input.trim()
+  const send = async (retryText?: string) => {
+    const text = (retryText ?? input).trim()
     if (!text || isSending) return
     setError('')
     setErrorRetryable(false)
@@ -78,13 +80,16 @@ export default function ChatbotScreen({ reviewId, focusClauseId, focusClauseName
       setMessages(previous => [...previous, {
         id: createClientId(), role: 'assistant', text: data.answer ?? data.limitations.join('\n'),
         refused: data.refused, disclaimer: data.disclaimer, limitations: data.limitations,
-        outcome: data.outcome, toolStatus: data.tool_status, retryable: data.retryable,
+        outcome: data.outcome, toolStatus: data.tool_status, retryable: data.retryable, retryPrompt: text,
         sources: data.sources.map(source => ({
           type: source.type,
-          sourceUrl: source.source_url,
-          label: source.type === 'USER_CLAUSE' ? ['사용자 조항', source.display_label].filter(Boolean).join(' · ')
-            : source.type === 'STANDARD_CLAUSE' ? [source.standard_contract_label || '표준계약서', source.display_label].filter(Boolean).join(' · ')
-              : source.display_label || [source.law_name, source.article].filter(Boolean).join(' ') || '법령 근거',
+          display_label: source.display_label,
+          clause_number: source.clause_number,
+          title: source.title,
+          category: source.category,
+          standard_contract_label: source.standard_contract_label,
+          law_name: source.law_name,
+          article: source.article,
         })),
       }])
     } catch (requestError: any) {
@@ -113,12 +118,15 @@ export default function ChatbotScreen({ reviewId, focusClauseId, focusClauseName
         {message.refused && <p className="mb-2 text-xs font-semibold text-amber-700">{outcomePresentation?.message || '현재 검토 근거로는 답변이 제한됩니다. 질문 범위를 조정해 주세요.'}</p>}
         <p className="whitespace-pre-line leading-6">{message.text}</p>
         {message.toolStatus && !['OK', 'NOT_REQUESTED', 'LLM_OUTPUT_INVALID'].includes(message.toolStatus) && <p className="mt-2 text-xs text-amber-700">법령 조회: {toolPresentation?.message || '법령 원문을 확인하지 못했습니다. 법령이 존재하지 않는다는 의미는 아닙니다.'}</p>}
-        {message.sources?.length ? <div className="mt-3 border-t border-slate-200 pt-2"><p className="mb-1 text-xs font-semibold text-slate-500">답변 출처</p>{message.sources.map((source, i) => source.sourceUrl ? <a key={`${source.label}-${i}`} href={source.sourceUrl} target="_blank" rel="noreferrer" className="mr-1 inline-flex items-center gap-1 text-xs text-blue-700 underline"><BookOpen className="size-3" />{source.label}</a> : <span key={`${source.label}-${i}`} className="mr-1 inline-flex items-center gap-1 text-xs text-slate-600"><BookOpen className="size-3" />{source.label}</span>)}</div> : null}
+        {message.role === 'assistant' && message.retryable && message.retryPrompt && <button type="button" onClick={() => void send(message.retryPrompt)} disabled={isSending} className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-blue-700 disabled:text-slate-400"><RotateCcw className="size-3" />같은 질문 다시 시도</button>}
+        {message.sources?.length ? <SourceReferences sources={message.sources} title="답변 출처" /> : null}
         {message.limitations?.length ? <p className="mt-2 text-xs text-slate-500">제한: {message.limitations.join(', ')}</p> : null}
         {message.disclaimer && <p className="mt-2 text-xs text-slate-500">{message.disclaimer}</p>}
-      </div></div>})}<div ref={bottomRef} />
+      </div></div>})}
+      {isSending && <div className="flex justify-start" role="status" aria-live="polite"><div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-600">답변을 작성하고 있습니다<span className="inline-block min-w-5 animate-pulse">…</span></div></div>}
+      <div ref={bottomRef} />
     </div>
     {error && <div className="mx-4 mb-2 rounded-lg bg-rose-50 p-3 text-xs text-rose-700" role="alert">{error}{errorRetryable && <button type="button" onClick={() => void send()} className="ml-2 inline-flex items-center gap-1 font-semibold underline"><RotateCcw className="size-3" />재시도</button>}</div>}
-    <div className="flex gap-2 border-t border-slate-200 p-3"><input ref={inputRef} value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') void send() }} placeholder="검토 결과에 대해 질문해 주세요" className="min-h-11 min-w-0 flex-1 rounded-xl border border-slate-200 px-3 text-sm" /><button type="button" onClick={() => void send()} disabled={!input.trim() || isSending} aria-label="질문 전송" className="rounded-xl bg-blue-600 px-4 text-white disabled:bg-slate-300"><Send className="size-4" /></button></div>
+    <div className="flex gap-2 border-t border-slate-200 p-3"><input ref={inputRef} value={input} disabled={isSending} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') void send() }} placeholder="검토 결과에 대해 질문해 주세요" className="min-h-11 min-w-0 flex-1 rounded-xl border border-slate-200 px-3 text-sm disabled:bg-slate-100" /><button type="button" onClick={() => void send()} disabled={!input.trim() || isSending} aria-label="질문 전송" className="rounded-xl bg-blue-600 px-4 text-white disabled:bg-slate-300"><Send className="size-4" /></button></div>
   </aside>
 }

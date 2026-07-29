@@ -19,9 +19,10 @@ const STEP_FOR: Record<Screen, number> = {
 interface Props {
   currentScreen: Screen
   onNavigate: (s: Screen) => void
+  navigationLocked?: boolean
 }
 
-export default function HorizontalStepper({ currentScreen, onNavigate }: Props) {
+export default function HorizontalStepper({ currentScreen, onNavigate, navigationLocked = false }: Props) {
   const currentStep = STEP_FOR[currentScreen]
 
   return (
@@ -39,14 +40,14 @@ export default function HorizontalStepper({ currentScreen, onNavigate }: Props) 
             return (
               <button
                 key={step.id}
-                disabled={ahead}
-                onClick={() => !ahead && onNavigate(step.nav)}
+                disabled={ahead || navigationLocked}
+                onClick={() => !ahead && !navigationLocked && onNavigate(step.nav)}
                 className={`
                   group relative flex min-w-0 flex-col items-center justify-center gap-2 px-1 text-center sm:flex-row sm:justify-start sm:gap-3 sm:px-4 sm:text-left
                   focus-visible:z-10 focus-visible:outline-none
                   focus-visible:ring-4 focus-visible:ring-inset
                   focus-visible:ring-blue-500/15
-                  ${ahead ? 'cursor-default' : 'cursor-pointer'}
+                  ${ahead || navigationLocked ? 'cursor-default' : 'cursor-pointer'}
                 `}
               >
                 {index < STEPS.length - 1 && (

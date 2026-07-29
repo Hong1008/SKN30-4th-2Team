@@ -1,107 +1,57 @@
-import { render, screen } from "@testing-library/react"
-import userEvent from "@testing-library/user-event"
-import { beforeEach, describe, expect, it, vi } from "vitest"
-import { api } from "../api/api"
-import ChatbotScreen from "./ChatbotScreen"
+import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import ChatbotScreen from './ChatbotScreen'
+import { api } from '../api/api'
 
-vi.mock("../api/api", () => ({
-  api: { chat: vi.fn() },
-}))
-vi.mock("../contexts/MetadataContext", () => ({
-  useMetadata: () => ({ metadata: null }),
-}))
+vi.mock('../api/api', () => ({ api: { chat: vi.fn() } }))
+vi.mock('../contexts/MetadataContext', () => ({ useMetadata: () => ({ metadata: {} }) }))
 
-beforeEach(() => {
-  vi.clearAllMocks()
-  Element.prototype.scrollIntoView = vi.fn()
-})
+const props = {
+  reviewId: 'review-1',
+  onClose: vi.fn(),
+  isOpen: true,
+}
 
-describe("챗봇 답변 출처", () => {
-  it("내부 조항 ID 대신 사용자용 조항명을 표시한다", async () => {
-    vi.mocked(api.chat).mockResolvedValue({
-      data: {
-        outcome: "ANSWERED",
-        answer: "업무 범위에는 API 명세서 작성이 포함됩니다.",
-        refused: false,
-        sources: [{
-          type: "USER_CLAUSE",
-          id: "uc_rev_chat_1",
-          display_label: "제1조 목적 및 업무 범위",
-        }, {
-          type: "STANDARD_CLAUSE",
-          id: "std_scope_1",
-          display_label: "제1조 업무 범위",
-          standard_contract_label: "SW 프리랜서 용역 표준계약서",
-        }],
-        limitations: [],
-        tool_status: "NOT_REQUESTED",
-        disclaimer: "법률 자문이 아닙니다.",
-      },
-    } as never)
+beforeEach(() => vi.clearAllMocks())
 
-    render(
-      <ChatbotScreen
-        reviewId="rev_chat"
-        isOpen
-        onClose={vi.fn()}
-      />,
-    )
-    await userEvent.type(
-      screen.getByPlaceholderText("검토 결과에 대해 질문해 주세요"),
-      "을의 업무 범위에는 무엇이 포함되나요?",
-    )
-    await userEvent.click(screen.getByRole("button", { name: "질문 전송" }))
-
-    expect(
-      await screen.findByText("사용자 조항 · 제1조 목적 및 업무 범위"),
-    ).toBeInTheDocument()
-    expect(
-      screen.getByText(
-        "SW 프리랜서 용역 표준계약서 · 제1조 업무 범위",
-      ),
-    ).toBeInTheDocument()
-    expect(screen.queryByText(/uc_rev_chat_1/)).not.toBeInTheDocument()
-    expect(screen.queryByText(/std_scope_1/)).not.toBeInTheDocument()
+describe('챗봇 요청 상태', () => {
+  it('답변 대기 중 입력 표시와 중복 전송 차단을 적용한다', async () => {
+    vi.mocked(api.chat).mockReturnValue(new Promise(() => {}))
+    render(<ChatbotScreen {...props} />)
+    const input = screen.getByPlaceholderText('검토 결과에 대해 질문해 주세요')
+    await userEvent.type(input, '이 조항을 설명해줘')
+    await userEvent.click(screen.getByRole('button', { name: '질문 전송' }))
+    expect(screen.getByRole('status')).toHaveTextContent('답변을 작성하고 있습니다')
+    expect(input).toBeDisabled()
+    expect(api.chat).toHaveBeenCalledTimes(1)
+    await userEvent.click(screen.getByRole('button', { name: '질문 전송' }))
+    expect(api.chat).toHaveBeenCalledTimes(1)
   })
 
-  it("검증된 법령 출처 URL을 새 창 링크로 표시한다", async () => {
+  it('출처의 내부 ID를 표시하지 않고 안전한 라벨을 사용한다', async () => {
     vi.mocked(api.chat).mockResolvedValue({
       data: {
-        outcome: "ANSWERED",
-        answer: "관련 법령 참고 원문을 확인했습니다.",
+        answer: '답변입니다.',
         refused: false,
-        sources: [{
-          type: "LAW",
-          id: "law_1",
-          display_label: "민법 제390조",
-          law_name: "민법",
-          article: "제390조",
-          source_url: "https://www.law.go.kr/법령/민법/제390조",
-        }],
+        disclaimer: '',
         limitations: [],
-        tool_status: "OK",
-        disclaimer: "법률 자문이 아닙니다.",
+        outcome: 'ANSWERED',
+        tool_status: 'OK',
+        retryable: false,
+        sources: [
+          { type: 'USER_CLAUSE', id: 'usr_internal_123' },
+          { type: 'STANDARD_CLAUSE', id: 'std_internal_456', display_label: '제5조 · 대금 지급', standard_contract_label: 'SW 프리랜서 표준계약서' },
+          { type: 'LAW', id: 'law_internal_789', law_name: '민법', article: '제390조' },
+        ],
       },
     } as never)
-
-    render(
-      <ChatbotScreen
-        reviewId="rev_chat"
-        isOpen
-        onClose={vi.fn()}
-      />,
-    )
-    await userEvent.type(
-      screen.getByPlaceholderText("검토 결과에 대해 질문해 주세요"),
-      "관련 법령을 알려줘.",
-    )
-    await userEvent.click(screen.getByRole("button", { name: "질문 전송" }))
-
-    expect(await screen.findByRole("link", { name: /민법 제390조/ }))
-      .toHaveAttribute(
-        "href",
-        "https://www.law.go.kr/법령/민법/제390조",
-      )
-    expect(screen.queryByText(/law_1/)).not.toBeInTheDocument()
+    render(<ChatbotScreen {...props} />)
+    await userEvent.type(screen.getByPlaceholderText('검토 결과에 대해 질문해 주세요'), '근거를 알려줘')
+    await userEvent.click(screen.getByRole('button', { name: '질문 전송' }))
+    expect(await screen.findByText('현재 검토 조항')).toBeInTheDocument()
+    expect(screen.getByText('SW 프리랜서 표준계약서 · 제5조 · 대금 지급')).toBeInTheDocument()
+    expect(screen.getByText('민법 제390조')).toBeInTheDocument()
+    expect(screen.queryByText(/internal_/)).not.toBeInTheDocument()
   })
 })
