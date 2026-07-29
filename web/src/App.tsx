@@ -30,14 +30,15 @@ function ProcessingRoute({ fallbackReviewId, onDone, onRetry, onStartNewReview }
     : <Navigate to="/review" replace />
 }
 
-function ResultsRoute({ fallbackReviewId, onClauseClick, onChatbot }: {
+function ResultsRoute({ fallbackReviewId, onClauseClick, onChatbot, onReviewInProgress }: {
   fallbackReviewId: string | null
   onClauseClick: (clause: ClauseResult, reviewId: string) => void
   onChatbot: (reviewId: string) => void
+  onReviewInProgress: (reviewId: string) => void
 }) {
   const { id } = useParams()
   const reviewId = id ?? fallbackReviewId
-  return reviewId ? <ResultsScreen reviewId={reviewId} onClauseClick={(clause) => onClauseClick(clause, reviewId)} onChatbot={() => onChatbot(reviewId)} /> : <Navigate to="/review" replace />
+  return reviewId ? <ResultsScreen reviewId={reviewId} onClauseClick={(clause) => onClauseClick(clause, reviewId)} onChatbot={() => onChatbot(reviewId)} onReviewInProgress={() => onReviewInProgress(reviewId)} /> : <Navigate to="/review" replace />
 }
 
 function ClauseRoute({ fallbackReviewId, selectedClause, onBack, onChatbot }: {
@@ -201,6 +202,7 @@ function MainApp() {
   else if (path.includes('/chatbot')) screen = 'chatbot'
   else if (path.includes('/results')) screen = 'results'
   else if (path.includes('/out-of-scope')) screen = 'out-of-scope'
+  const navigationLocked = screen === 'processing'
 
   const nav = (s: Screen) => {
     switch (s) {
@@ -225,10 +227,11 @@ function MainApp() {
           )}
           onStartNewReview={() => setShowNewReviewConfirm(true)}
           isStartingNewReview={isStartingNewReview}
+          navigationLocked={navigationLocked}
         />
 
         {/* ── Stepper ── */}
-        <HorizontalStepper currentScreen={screen} onNavigate={nav} />
+        <HorizontalStepper currentScreen={screen} onNavigate={nav} navigationLocked={navigationLocked} />
 
         {/* ── Body ── */}
         <main className="flex-1 px-4 py-7 sm:px-6 lg:px-8 lg:py-9">
@@ -272,7 +275,7 @@ function MainApp() {
                 <ResultsRoute fallbackReviewId={reviewId} onClauseClick={(clause, id) => {
                     setSelectedClause(clause)
                     navigate(`/review/${id}/results/clause/${clause.id}`)
-                  }} onChatbot={(id) => openChat(id)} />
+                  }} onChatbot={(id) => openChat(id)} onReviewInProgress={(id) => navigate(`/review/${id}/progress`, { replace: true })} />
               } />
               <Route path="/review/:id/results/clause/:clauseId" element={<ClauseRoute fallbackReviewId={reviewId} selectedClause={selectedClause} onBack={(id) => navigate(`/review/${id}/results`)} onChatbot={openChat} />} />
               <Route path="/review/:id/chatbot" element={<Navigate to="../results" replace />} />

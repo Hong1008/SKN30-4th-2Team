@@ -3,11 +3,11 @@ import { useEffect, useState, useRef } from "react"
 
 import {
   UploadCloud,
-  FileText,
   CheckCircle2,
   X,
   ChevronRight,
   AlertCircle,
+  Loader2,
 } from "lucide-react"
 
 import { api } from "../api/api"
@@ -69,6 +69,7 @@ export default function UploadAndTypeScreen({
   const fileRef = useRef<HTMLInputElement>(null)
 
   const startRequestKey = useRef<string | null>(null)
+  const startLockedRef = useRef(false)
 
   const uploadLockedRef = useRef(false)
 
@@ -87,6 +88,7 @@ export default function UploadAndTypeScreen({
   const [errorMsg, setErrorMsg] = useState("")
 
   const [emptyDocError, setEmptyDocError] = useState(false)
+  const [isStartingReview, setIsStartingReview] = useState(false)
 
   useEffect(() => () => uploadControllerRef.current?.abort(), [])
 
@@ -233,7 +235,9 @@ export default function UploadAndTypeScreen({
     }
   }
   const handleNext = async () => {
-    if (!sessionId) return
+    if (!sessionId || startLockedRef.current) return
+    startLockedRef.current = true
+    setIsStartingReview(true)
 
     try {
       // 1. Confirm contract type
@@ -325,6 +329,9 @@ export default function UploadAndTypeScreen({
       } else {
         setErrorMsg("검토 시작 요청에 실패했습니다.")
       }
+    } finally {
+      startLockedRef.current = false
+      setIsStartingReview(false)
     }
   }
 
@@ -352,6 +359,8 @@ export default function UploadAndTypeScreen({
     setSessionExpiresAt(null)
 
     startRequestKey.current = null
+    startLockedRef.current = false
+    setIsStartingReview(false)
 
     localStorage.removeItem(SESSION_ID_KEY)
 
@@ -508,7 +517,7 @@ export default function UploadAndTypeScreen({
           <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
             <div className="flex items-start gap-4">
               <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center shrink-0">
-                <FileText className="w-5 h-5 text-blue-600" />
+                <Loader2 className="w-5 h-5 animate-spin text-blue-600" aria-hidden="true" />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between mb-2">
@@ -524,7 +533,7 @@ export default function UploadAndTypeScreen({
                     <div className="h-full w-full animate-pulse rounded-full bg-gradient-to-r from-blue-600 to-cyan-500" />
                   </div>
                   <span className="text-xs font-medium text-slate-600 shrink-0">
-                    업로드·분석 중
+                    파일 업로드 중
                   </span>
                   <button
                     type="button"
@@ -556,6 +565,7 @@ export default function UploadAndTypeScreen({
               </div>
               <button
                 onClick={reset}
+                disabled={isStartingReview}
                 aria-label="파일 제거"
                 className="text-slate-400 hover:text-rose-500 transition-colors"
               >
@@ -573,6 +583,7 @@ export default function UploadAndTypeScreen({
               return (
                 <button
                   key={type.code}
+                  disabled={uploadState === "uploading" || isStartingReview}
                   onClick={() => {
                     setSelectedType(type.code)
 
@@ -626,14 +637,15 @@ export default function UploadAndTypeScreen({
       <div className="sticky bottom-4 z-20 flex flex-col-reverse gap-3 rounded-2xl border border-slate-200/80 bg-white/95 p-3 shadow-[0_8px_24px_rgba(15,23,42,0.07)] backdrop-blur-xl sm:flex-row sm:items-center sm:justify-end">
         <button
           onClick={handleNext}
-          disabled={uploadState !== "success" || !selectedType}
+          disabled={uploadState !== "success" || !selectedType || isStartingReview}
           className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-5 text-sm font-semibold transition-[background-color,box-shadow,transform] duration-150 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/20 ${
-            uploadState === "success" && selectedType
+            uploadState === "success" && selectedType && !isStartingReview
               ? "bg-blue-600 text-white shadow-[0_1px_2px_rgba(37,99,235,0.2),0_6px_16px_rgba(37,99,235,0.16)] hover:-translate-y-px hover:bg-blue-700 hover:shadow-md active:translate-y-0 active:bg-blue-800"
               : "cursor-not-allowed bg-slate-200 text-slate-500"
           }`}
         >
-          선택한 유형으로 검토 시작 <ChevronRight className="w-4 h-4" />
+          {isStartingReview ? '검토 시작 요청 중' : '선택한 유형으로 검토 시작'}
+          {isStartingReview ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> : <ChevronRight className="w-4 h-4" />}
         </button>
       </div>
     </div>
