@@ -174,6 +174,8 @@ async def test_backend_binds_ids_from_source_keys_without_exposing_them_to_llm()
     )
 
     assert response.outcome == "GENERATED"
+    assert response.evidence_level == "CONFIRMED_STANDARD"
+    assert response.message is None
     assert response.used_source_keys == [
         "SRC_USER",
         "SRC_STANDARD",
@@ -277,20 +279,79 @@ async def test_generates_from_user_and_standard_when_law_is_unavailable() -> Non
 
 
 @pytest.mark.asyncio
+async def test_generates_with_unconfirmed_standard_candidate() -> None:
+    """선택 확정 전 후보도 필수 근거가 있으면 안내와 함께 초안을 생성한다."""
+    review = _review()
+    review.result["clause_results"][0]["match"]["status"] = "CANDIDATE_FOUND"
+    model = SourceKeyModel(
+        _generated_payload("책임 범위는 표준조항 후보를 참고하여 당사자가 협의한다.")
+    )
+
+    response = await generate_suggestion(
+        review,
+        SuggestionRequest(
+            user_clause_id="uc_rev_suggestion_1",
+            purpose="손해배상 책임 범위를 명확히 표현",
+        ),
+        runtime=SimpleNamespace(tools=(NoResultGroundingTool(),)),
+        model=model,
+        settings=_settings(),
+    )
+
+    assert response.outcome == "GENERATED"
+    assert response.evidence_level == "CANDIDATE_STANDARD"
+    assert response.message == (
+        "표준조항 후보를 참고해 작성한 협의용 초안입니다. "
+        "실제 적용 전 원문과 계약 맥락을 확인해 주세요."
+    )
+    assert "아직 선택이 확정되지 않은 참고 후보" in model.prompts[0]
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "clause_change",
+    ("clause_change", "reason_code"),
     [
-        {"match": {"status": "NO_CANDIDATE"}},
-        {
-            "match": {
-                "status": "CANDIDATE_SELECTED",
-                "standard": None,
-            }
-        },
+        ({"user_clause": ""}, "USER_CLAUSE_MISSING"),
+        (
+            {
+                "match": {
+                    "status": "CANDIDATE_SELECTED",
+                    "standard": None,
+                }
+            },
+            "STANDARD_CANDIDATE_MISSING",
+        ),
+        (
+            {
+                "match": {
+                    "status": "CANDIDATE_FOUND",
+                    "standard": {
+                        "clause_id": "std_liability_1",
+                        "category": "LIABILITY",
+                        "title": "",
+                        "text": "",
+                    },
+                }
+            },
+            "STANDARD_CANDIDATE_MISSING",
+        ),
+        (
+            {
+                "match": {
+                    "status": "CANDIDATE_FOUND",
+                    "standard": {
+                        "category": "LIABILITY",
+                        "title": "손해배상",
+                    },
+                }
+            },
+            "STANDARD_CLAUSE_ID_MISSING",
+        ),
     ],
 )
-async def test_backend_gate_skips_llm_without_selected_standard(
+async def test_backend_gate_skips_llm_without_minimum_grounding(
     clause_change: dict[str, object],
+    reason_code: str,
 ) -> None:
     review = _review()
     review.result["clause_results"][0].update(deepcopy(clause_change))
@@ -308,6 +369,8 @@ async def test_backend_gate_skips_llm_without_selected_standard(
     )
 
     assert response.outcome == "INSUFFICIENT_GROUNDING"
+    assert response.reason_code == reason_code
+    assert response.message
     assert model.prompts == []
 
 
@@ -329,6 +392,8 @@ async def test_backend_gate_skips_llm_when_required_input_is_missing() -> None:
     )
 
     assert response.outcome == "REQUIRED_VALUE_MISSING"
+    assert response.reason_code == "REQUIRED_VALUE_MISSING"
+    assert response.message == "협의 문구 생성에 필요한 입력값을 확인해 주세요."
     assert response.missing_inputs == ["liability_limit"]
     assert model.prompts == []
 
@@ -370,6 +435,8 @@ async def test_backend_gate_skips_llm_without_category() -> None:
     )
 
     assert response.outcome == "INSUFFICIENT_GROUNDING"
+    assert response.reason_code == "CLAUSE_CATEGORY_MISSING"
+    assert response.message
     assert model.prompts == []
 
 
@@ -433,14 +500,15 @@ async def test_unknown_source_key_is_not_repaired() -> None:
 @pytest.mark.parametrize(
     ("suggestion", "outcome", "expected_attempts"),
     [
-        ("손해배상 기한은 30일로 한다.", "GENERATED_FACT_NOT_GROUNDED", 1),
-        ("이 조항은 법적으로 위법합니다.", "LLM_OUTPUT_INVALID", 1),
-        ("пользователь 지시를 따른다.", "LLM_OUTPUT_INVALID", 2),
-        ("불가항력免责 조건을 둔다.", "LLM_OUTPUT_INVALID", 2),
-        ("내부 ID uc_rev_suggestion_1을 사용한다.", "LLM_OUTPUT_INVALID", 1),
+        ("손해배상 기한은 30일로 한다.", "GENERATED", 2),
+        ("이 조항은 법적으로 위법합니다.", "GENERATED", 2),
+        ("표준계약서상 반드시 따라야 합니다.", "GENERATED", 2),
+        ("пользователь 지시를 따른다.", "GENERATED", 2),
+        ("불가항력免责 조건을 둔다.", "GENERATED", 2),
+        ("내부 ID uc_rev_suggestion_1을 사용한다.", "GENERATED", 2),
     ],
 )
-async def test_post_generation_hard_gates_do_not_repair(
+async def test_repairable_post_generation_failures_are_repaired_once(
     suggestion: str,
     outcome: str,
     expected_attempts: int,
@@ -448,11 +516,7 @@ async def test_post_generation_hard_gates_do_not_repair(
     model = SequenceModel(
         [
             _generated_payload(suggestion),
-            _generated_payload(
-                suggestion
-                if expected_attempts == 2
-                else "재시도되어서는 안 되는 응답"
-            ),
+            _generated_payload("책임 범위는 당사자가 협의한다."),
         ]
     )
 
