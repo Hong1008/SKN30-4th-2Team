@@ -13,8 +13,8 @@ from app.core.llm.types import ReasoningMode
 
 
 def get_chat_model(settings: SettingsDep) -> BaseChatModel:
-    """선택 provider의 기본 non-reasoning chat model을 반환한다."""
-    return create_chat_model(settings, ReasoningMode.OFF)
+    """선택 provider의 기본 reasoning chat model을 반환한다."""
+    return create_chat_model(settings, ReasoningMode.ON)
 
 async def get_mcp_runtime(request: Request) -> WorkShieldMCPRuntime:
     """FastAPI lifespan에서 준비한 WorkShield MCP runtime을 반환한다."""

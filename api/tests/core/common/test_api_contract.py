@@ -9,7 +9,7 @@ import pytest
 from fastapi import Body, FastAPI, Request
 from pydantic import BaseModel
 
-from app.core.common.errors import NotFoundError
+from app.core.common.errors import NotFoundError, OverCapacityError
 from app.core.common.exception_handlers import register_exception_handlers
 from app.core.common.request_id import register_request_id_middleware
 from app.core.common.responses import success_response
@@ -40,6 +40,14 @@ def create_contract_test_app() -> FastAPI:
             code="SESSION_NOT_FOUND",
             message="검토 세션을 찾을 수 없습니다.",
             next_action="START_NEW_REVIEW",
+        )
+
+    @test_app.get("/over-capacity")
+    async def over_capacity() -> None:
+        raise OverCapacityError(
+            code="REVIEW_QUEUE_FULL",
+            message="현재 검토 요청이 많습니다.",
+            retry_after_seconds=30,
         )
 
     @test_app.post("/validation")
@@ -115,6 +123,21 @@ async def test_domain_error_uses_common_error_response() -> None:
         "details": {},
     }
     assert response.headers["X-Request-ID"] == body["meta"]["request_id"]
+
+
+async def test_over_capacity_error_has_retry_headers() -> None:
+    transport = httpx.ASGITransport(app=create_contract_test_app())
+    async with httpx.AsyncClient(
+        transport=transport,
+        base_url="http://test",
+    ) as client:
+        response = await client.get("/over-capacity")
+
+    assert response.status_code == 429
+    assert response.headers["Retry-After"] == "30"
+    assert response.headers["Cache-Control"] == "no-store"
+    assert response.json()["error"]["retryable"] is True
+    assert response.json()["error"]["next_action"] == "RETRY_LATER"
 
 
 async def test_validation_error_does_not_echo_request_body() -> None:

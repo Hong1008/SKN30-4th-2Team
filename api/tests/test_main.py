@@ -1,7 +1,6 @@
 """FastAPI 애플리케이션 팩토리와 MCP lifespan 연결을 검증한다."""
 
 from contextlib import asynccontextmanager
-import asyncio
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -130,7 +129,7 @@ async def test_lifespan_exposes_and_cleans_mcp_runtime(
 
 
 @pytest.mark.asyncio
-async def test_lifespan_awaits_review_tasks_before_mcp_runtime_closes(
+async def test_lifespan_stops_scheduler_before_mcp_runtime_closes(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -143,13 +142,6 @@ async def test_lifespan_awaits_review_tasks_before_mcp_runtime_closes(
         finally:
             events.append("runtime-closed")
 
-    async def pending_review() -> None:
-        try:
-            await asyncio.Event().wait()
-        finally:
-            await asyncio.sleep(0)
-            events.append("review-finished")
-
     settings = SimpleNamespace(
         database_url=f"sqlite+pysqlite:///{tmp_path / 'ordered.db'}",
         database_echo=False,
@@ -161,8 +153,13 @@ async def test_lifespan_awaits_review_tasks_before_mcp_runtime_closes(
     monkeypatch.setattr(lifespan_module, "open_workshield_mcp", fake_open)
 
     async with lifespan(app):
-        task = asyncio.create_task(pending_review())
-        await asyncio.sleep(0)
-        app.state.review_tasks["rev_pending"] = task
+        scheduler = app.state.review_scheduler
+        original_stop = scheduler.stop
 
-    assert events == ["review-finished", "runtime-closed"]
+        async def tracked_stop() -> None:
+            await original_stop()
+            events.append("scheduler-stopped")
+
+        scheduler.stop = tracked_stop
+
+    assert events == ["scheduler-stopped", "runtime-closed"]
