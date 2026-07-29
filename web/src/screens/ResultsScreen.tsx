@@ -1,3 +1,4 @@
+import { createClientId } from '../utils/clientId'
 import { useState, useEffect, useRef } from 'react'
 import { Search, SlidersHorizontal, MessageSquare, ChevronRight, RotateCcw, ChevronDown, ChevronUp, AlertTriangle, CheckSquare, Trash2, Loader2 } from 'lucide-react'
 import Badge from '../components/Badge'
@@ -121,7 +122,7 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot }: Pr
     setIsDiscarding(true)
     setDiscardError('')
     try {
-      const key = discardRequestKey.current ?? crypto.randomUUID()
+      const key = discardRequestKey.current ?? createClientId()
       discardRequestKey.current = key
       await api.deleteReview(reviewId, key)
       discardRequestKey.current = null

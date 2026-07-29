@@ -1,3 +1,4 @@
+import { createClientId } from '../utils/clientId'
 import { useEffect, useRef, useState } from 'react'
 import { AlertCircle, ArrowLeft, ChevronRight, FileQuestion } from 'lucide-react'
 import { api } from '../api/api'
@@ -69,7 +70,7 @@ export default function OutOfScopeScreen({ sessionId, onBack, onContinue, setSes
         setError('현재 상태에서는 검토를 시작할 수 없습니다.')
         return
       }
-      const idempotencyKey = startRequestKey.current ?? crypto.randomUUID()
+      const idempotencyKey = startRequestKey.current ?? createClientId()
       startRequestKey.current = idempotencyKey
       const review = await api.startReview(sessionId, idempotencyKey)
       startRequestKey.current = null
