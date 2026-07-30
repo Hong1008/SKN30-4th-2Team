@@ -152,6 +152,43 @@ async def test_session_creation_and_review_access_are_cookie_bound(
         assert (await other.get(f"/api/v1/reviews/{review_id}")).status_code == 404
 
 
+async def test_session_extend_resets_expiration_and_cookie(
+    tmp_path: Path,
+) -> None:
+    """연장 버튼 API는 세션 만료시각과 Cookie를 현재부터 30분으로 재설정한다."""
+    app = create_test_app(tmp_path)
+    transport = httpx.ASGITransport(app=app)
+
+    async with httpx.AsyncClient(
+        transport=transport,
+        base_url="http://test",
+    ) as owner:
+        created = await owner.post(
+            "/api/v1/review-sessions",
+            files={"file": ("contract.pdf", _pdf(), "application/pdf")},
+        )
+        session_id = created.json()["data"]["session_id"]
+        original_expires_at = created.json()["data"]["expires_at"]
+
+        await asyncio.sleep(0.01)
+        extended = await owner.post(
+            f"/api/v1/review-sessions/{session_id}/extend"
+        )
+
+    assert extended.status_code == 200
+    assert extended.json()["data"]["expires_at"] > original_expires_at
+    assert "Max-Age=1800" in extended.headers["set-cookie"]
+
+    async with httpx.AsyncClient(
+        transport=transport,
+        base_url="http://test",
+    ) as other:
+        denied = await other.post(
+            f"/api/v1/review-sessions/{session_id}/extend"
+        )
+    assert denied.status_code == 404
+
+
 @pytest.mark.parametrize(
     ("scope_status", "review_state", "allowed_actions"),
     [

@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 
 from fastapi import FastAPI
 
-from app.config import API_ROOT, get_settings
+from app.config import API_ROOT, MCPTransport, get_settings
 from app.core.admission.gate import BoundedFifoGate, ImmediateConcurrencyLimiter
 from app.core.admission.policy import (
     REVIEW_POLICY,
@@ -184,6 +184,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     settings=settings,
                     review_id=review_id,
                     policy=review_session_policy,
+                    runtime_factory=(
+                        (lambda: open_workshield_mcp(settings))
+                        if settings.workshield_mcp_transport is MCPTransport.STDIO
+                        else None
+                    ),
                 ),
                 REVIEW_POLICY,
             )

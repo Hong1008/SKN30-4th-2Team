@@ -84,6 +84,37 @@ async def test_only_owner_cookie_can_access_resource(
     assert owner.status_code == 200
 
 
+async def test_owned_reads_do_not_extend_session_or_review(
+    database: Database,
+) -> None:
+    """일반 조회는 수동 연장 전까지 기존 만료 시각을 유지한다."""
+    owner_token, _, review_id = _seed(database)
+    with database.session() as session:
+        session_entity = SqlAlchemyReviewSessionRepository(session).get("ses_owner")
+        review_entity_value = SqlAlchemyReviewRepository(session).get(review_id)
+        assert session_entity is not None
+        assert review_entity_value is not None
+        session_expires_at = session_entity.expires_at
+        review_expires_at = review_entity_value.expires_at
+
+    transport = httpx.ASGITransport(app=_create_app(database))
+    async with httpx.AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        cookies={SESSION_ACCESS_COOKIE: owner_token},
+    ) as client:
+        assert (await client.get("/sessions/ses_owner")).status_code == 200
+        assert (await client.get(f"/reviews/{review_id}")).status_code == 200
+
+    with database.session() as session:
+        restored_session = SqlAlchemyReviewSessionRepository(session).get("ses_owner")
+        restored_review = SqlAlchemyReviewRepository(session).get(review_id)
+    assert restored_session is not None
+    assert restored_review is not None
+    assert restored_session.expires_at == session_expires_at
+    assert restored_review.expires_at == review_expires_at
+
+
 async def test_owned_expired_session_returns_410_but_other_browser_gets_404(
     database: Database,
 ) -> None:
