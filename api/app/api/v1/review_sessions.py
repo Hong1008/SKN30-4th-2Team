@@ -4,7 +4,7 @@ from fastapi import APIRouter, File, Request, Response, UploadFile
 
 from app.config import SettingsDep
 from app.core.admission.dependencies import UploadLimiterDep
-from app.core.access_control.dependencies import OwnedReviewSessionDep
+from app.core.access_control.dependencies import OwnedReviewSessionDep, SessionCookie
 from app.core.common.responses import (
     ApiResponse,
     COMMON_ERROR_RESPONSES,
@@ -23,6 +23,7 @@ from app.domains.review_sessions.schemas import (
     UploadInfo,
 )
 from app.domains.review_sessions.dependencies import ReviewSessionPolicyDep
+from app.domains.review_sessions.activity import extend_review_session
 from app.domains.review_sessions.service import (
     confirm_out_of_scope,
     create_review_session,
@@ -131,6 +132,37 @@ async def create_session(
 def get_session(request: Request, owned: OwnedReviewSessionDep):
     """Cookie 소유자에게만 세션 상태를 반환한다."""
     return success_response(request, _response(owned))
+
+
+@router.post(
+    "/{session_id}/extend",
+    response_model=ApiResponse[ReviewSessionResponse],
+)
+def extend_session(
+    request: Request,
+    response: Response,
+    owned: OwnedReviewSessionDep,
+    db_session: DbSessionDep,
+    settings: SettingsDep,
+    policy: ReviewSessionPolicyDep,
+    access_token: SessionCookie = None,
+):
+    """사용자 요청 시 세션 보관 시간을 현재부터 30분으로 재설정한다."""
+    if access_token is None:
+        raise RuntimeError("소유권 검증 후 세션 Cookie가 누락되었습니다.")
+    entity = extend_review_session(
+        db_session,
+        owned,
+        ttl_seconds=policy.session_ttl_seconds,
+    )
+    db_session.commit()
+    set_session_access_cookie(
+        response,
+        token=access_token,
+        settings=settings,
+        policy=policy,
+    )
+    return success_response(request, _response(entity))
 
 
 @router.patch(

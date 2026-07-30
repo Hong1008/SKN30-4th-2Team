@@ -3,8 +3,9 @@
 import asyncio
 import base64
 import json
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, AsyncContextManager
 
 from app.config import Settings
 from app.core.db.database import Database
@@ -202,6 +203,46 @@ async def _call_review_tool(
     return _tool_payload(result)
 
 
+async def _invoke_review_tool(
+    *,
+    runtime: WorkShieldMCPRuntime,
+    database: Database,
+    storage: FileStorage,
+    storage_key: str,
+    file_name: str,
+    contract_type: str,
+    settings: Settings,
+    review_id: str,
+) -> dict[str, Any]:
+    """선택된 MCP runtime에 transport별 계약서 입력을 전달한다."""
+    if runtime.supports_file_path:
+        with storage.local_path(storage_key) as local_path:
+            arguments = {
+                "contract_type": contract_type,
+                "file_path": str(local_path),
+            }
+            return await _call_review_tool(
+                runtime,
+                arguments,
+                timeout_seconds=settings.workshield_mcp_read_timeout,
+                progress_callback=ReviewProgressRecorder(database, review_id),
+            )
+
+    with storage.open(storage_key) as stored_file:
+        content = stored_file.read()
+    arguments = {
+        "contract_type": contract_type,
+        "file_content": base64.b64encode(content).decode("ascii"),
+        "file_name": file_name,
+    }
+    return await _call_review_tool(
+        runtime,
+        arguments,
+        timeout_seconds=settings.workshield_mcp_read_timeout,
+        progress_callback=ReviewProgressRecorder(database, review_id),
+    )
+
+
 async def execute_review(
     *,
     database: Database,
@@ -210,6 +251,9 @@ async def execute_review(
     settings: Settings,
     review_id: str,
     policy: ReviewSessionPolicy = DEFAULT_REVIEW_SESSION_POLICY,
+    runtime_factory: Callable[
+        [], AsyncContextManager[WorkShieldMCPRuntime]
+    ] | None = None,
 ) -> None:
     """검토를 수행하고 별도 DB session으로 최종 상태를 저장한다."""
     with database.session() as db_session:
@@ -239,31 +283,28 @@ async def execute_review(
         contract_type = review.contract_type
 
     try:
-        if runtime.supports_file_path:
-            with storage.local_path(storage_key) as local_path:
-                arguments = {
-                    "contract_type": contract_type,
-                    "file_path": str(local_path),
-                }
-                raw_result = await _call_review_tool(
-                    runtime,
-                    arguments,
-                    timeout_seconds=settings.workshield_mcp_read_timeout,
-                    progress_callback=ReviewProgressRecorder(database, review_id),
+        if runtime_factory is not None:
+            async with runtime_factory() as execution_runtime:
+                raw_result = await _invoke_review_tool(
+                    runtime=execution_runtime,
+                    storage=storage,
+                    storage_key=storage_key,
+                    file_name=file_name,
+                    contract_type=contract_type,
+                    settings=settings,
+                    review_id=review_id,
+                    database=database,
                 )
         else:
-            with storage.open(storage_key) as stored_file:
-                content = stored_file.read()
-            arguments = {
-                "contract_type": contract_type,
-                "file_content": base64.b64encode(content).decode("ascii"),
-                "file_name": file_name,
-            }
-            raw_result = await _call_review_tool(
-                runtime,
-                arguments,
-                timeout_seconds=settings.workshield_mcp_read_timeout,
-                progress_callback=ReviewProgressRecorder(database, review_id),
+            raw_result = await _invoke_review_tool(
+                runtime=runtime,
+                database=database,
+                storage=storage,
+                storage_key=storage_key,
+                file_name=file_name,
+                contract_type=contract_type,
+                settings=settings,
+                review_id=review_id,
             )
         result_payload = normalize_review_result(raw_result, review_id=review_id)
         status = _mcp_status(result_payload)

@@ -47,10 +47,11 @@ def _structured_capabilities(result: CallToolResult) -> dict[str, object]:
 
 async def _close_mcp_stack(stack: AsyncExitStack) -> None:
     """정상 stdio 종료 중 이미 닫힌 스트림 오류만 제한적으로 무시한다."""
-    try:
-        await stack.aclose()
-    except* (anyio.BrokenResourceError, anyio.ClosedResourceError):
-        pass
+    with anyio.CancelScope(shield=True):
+        try:
+            await stack.aclose()
+        except* (anyio.BrokenResourceError, anyio.ClosedResourceError):
+            pass
 
 
 @asynccontextmanager
@@ -86,6 +87,9 @@ async def open_workshield_mcp(
         result = await session.call_tool(CAPABILITIES_TOOL_NAME, {})
         capabilities = _structured_capabilities(result)
     except (MCPCompatibilityError, MCPConfigurationError):
+        await _close_mcp_stack(stack)
+        raise
+    except anyio.get_cancelled_exc_class():
         await _close_mcp_stack(stack)
         raise
     except Exception as error:

@@ -17,7 +17,7 @@
 
 ## 0. 현재 구현 경계
 
-현재 MVP REST API는 metadata, 세션 생성·복구, 계약 유형 확정, 범위 확인, 검토 접수·상태·결과·재시도·SSE, grounding, chat, suggestions, 결과 폐기형 취소까지 구현되어 있다. 멱등 요청은 `idempotency_records`의 scope·세션·요청 fingerprint로 검증하며, chat과 suggestions 응답 스냅샷은 세션 TTL 안에서만 보존한다.
+현재 MVP REST API는 metadata, 세션 생성·복구, 계약 유형 확정, 범위 확인, 검토 접수·상태·결과·재시도·SSE, grounding, chat, suggestions, 검토 실행 취소와 결과 폐기까지 구현되어 있다. 멱등 요청은 `idempotency_records`의 scope·세션·요청 fingerprint로 검증하며, chat과 suggestions 응답 스냅샷은 세션 TTL 안에서만 보존한다.
 
 신규 연동은 다음 MCP 도구를 우선 사용한다.
 
@@ -56,6 +56,7 @@
 | 메타데이터 | GET | `/api/v1/metadata` | 공통 코드·표시명·파일 정책 | MVP |
 | 검토 세션 | POST | `/api/v1/review-sessions` | 파일 업로드·범위 판별 | MVP |
 | 검토 세션 | GET | `/api/v1/review-sessions/{session_id}` | 세션 상태 복구 | MVP |
+| 검토 세션 | POST | `/api/v1/review-sessions/{session_id}/extend` | 세션·현재 review·Cookie 만료를 현재부터 30분으로 재설정 | MVP |
 | 검토 세션 | PATCH | `/api/v1/review-sessions/{session_id}/contract-type` | 계약 유형 확정 | MVP |
 | 검토 세션 | POST | `/api/v1/review-sessions/{session_id}/out-of-scope-confirmation` | 범위 외 계속 진행 확인 | MVP |
 | 검토 | POST | `/api/v1/reviews` | 전체 검토 시작 | MVP |
@@ -68,7 +69,7 @@
 | 제안 | POST | `/api/v1/reviews/{review_id}/suggestions` | 단일 협의 문구 생성 | MVP |
 | 제안 편집 | PATCH | `/api/v1/reviews/{review_id}/suggestions/{suggestion_id}` | 제안 편집·임시 저장 | MVP 이후 |
 | 단일 조항 재검토 | POST | `/api/v1/reviews/{review_id}/clause-reviews` | 수정 문구 단일 조항 재검토 | MVP 이후 |
-| 취소 | DELETE | `/api/v1/reviews/{review_id}` | 결과 폐기·임시 파일 정리 | MVP |
+| 취소 | DELETE | `/api/v1/reviews/{review_id}` | 큐 제거 또는 실행 취소, 결과 폐기·임시 파일 정리 | MVP |
 
 표준조항의 전체 본문·출처·버전은 `review_contract_candidates` 결과에 포함되므로 MVP에서는 별도 표준조항 조회 API를 필수로 두지 않는다.
 
@@ -198,6 +199,7 @@
 - 재시도 가능한 실패에서는 세션 TTL까지 원본 파일을 유지할 수 있다.
 - 완료된 결과는 사용자가 S05~S08을 사용할 수 있도록 세션 TTL까지 유지한다.
 - 세션 만료, 명시적 새 검토, 취소 처리 후 파일·결과·대화를 삭제한다.
+- 로컬 stdio 전체 검토는 review별 전용 MCP 세션에서 실행한다. DELETE는 해당 실행 task를 취소하고 전용 세션·자식 프로세스를 닫은 뒤 `CANCELLED` 상태와 파일 정리를 완료한다.
 - 비정상 종료 잔존 파일은 서버 시작 또는 정기 정리 작업으로 삭제한다.
 - 임시 저장소는 백업 대상에서 제외한다.
 - 계약서, 조항, 대화, 프롬프트 본문은 운영 로그와 APM에 기록하지 않는다.
@@ -230,7 +232,7 @@
 ### 17.1 결정된 MVP 기본값
 
 1. 업로드 최대 크기는 10 MiB다.
-2. 세션과 결과의 sliding TTL은 기본 1,800초다.
+2. 세션과 결과 TTL은 기본 1,800초다. 일반 API 접근으로 자동 연장하지 않으며 명시적 세션 연장 API만 현재 시각 기준 1,800초로 재설정한다.
 3. 인증은 원본 토큰을 응답 본문에 노출하지 않는 익명 HttpOnly Cookie
    소유권 방식이다.
 4. API 한 대, 파일형 SQLite와 로컬 FileStorage를 전제로 한다.
@@ -245,5 +247,5 @@
 3. MCP progress의 실제 `current`, `total` 단위
 4. 모델·설정 버전의 수집 방법
 5. 사용자 조항의 원문 위치 좌표 제공 여부
-6. 외부 LLM 동의 기능의 도입 여부
+6. 외부 관리형 LLM 동의 기능은 MVP 이후 별도 도입 여부 검토
 7. 협의 문구 목적의 고정 선택지

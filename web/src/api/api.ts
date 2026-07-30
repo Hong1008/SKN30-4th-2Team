@@ -31,6 +31,9 @@ export const api = {
   getSession: (sessionId: string, signal?: AbortSignal): Promise<ApiResponse<ReviewSessionData>> =>
     client(`/review-sessions/${encodeURIComponent(sessionId)}`, { signal }),
 
+  extendSession: (sessionId: string): Promise<ApiResponse<ReviewSessionData>> =>
+    client(`/review-sessions/${encodeURIComponent(sessionId)}/extend`, { method: 'POST' }),
+
   selectContractType(
     sessionId: string,
     selectedContractType: string,

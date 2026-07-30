@@ -16,17 +16,18 @@ import { api } from './api/api'
 import { mapClauseResult } from './utils/reviewResults'
 import { useToast } from './contexts/ToastContext'
 import { getErrorMessage } from './utils/apiErrors'
+import { getReviewIdFromPath } from './utils/reviewRoute'
 
 function ProcessingRoute({ fallbackReviewId, onDone, onRetry, onStartNewReview }: {
   fallbackReviewId: string | null
   onDone: (id: string) => void
   onRetry: (id: string) => void
-  onStartNewReview: () => void
+  onStartNewReview: (id: string) => void
 }) {
   const { id } = useParams()
   const reviewId = (id && id !== 'new' ? id : null) ?? fallbackReviewId
   return reviewId
-    ? <ProcessingScreen reviewId={reviewId} onDone={() => onDone(reviewId)} onRetry={onRetry} onStartNewReview={onStartNewReview} />
+    ? <ProcessingScreen reviewId={reviewId} onDone={() => onDone(reviewId)} onRetry={onRetry} onStartNewReview={() => onStartNewReview(reviewId)} />
     : <Navigate to="/review" replace />
 }
 
@@ -75,7 +76,7 @@ function ClauseRoute({ fallbackReviewId, selectedClause, onBack, onChatbot }: {
   return <ClauseDetailScreen clause={clause} reviewId={reviewId} onBack={() => onBack(reviewId)} onChatbot={() => onChatbot(reviewId, clause)} />
 }
 
-function MainApp() {
+export function MainApp() {
   const { metadata } = useMetadata()
   const { showToast } = useToast()
   const navigate = useNavigate()
@@ -86,11 +87,14 @@ function MainApp() {
   const [selectedClause, setSelectedClause] = useState<ClauseResult | null>(null)
   const [sessionExpiresAt, setSessionExpiresAt] = useState<string | null>(null)
   const [isStartingNewReview, setIsStartingNewReview] = useState(false)
+  const [isExtendingSession, setIsExtendingSession] = useState(false)
   const [showNewReviewConfirm, setShowNewReviewConfirm] = useState(false)
+  const [reviewIdToDiscard, setReviewIdToDiscard] = useState<string | null>(null)
   const [chatTarget, setChatTarget] = useState<{ reviewId: string; clause?: ClauseResult } | null>(null)
   const [isChatOpen, setIsChatOpen] = useState(false)
   const discardRequestKey = useRef<string | null>(null)
   const chatTriggerRef = useRef<HTMLElement | null>(null)
+  const isProcessingRoute = location.pathname.includes('/progress')
 
   const openChat = (id: string, clause?: ClauseResult) => {
     chatTriggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
@@ -117,7 +121,7 @@ function MainApp() {
   }
 
   useEffect(() => {
-    if (!sessionExpiresAt) return
+    if (!sessionExpiresAt || isProcessingRoute) return
     const expiresAt = new Date(sessionExpiresAt).getTime()
     if (!Number.isFinite(expiresAt)) return
     const timeout = window.setTimeout(() => {
@@ -126,7 +130,7 @@ function MainApp() {
       navigate('/review', { replace: true })
     }, Math.max(0, expiresAt - Date.now()))
     return () => window.clearTimeout(timeout)
-  }, [sessionExpiresAt])
+  }, [sessionExpiresAt, isProcessingRoute])
 
   // Recovery logic for session and review IDs
   useEffect(() => {
@@ -141,6 +145,8 @@ function MainApp() {
 
     if (savedReview) {
       api.pollReviewStatus(savedReview).then(res => {
+        setSessionId(res.data.session_id)
+        localStorage.setItem(SESSION_ID_KEY, res.data.session_id)
         setSessionExpiresAt(res.data.expires_at)
         if (res.data.review_state === 'COMPLETED') {
           if (isRoot) navigate(`/review/${savedReview}/results`, { replace: true })
@@ -169,21 +175,69 @@ function MainApp() {
     }
   }, []) // Run once on mount
 
+  const routeReviewId = getReviewIdFromPath(location.pathname)
+  const activeReviewId = routeReviewId ?? reviewId
+
+  const requestStartNewReview = (targetReviewId: string | null = activeReviewId) => {
+    if (targetReviewId && metadata?.features.server_side_cancel !== true) {
+      showToast('진행 중인 검토를 안전하게 중단할 수 없어 새 검토를 시작할 수 없습니다.', 'error')
+      return
+    }
+    setReviewIdToDiscard(targetReviewId)
+    setShowNewReviewConfirm(true)
+  }
+
+  const extendSession = async () => {
+    if (!sessionId || isExtendingSession || isProcessingRoute) return
+    const expiresAt = sessionExpiresAt ? new Date(sessionExpiresAt).getTime() : NaN
+    if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) return
+    setIsExtendingSession(true)
+    try {
+      const response = await api.extendSession(sessionId)
+      setSessionExpiresAt(response.data.expires_at)
+      showToast('세션 유지 시간이 30분 연장되었습니다.', 'success')
+    } catch (error: any) {
+      if (error?.status === 404 || error?.status === 410) {
+        clearLocalReview()
+        showToast('세션이 만료되었습니다. 새 검토를 시작해 주세요.', 'error')
+        navigate('/review', { replace: true })
+      } else {
+        showToast(getErrorMessage(error, '세션 시간을 연장하지 못했습니다. 다시 시도해 주세요.'), 'error')
+      }
+    } finally {
+      setIsExtendingSession(false)
+    }
+  }
+
+  const refreshReviewExpiry = async (id: string) => {
+    try {
+      const response = await api.pollReviewStatus(id)
+      setSessionId(response.data.session_id)
+      localStorage.setItem(SESSION_ID_KEY, response.data.session_id)
+      setSessionExpiresAt(response.data.expires_at)
+    } catch {
+      // 결과 화면의 기존 오류 처리 흐름이 실제 접근 가능 여부를 안내한다.
+    }
+  }
+
   const startNewReview = async () => {
-    setShowNewReviewConfirm(false)
     setIsStartingNewReview(true)
     try {
-      if (reviewId && metadata?.features.server_side_cancel) {
+      if (reviewIdToDiscard) {
         const key = discardRequestKey.current ?? createClientId()
         discardRequestKey.current = key
-        await api.deleteReview(reviewId, key)
+        await api.deleteReview(reviewIdToDiscard, key)
       }
       discardRequestKey.current = null
+      setReviewIdToDiscard(null)
+      setShowNewReviewConfirm(false)
       clearLocalReview()
       navigate('/review', { replace: true })
     } catch (error: any) {
       if (error?.status === 404 || error?.status === 410) {
         discardRequestKey.current = null
+        setReviewIdToDiscard(null)
+        setShowNewReviewConfirm(false)
         clearLocalReview()
         navigate('/review', { replace: true })
       } else {
@@ -222,11 +276,14 @@ function MainApp() {
           currentScreen={screen}
           onNavigate={nav}
           expiresAt={sessionExpiresAt}
-          canStartNewReview={Boolean(sessionId || reviewId) && (
-            !reviewId || metadata?.features.server_side_cancel === true
+          canStartNewReview={Boolean(sessionId || activeReviewId) && (
+            !activeReviewId || metadata?.features.server_side_cancel === true
           )}
-          onStartNewReview={() => setShowNewReviewConfirm(true)}
+          onStartNewReview={() => requestStartNewReview()}
           isStartingNewReview={isStartingNewReview}
+          canExtendSession={Boolean(sessionId && sessionExpiresAt) && !isProcessingRoute}
+          onExtendSession={() => void extendSession()}
+          isExtendingSession={isExtendingSession}
           navigationLocked={navigationLocked}
         />
 
@@ -262,13 +319,15 @@ function MainApp() {
               <Route path="/review/:id/progress" element={
                 <ProcessingRoute
                   fallbackReviewId={reviewId}
-                  onDone={(id) => navigate(`/review/${id}/results`)}
+                  onDone={(id) => {
+                    void refreshReviewExpiry(id).finally(() => navigate(`/review/${id}/results`))
+                  }}
                   onRetry={(id) => {
                     setReviewId(id)
                     localStorage.setItem(REVIEW_ID_KEY, id)
                     navigate(`/review/${id}/progress`, { replace: true })
                   }}
-                  onStartNewReview={() => setShowNewReviewConfirm(true)}
+                  onStartNewReview={(id) => requestStartNewReview(id)}
                 />
               } />
               <Route path="/review/:id/results" element={
@@ -299,11 +358,11 @@ function MainApp() {
                   : '현재 계약서와 검토 결과가 삭제됩니다.'}
               </p>
               <div className="mt-6 flex justify-end gap-2">
-                <button type="button" onClick={() => setShowNewReviewConfirm(false)} className="min-w-20 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50">
+                <button type="button" onClick={() => { setShowNewReviewConfirm(false); setReviewIdToDiscard(null) }} disabled={isStartingNewReview} className="min-w-20 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">
                   아니요
                 </button>
-                <button type="button" onClick={startNewReview} className="min-w-20 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 transition-colors hover:bg-rose-100">
-                  예
+                <button type="button" onClick={startNewReview} disabled={isStartingNewReview} className="min-w-20 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 transition-colors hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50">
+                  {isStartingNewReview ? '처리 중' : '예'}
                 </button>
               </div>
             </div>

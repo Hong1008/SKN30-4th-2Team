@@ -9,6 +9,9 @@ interface Props {
   canStartNewReview: boolean
   onStartNewReview: () => void
   isStartingNewReview: boolean
+  canExtendSession?: boolean
+  onExtendSession?: () => void
+  isExtendingSession?: boolean
   navigationLocked?: boolean
 }
 
@@ -19,6 +22,9 @@ export default function Header({
   canStartNewReview,
   onStartNewReview,
   isStartingNewReview,
+  canExtendSession = false,
+  onExtendSession,
+  isExtendingSession = false,
   navigationLocked = false,
 }: Props) {
   const isReview = ['upload-and-type', 'out-of-scope', 'processing'].includes(currentScreen)
@@ -116,15 +122,23 @@ export default function Header({
               className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
             >
               <Plus className="size-4" />
-              {isStartingNewReview ? '정리 중' : '새 검토'}
+              {isStartingNewReview ? '처리 중' : '새 검토'}
             </button>
           )}
           {timeLeft !== null && <div className="hidden items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 sm:flex">
             <span className={`size-1.5 rounded-full ${timeLeft > 300 ? 'bg-emerald-500' : 'bg-red-500 animate-pulse'}`} />
             <span className="text-[11px] font-medium text-slate-600 font-mono tracking-tight">
-              {timeLeft > 0 ? '세션 유지 중' : '세션 만료'}
-              <span className="ml-0.5">{formatTime(timeLeft)}</span>
+              {currentScreen === 'processing' && timeLeft === 0 ? '검토 진행 중' : timeLeft > 0 ? '세션 유지 중' : '세션 만료'}
+              {!(currentScreen === 'processing' && timeLeft === 0) && <span className="ml-0.5">{formatTime(timeLeft)}</span>}
             </span>
+            <button
+              type="button"
+              onClick={onExtendSession}
+              disabled={!canExtendSession || isExtendingSession || isStartingNewReview || timeLeft <= 0}
+              className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:text-slate-400"
+            >
+              {isExtendingSession ? '연장 중' : '연장'}
+            </button>
           </div>}
         </div>
       </div>

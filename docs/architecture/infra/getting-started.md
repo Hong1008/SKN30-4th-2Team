@@ -7,6 +7,7 @@
 
 - 권장: Ubuntu 또는 WSL2 Ubuntu
 - Windows: Git Bash에서 동일한 `just` 명령 사용
+- CDK 앱은 `uv`로 실행하므로 OS별 `.venv/bin/python` 또는 `.venv/Scripts/python.exe` 경로를 직접 실행하지 않는다.
 - 저장소는 submodule을 포함해 clone해야 한다.
 
 ```bash

@@ -77,3 +77,36 @@ def resume_ttl_after_review(
         ttl_seconds=ttl_seconds,
         now=now,
     )
+
+
+def extend_review_session(
+    db_session: Session,
+    session: ReviewSession,
+    *,
+    ttl_seconds: int,
+    now: datetime | None = None,
+) -> ReviewSession:
+    """사용자 연장 요청으로 세션과 최신 검토의 만료 시각을 함께 재설정한다."""
+    touched_at = now or datetime.now(UTC)
+    reviews = SqlAlchemyReviewRepository(db_session).list_by_session(session.id)
+    extendable_reviews = [
+        review for review in reviews if review.state is not ReviewState.EXPIRED
+    ]
+    if extendable_reviews:
+        touch_review(
+            db_session,
+            extendable_reviews[-1],
+            ttl_seconds=ttl_seconds,
+            now=touched_at,
+        )
+    else:
+        touch_session(
+            db_session,
+            session,
+            ttl_seconds=ttl_seconds,
+            now=touched_at,
+        )
+    extended = SqlAlchemyReviewSessionRepository(db_session).get(session.id)
+    if extended is None:
+        raise LookupError(f"검토 세션을 찾을 수 없습니다: {session.id}")
+    return extended

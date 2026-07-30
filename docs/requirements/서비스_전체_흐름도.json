@@ -52,7 +52,7 @@
         "from": "READY",
         "event": "upload_requested",
         "to": "UPLOADING",
-        "guard": "개인정보 안내 확인 및 확장자·크기·실제 형식 등 사전 검증 통과",
+        "guard": "확장자·크기·실제 형식 등 사전 검증 통과",
         "action": "업로드 세션 생성"
       },
       {

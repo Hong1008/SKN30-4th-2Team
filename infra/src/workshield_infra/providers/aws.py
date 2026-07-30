@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import base64
 import json
 import subprocess
@@ -56,8 +57,10 @@ class AwsProvider:
 
     def cdk(self, action: str, stacks: Iterable[str]) -> None:
         stack_list = list(stacks)
+        npm_command = "npm.cmd" if os.name == "nt" else "npm"
+
         command = [
-            "npm",
+            npm_command,
             "exec",
             "cdk",
             "--",
@@ -78,8 +81,9 @@ class AwsProvider:
         subprocess.run(command, cwd=self.infra_root, check=True)
 
     def bootstrap(self) -> None:
+        npm_command = "npm.cmd" if os.name == "nt" else "npm"
         command = [
-            "npm",
+            npm_command,
             "exec",
             "cdk",
             "--",

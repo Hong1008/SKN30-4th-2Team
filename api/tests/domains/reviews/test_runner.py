@@ -7,6 +7,7 @@ from datetime import timedelta
 
 import pytest
 import asyncio
+from contextlib import asynccontextmanager
 
 from app.config import Settings
 from app.core.db.database import Database
@@ -609,6 +610,63 @@ async def test_cancelled_runner_does_not_store_final_result(
     assert interrupted is not None
     assert interrupted.state is ReviewState.REVIEWING
     assert interrupted.result is None
+
+
+@pytest.mark.asyncio
+async def test_cancelled_runner_closes_dedicated_mcp_runtime(
+    database: Database,
+    tmp_path: Path,
+) -> None:
+    """실행 취소 시 전용 stdio MCP 세션을 닫아 서버 작업도 종료한다."""
+    storage, review = _seed_executable_review(
+        database,
+        tmp_path,
+        "cancelled_dedicated_runtime",
+    )
+    entered = asyncio.Event()
+    closed = asyncio.Event()
+
+    class BlockingSession:
+        async def call_tool(
+            self,
+            _name,
+            _arguments,
+            read_timeout_seconds=None,
+            progress_callback=None,
+        ):
+            entered.set()
+            await asyncio.Event().wait()
+
+    @asynccontextmanager
+    async def dedicated_runtime():
+        try:
+            yield SimpleNamespace(
+                session=BlockingSession(),
+                tools=(),
+                supports_file_path=False,
+            )
+        finally:
+            closed.set()
+
+    task = asyncio.create_task(
+        execute_review(
+            database=database,
+            storage=storage,
+            runtime=SimpleNamespace(
+                session=ResultSession(_valid_result()),
+                tools=(),
+                supports_file_path=False,
+            ),
+            settings=_settings(),
+            review_id=review.id,
+            runtime_factory=dedicated_runtime,
+        )
+    )
+    await entered.wait()
+    task.cancel()
+    await asyncio.gather(task, return_exceptions=True)
+
+    assert closed.is_set()
 
 
 def test_restart_marks_active_review_retryable(database: Database) -> None:

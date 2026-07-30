@@ -1,4 +1,5 @@
 import { BookOpen } from 'lucide-react'
+import { getStandardContractLabel } from '../utils/standardContractLabel'
 
 export type SourceReferenceType = 'USER_CLAUSE' | 'STANDARD_CLAUSE' | 'LAW'
 
@@ -24,8 +25,14 @@ export function getSourceLabel(source: SourceReference): string {
     const lawLabel = [safeText(source.law_name), safeText(source.article)].filter(Boolean).join(' ')
     return lawLabel || '법령 근거'
   }
-  if (source.type === 'STANDARD_CLAUSE' && displayLabel) {
-    return [safeText(source.standard_contract_label), displayLabel].filter(Boolean).join(' · ')
+  if (source.type === 'STANDARD_CLAUSE') {
+    const contractLabel = getStandardContractLabel(source.standard_contract_label)
+    const clauseLabel = displayLabel || [
+      safeText(source.clause_number),
+      safeText(source.title),
+      safeText(source.category),
+    ].filter(Boolean).join(' · ')
+    return clauseLabel ? `${contractLabel} · ${clauseLabel}` : contractLabel
   }
   if (displayLabel) return displayLabel
   const clauseLabel = [
@@ -34,7 +41,7 @@ export function getSourceLabel(source: SourceReference): string {
     safeText(source.category),
   ].filter(Boolean).join(' · ')
   if (clauseLabel) return clauseLabel
-  return source.type === 'USER_CLAUSE' ? '현재 검토 조항' : '대응 표준조항'
+  return '현재 검토 조항'
 }
 
 export default function SourceReferences({ sources, title = '출처' }: { sources: SourceReference[]; title?: string }) {
