@@ -27,7 +27,8 @@ class DeploymentConfig:
     cloudfront_origin_prefix_list_id: str
     instance_type: str
     github_organization: str
-
+    github_owner_id: str
+    github_repository_id: str
     github_repository: str
     github_environment: str
     ghcr_owner: str
@@ -56,6 +57,8 @@ class DeploymentConfig:
             "instance_type",
             "github_organization",
             "github_repository",
+            "github_repository_id",
+            "github_owner_id",
             "github_environment",
             "ghcr_owner",
             "nginx_image",
