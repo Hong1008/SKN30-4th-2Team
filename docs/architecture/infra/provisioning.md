@@ -123,9 +123,10 @@ just infra-github-configure profile=<profile> environment=production
 - RunPod 관리 키, 모델 호출 키, 법령 API key와 origin header는 GitHub에
   보내지 않는다.
 
-`infra-github-configure`를 실행하는 동안에는 repository Environment Variable
-관리 권한을 가진 `GH_TOKEN`을 process environment로만 제공한다. 이 토큰은
-GitHub Environment Variable이나 프로젝트 파일에 저장하지 않는다.
+`infra-github-configure`는 `gh auth login`으로 로그인한 GitHub CLI 계정을
+사용한다. repository Environment Variable 관리 권한이 필요하며, 로그인하지
+않았거나 인증이 만료되었으면 GitHub API를 호출하기 전에 실패한다. 별도의
+GitHub token을 process environment나 프로젝트 파일에 저장하지 않는다.
 
 자세한 회전 순서는 [비밀 관리](../operations/secrets.md)를 따른다.
 

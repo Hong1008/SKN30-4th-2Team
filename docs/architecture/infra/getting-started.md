@@ -23,6 +23,7 @@ PowerShell 전용 명령은 제공하지 않는다. Windows 경로 문제를 피
 | 도구 | 용도 |
 | --- | --- |
 | Git | 저장소와 MCP submodule |
+| GitHub CLI (`gh`) | 로컬 GitHub 인증과 Environment Variable 등록 |
 | Docker Engine + Compose v2 (Linux) / Docker Desktop (Windows) | Compose 검증과 컨테이너 실행 |
 | Python 3.13+, `uv` | 내부 인프라 모듈과 API·MCP 의존성 |
 | Node.js 24.18+, npm | Web build와 CDK CLI |
@@ -40,7 +41,7 @@ Ubuntu 24.04/WSL2 환경에서는 먼저 기본 패키지와 Docker 공식 apt r
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y git curl unzip ca-certificates xz-utils
+sudo apt-get install -y git gh curl unzip ca-certificates xz-utils
 sudo install -m 0755 -d /etc/apt/keyrings
 sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
   -o /etc/apt/keyrings/docker.asc
@@ -104,8 +105,9 @@ chmod 0755 "$HOME/.local/bin/runpodctl"
 Native Windows 환경에서는 **PowerShell**에서 도구 및 CLI를 설치한 뒤, 저장소의 실제 execution 명령어(`just ...`)는 **Git Bash**에서 실행한다.
 
 ```powershell
-# 1. winget을 이용해 필수 도구 설치 (Git, Docker Desktop, Node.js LTS, AWS CLI v2)
+# 1. winget을 이용해 필수 도구 설치
 winget install -e --id Git.Git
+winget install -e --id GitHub.cli
 winget install -e --id Docker.DockerDesktop
 winget install -e --id OpenJS.NodeJS.LTS
 winget install -e --id Amazon.AWSCLI
@@ -134,6 +136,7 @@ Invoke-WebRequest -Uri "https://github.com/runpod/runpodctl/releases/latest/down
 
 ```bash
 git --version
+gh --version
 docker --version
 docker compose version
 python3 --version
@@ -146,6 +149,7 @@ just --version
 ```
 
 - [Docker Engine on Ubuntu](https://docs.docker.com/engine/install/ubuntu/)
+- [GitHub CLI 설치](https://github.com/cli/cli/blob/trunk/docs/install_linux.md)
 - [Node.js download](https://nodejs.org/en/download)
 - [AWS CLI v2 설치](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)
 - [uv 설치](https://docs.astral.sh/uv/getting-started/installation/)
@@ -376,11 +380,22 @@ Stack 실패, SSM `Offline`, RunPod 소유권 오류가 있으면 GitHub 배포�
 `infra/config/prod.json`의 다음 값은 workflow를 실행할 **실제 GitHub
 저장소**와 정확히 일치해야 합니다.
 
+```bash
+gh auth login
+gh auth status --hostname github.com
+gh api "repos/<저장소 소유자>/<저장소 이름>" --jq '{
+    github_owner_id: .owner.id,
+    github_repository_id: .id
+  }'
+```
+
 ```json
 {
   "github_organization": "<저장소 소유자>",
   "github_repository": "<저장소 이름>",
   "github_environment": "production",
+  "github_owner_id": "<소유자 id>",
+  "github_repository_id": "<저장소 id>",
   "ghcr_owner": "<GHCR package 소유자>"
 }
 ```
@@ -402,19 +417,16 @@ fork에서 workflow를 실행한다면 원본 organization이 아니라 fork 소
 
 ### 6.4. GitHub Environment Variable 등록
 
-GitHub API를 호출할 토큰을 현재 셸에만 임시로 제공한 뒤 설정 명령을
-실행합니다. 토큰에는 대상 저장소의 Environment와 Actions Variable을
-생성·수정할 권한이 필요합니다.
+6.3에서 로그인한 GitHub CLI 계정으로 설정 명령을 실행합니다. 해당 계정에는
+대상 저장소의 Environment와 Actions Variable을 생성·수정할 권한이 필요합니다.
 
 ```bash
-read -rsp "GitHub token: " GH_TOKEN
-printf '\n'
-export GH_TOKEN
-
 just infra-github-configure workshield-session production prod
-
-unset GH_TOKEN
 ```
+
+명령은 먼저 `gh auth status`로 `github.com` 로그인 상태를 확인합니다.
+로그인하지 않았거나 인증이 만료되었으면 GitHub API를 호출하지 않고
+`gh auth login` 안내와 함께 실패합니다.
 
 명령은 GitHub의 `production` Environment를 생성하거나 갱신하고 다음
 **비밀이 아닌 Environment Variable**을 등록합니다.
@@ -428,9 +440,8 @@ unset GH_TOKEN
 | `CLOUDFRONT_DISTRIBUTION_ID` | Web 배포 후 invalidation 대상 |
 | `GHCR_OWNER` | API·MCP image package 소유자 |
 
-`GH_TOKEN`은 로컬 명령을 실행하는 동안에만 사용하며 프로젝트 파일,
-GitHub Variable 또는 GitHub Secret에 저장하지 않습니다. GitHub Actions에는
-별도의 AWS access key나 RunPod/runtime secret도 등록하지 않습니다.
+별도의 GitHub token을 환경 변수나 프로젝트 파일에 저장하지 않습니다.
+GitHub Actions에는 AWS access key나 RunPod/runtime secret도 등록하지 않습니다.
 
 다음 값은 **GitHub에 등록하면 안 됩니다.**
 
