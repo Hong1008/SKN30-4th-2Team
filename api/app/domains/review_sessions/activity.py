@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
+from app.core.common.errors import ExpiredError
 from app.domains.review_sessions.domain import ReviewSession
 from app.domains.review_sessions.repository import SqlAlchemyReviewSessionRepository
 from app.domains.reviews.domain import Review, ReviewState
@@ -88,6 +89,12 @@ def extend_review_session(
 ) -> ReviewSession:
     """사용자 연장 요청으로 세션과 최신 검토의 만료 시각을 함께 재설정한다."""
     touched_at = now or datetime.now(UTC)
+    if session.is_expired(touched_at):
+        raise ExpiredError(
+            code="SESSION_EXPIRED",
+            message="검토 세션이 만료되었습니다.",
+            next_action="START_NEW_REVIEW",
+        )
     reviews = SqlAlchemyReviewRepository(db_session).list_by_session(session.id)
     extendable_reviews = [
         review for review in reviews if review.state is not ReviewState.EXPIRED
