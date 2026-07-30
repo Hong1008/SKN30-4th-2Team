@@ -59,4 +59,43 @@ describe('결과 화면 상태 이동', () => {
     expect(screen.queryByText(/\.md/)).not.toBeInTheDocument()
     expect(screen.queryByText(/버전: 2025/)).not.toBeInTheDocument()
   })
+
+  it('NO_MATCH 조항을 포함해 API 조항 순서대로 표시한다', async () => {
+    const clauseResults = [1, 2, 3].map((article) => ({
+      user_clause_id: `uc_review_${article}`,
+      user_clause: `제${article}조 (테스트 조항) 본문`,
+      deviation: { code: 'NO_MATCH', label: '표준조항 검색 후보 없음' },
+      match: { status: 'NO_CANDIDATE' },
+      explanation: '대응할 표준조항 후보를 찾지 못했습니다.',
+      toxic_patterns: [],
+    }))
+    vi.mocked(api.getResults).mockResolvedValue({
+      data: {
+        review: {
+          review_id: 'review-1',
+          review_state: 'COMPLETED',
+          mcp_review_status: 'OK',
+          contract_type: 'SW_FREELANCE',
+          started_at: null,
+          completed_at: null,
+          expires_at: '',
+          disclaimer: '',
+        },
+        summary: {
+          clause_results: { total: 3, NONE: 0, EXTRA: 0, NO_MATCH: 3 },
+          missing_standard_clauses: 0,
+          toxic_pattern_candidates: 0,
+        },
+        clause_results: clauseResults,
+        missing_standard_clauses: [],
+      },
+    } as never)
+
+    render(<ResultsScreen reviewId="review-1" onClauseClick={vi.fn()} onChatbot={vi.fn()} />)
+
+    await screen.findByText('제2조')
+    expect(screen.getAllByRole('heading', { level: 3 }).map((heading) => heading.textContent))
+      .toEqual(['제1조', '제2조', '제3조'])
+    expect(screen.getAllByText('대응할 표준조항 후보를 찾지 못했습니다.')).toHaveLength(3)
+  })
 })

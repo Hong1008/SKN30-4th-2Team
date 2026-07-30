@@ -274,6 +274,13 @@ def test_normalize_review_result_validates_real_mcp_dto_and_assigns_ids() -> Non
         "toxic_patterns": ["UNFAIR_DAMAGE_CLAIM"],
     }
     assert result["clause_results"][1]["user_clause_id"] == "uc_rev_01_2"
+    assert [
+        (item["user_clause"], item["deviation"])
+        for item in result["clause_results"]
+    ] == [
+        ("제7조 책임 조항", "NONE"),
+        ("제8조 별도 합의", "NO_MATCH"),
+    ]
     assert result["missing_standard_clauses"] == [
         {"standard": {**_standard_clause(), "clause_id": "std_2"}}
     ]
