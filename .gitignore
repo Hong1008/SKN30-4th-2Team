@@ -23,4 +23,5 @@ infra/node_modules/
 infra/cdk.context.json
 infra/config/prod.json
 infra/config/prod.secrets.env
+infra/config/compose.env
 infra/.state/

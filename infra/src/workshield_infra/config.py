@@ -27,6 +27,7 @@ class DeploymentConfig:
     cloudfront_origin_prefix_list_id: str
     instance_type: str
     github_organization: str
+
     github_repository: str
     github_environment: str
     ghcr_owner: str

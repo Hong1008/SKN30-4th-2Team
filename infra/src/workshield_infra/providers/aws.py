@@ -142,7 +142,8 @@ class AwsProvider:
 
         role_name = f"{self.config.app_name}-github-deploy"
         subject = (
-            f"repo:{self.config.github_organization}/{self.config.github_repository}:"
+            f"repo:{self.config.github_organization}@{self.config.github_owner_id}/"
+            f"{self.config.github_repository}@{self.config.github_repository_id}:"
             f"environment:{self.config.github_environment}"
         )
         trust = {
@@ -154,7 +155,9 @@ class AwsProvider:
                     "Action": "sts:AssumeRoleWithWebIdentity",
                     "Condition": {
                         "StringEquals": {
-                            "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+                            "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
+                        },
+                        "StringLike": {
                             "token.actions.githubusercontent.com:sub": subject,
                         }
                     },

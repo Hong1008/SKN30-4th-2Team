@@ -9,9 +9,6 @@ import secrets
 import shutil
 import subprocess
 import sys
-import urllib.error
-import urllib.parse
-import urllib.request
 from pathlib import Path
 from typing import Any
 
@@ -155,7 +152,17 @@ def _binding(
 def check(environment: str) -> None:
     missing_tools = [
         tool
-        for tool in ("git", "docker", "uv", "node", "npm", "aws", "just", "runpodctl")
+        for tool in (
+            "git",
+            "gh",
+            "docker",
+            "uv",
+            "node",
+            "npm",
+            "aws",
+            "just",
+            "runpodctl",
+        )
         if shutil.which(tool) is None
     ]
     if missing_tools:
@@ -599,6 +606,19 @@ def runpod_replace(target: str, profile: str, environment: str) -> None:
 
 
 def github_configure(profile: str, environment: str, github_environment: str) -> None:
+    if shutil.which("gh") is None:
+        raise RuntimeError("GitHub CLI(gh)를 찾지 못했습니다.")
+    auth = subprocess.run(
+        ["gh", "auth", "status", "--hostname", "github.com"],
+        capture_output=True,
+        text=True,
+    )
+    if auth.returncode != 0:
+        raise RuntimeError(
+            "GitHub CLI가 github.com에 로그인되어 있지 않습니다. "
+            "`gh auth login`을 먼저 실행하세요."
+        )
+
     config, values, _, _, _ = _load(environment, require_secrets=False)
     if github_environment != config.github_environment:
         raise RuntimeError(
@@ -621,42 +641,55 @@ def github_configure(profile: str, environment: str, github_environment: str) ->
         "GHCR_OWNER": config.ghcr_owner,
     }
     repository = f"{config.github_organization}/{config.github_repository}"
-    token = os.getenv("GH_TOKEN") or os.getenv("GITHUB_TOKEN")
-    if not token:
-        raise RuntimeError("GitHub Environment 설정에는 로컬 GH_TOKEN이 필요합니다.")
-    base_url = (
-        "https://api.github.com/repos/"
-        f"{urllib.parse.quote(repository, safe='/')}/environments/"
-        f"{urllib.parse.quote(github_environment, safe='')}"
-    )
+    base_url = f"repos/{repository}/environments/{github_environment}"
+    api_headers = [
+        "--hostname",
+        "github.com",
+        "--header",
+        "Accept: application/vnd.github+json",
+        "--header",
+        "X-GitHub-Api-Version: 2022-11-28",
+    ]
 
-    def request(method: str, url: str, body: dict[str, str] | None = None) -> int:
-        payload = json.dumps(body).encode("utf-8") if body is not None else None
-        api_request = urllib.request.Request(
-            url,
-            data=payload,
-            method=method,
-            headers={
-                "Accept": "application/vnd.github+json",
-                "Authorization": f"Bearer {token}",
-                "X-GitHub-Api-Version": "2022-11-28",
-                "Content-Type": "application/json",
-            },
-        )
+    def api(*arguments: str) -> subprocess.CompletedProcess[str]:
         try:
-            with urllib.request.urlopen(api_request, timeout=30) as response:
-                return response.status
-        except urllib.error.HTTPError as error:
-            if method == "GET" and error.code == 404:
-                return 404
-            raise RuntimeError(f"GitHub API 요청 실패: HTTP {error.code}") from error
+            return subprocess.run(
+                ["gh", "api", *api_headers, *arguments],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except subprocess.CalledProcessError as error:
+            detail = error.stderr.strip()
+            suffix = f": {detail}" if detail else ""
+            raise RuntimeError(f"GitHub API 요청 실패{suffix}") from error
 
-    request("PUT", base_url)
+    api("--method", "PUT", base_url, "--silent")
+    existing = set(
+        api(
+            f"{base_url}/variables",
+            "--paginate",
+            "--jq",
+            ".variables[].name",
+        ).stdout.splitlines()
+    )
     for name, value in variables.items():
-        variable_url = f"{base_url}/variables/{urllib.parse.quote(name, safe='')}"
-        operation = "PATCH" if request("GET", variable_url) == 200 else "POST"
-        target = variable_url if operation == "PATCH" else f"{base_url}/variables"
-        request(operation, target, {"name": name, "value": value})
+        operation = "PATCH" if name in existing else "POST"
+        target = (
+            f"{base_url}/variables/{name}"
+            if operation == "PATCH"
+            else f"{base_url}/variables"
+        )
+        api(
+            "--method",
+            operation,
+            target,
+            "--raw-field",
+            f"name={name}",
+            "--raw-field",
+            f"value={value}",
+            "--silent",
+        )
 
 
 def rotate_secret(name: str, profile: str, environment: str) -> None:
