@@ -39,7 +39,7 @@ def test_ollama_maps_reasoning_without_model_name_branch(
     mode: ReasoningMode,
     enabled: bool,
 ) -> None:
-    monkeypatch.setattr("app.core.llm.provider.ollama.ChatOllama", FakeOllamaModel)
+    monkeypatch.setattr("app.core.llm.provider.ollama.OllamaChatModel", FakeOllamaModel)
 
     build_ollama_model(_settings(), mode)
 
@@ -48,5 +48,9 @@ def test_ollama_maps_reasoning_without_model_name_branch(
             "model": "runtime-selected-model",
             "base_url": "http://ollama.internal:11434/",
             "reasoning": enabled,
+            "temperature": 0.0,
+            "top_p": 1.0,
+            "seed": 42,
+            "num_predict": 512,
         }
     ]

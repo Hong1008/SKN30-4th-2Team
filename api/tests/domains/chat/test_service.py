@@ -12,7 +12,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from app.config import Settings
 from app.core.common.errors import ExternalServiceError, ExternalServiceTimeoutError
 from app.core.llm.policy import LLMPolicy
-from app.domains.chat.schemas import ChatRequest
+from app.domains.chat.schemas import ChatHistoryMessage, ChatRequest
 from app.domains.chat.service import COMMON_SYSTEM_PROMPT, answer_review_question
 from app.domains.reviews.domain import MCPReviewStatus, Review, ReviewState
 
@@ -231,6 +231,34 @@ def _review_with_payment_clause() -> Review:
     return review
 
 
+def _review_with_confidentiality_clause() -> Review:
+    review = _review()
+    assert review.result is not None
+    review.result["clause_results"].append(
+        {
+            "user_clause_id": "uc_confidentiality_1",
+            "user_clause": (
+                "제5조 비밀유지\n계약 종료 후에도 업무상 비밀을 누설하지 않는다."
+            ),
+            "deviation": "EXTRA",
+            "match": {
+                "status": "CANDIDATE_SELECTED",
+                "standard": {
+                    "clause_id": "std_confidentiality_17",
+                    "category": "CONFIDENTIALITY",
+                    "title": "제17조 비밀준수",
+                    "text": (
+                        "제17조 비밀준수\n업무 종료 후 1년 동안 비밀을 준수한다. "
+                        "제5조의 업무 범위도 비밀 대상에 포함한다."
+                    ),
+                },
+            },
+            "toxic_patterns": [],
+        }
+    )
+    return review
+
+
 def _review_with_scope_clauses() -> Review:
     review = _review()
     assert review.result is not None
@@ -326,10 +354,13 @@ async def test_focused_question_uses_user_and_standard_when_law_is_unavailable()
     model = ChatModel(
         {
             "outcome": "ANSWERED",
-            "answer": "사용자 조항은 책임 범위를 협의 대상으로 두고 있습니다.",
+            "answer": (
+                "사용자 조항은 책임 범위를 협의 대상으로 두지만, 대응 표준조항은 "
+                "귀책사유가 있는 당사자의 손해배상을 정하고 있습니다."
+            ),
             "sources": [
-                {"type": "USER_CLAUSE", "id": "uc_rev_chat_1"},
-                {"type": "STANDARD_CLAUSE", "id": "std_liability_1"},
+                    {"type": "USER_CLAUSE", "id": "SRC_USER_1"},
+                    {"type": "STANDARD_CLAUSE", "id": "SRC_STANDARD_1"},
             ],
             "limitations": ["관련 법령 원문은 확인되지 않았습니다."],
         }
@@ -373,7 +404,10 @@ async def test_chat_adds_deterministic_grounding_status_guidance(
         {
             "outcome": "ANSWERED",
             "answer": "사용자 조항과 표준 대응 후보를 설명합니다.",
-            "sources": [{"type": "USER_CLAUSE", "id": "uc_rev_chat_1"}],
+            "sources": [
+                {"type": "USER_CLAUSE", "id": "SRC_USER_1"},
+                {"type": "STANDARD_CLAUSE", "id": "SRC_STANDARD_1"},
+            ],
             "limitations": [],
         }
     )
@@ -400,11 +434,11 @@ async def test_whole_review_law_question_fetches_current_review_category() -> No
     model = ChatModel(
         {
             "outcome": "ANSWERED",
-            "answer": "관련 법령 참고 원문과 함께 확인할 수 있습니다.",
+            "answer": "민법 제390조 참고 원문과 함께 확인할 수 있습니다.",
             "sources": [
                 {
                     "type": "LAW",
-                    "id": "law_1",
+                    "id": "SRC_LAW_1",
                     "source_url": "https://unverified.example/law",
                 }
             ],
@@ -431,6 +465,69 @@ async def test_whole_review_law_question_fetches_current_review_category() -> No
 
 
 @pytest.mark.asyncio
+async def test_verified_law_only_answer_does_not_invent_contract_clause() -> None:
+    model = ChatModel(
+        {
+            "outcome": "ANSWERED",
+            "answer": "민법 제390조는 채무불이행으로 인한 손해배상 근거를 다룹니다.",
+            "sources": [{"type": "LAW", "id": "SRC_LAW_1"}],
+            "limitations": [],
+        }
+    )
+
+    response = await answer_review_question(
+        _review(),
+        ChatRequest(message="민법 제390조가 어떤 내용인지 설명해 줘."),
+        runtime=SimpleNamespace(tools=(GroundingTool(),)),
+        model=model,
+        settings=_settings(),
+    )
+
+    assert response.outcome == "ANSWERED"
+    assert [source.type for source in response.sources] == ["LAW"]
+    assert response.limitations[-1] == (
+        "현재 계약서 조항과의 직접 비교는 확인하지 못했습니다."
+    )
+
+
+@pytest.mark.asyncio
+async def test_user_standard_and_law_sources_can_be_combined() -> None:
+    model = ChatModel(
+        {
+            "outcome": "ANSWERED",
+            "answer": (
+                "사용자 계약서는 책임 범위를 협의 대상으로 두고, 대응 표준조항은 "
+                "귀책사유 기준을 제시합니다. 민법 제390조도 손해배상 근거를 다룹니다."
+            ),
+            "sources": [
+                {"type": "USER_CLAUSE", "id": "SRC_USER_1"},
+                {"type": "STANDARD_CLAUSE", "id": "SRC_STANDARD_1"},
+                {"type": "LAW", "id": "SRC_LAW_1"},
+            ],
+            "limitations": [],
+        }
+    )
+
+    response = await answer_review_question(
+        _review(),
+        ChatRequest(
+            message="이 조항을 표준조항 및 법령 근거와 비교해 줘.",
+            focus_clause_id="uc_rev_chat_1",
+        ),
+        runtime=SimpleNamespace(tools=(GroundingTool(),)),
+        model=model,
+        settings=_settings(),
+    )
+
+    assert response.outcome == "ANSWERED"
+    assert {source.type for source in response.sources} == {
+        "USER_CLAUSE",
+        "STANDARD_CLAUSE",
+        "LAW",
+    }
+
+
+@pytest.mark.asyncio
 async def test_plain_question_does_not_fetch_law_grounding() -> None:
     """일반 설명 질문은 법령 MCP를 호출하지 않는다."""
     tool = GroundingTool()
@@ -438,7 +535,7 @@ async def test_plain_question_does_not_fetch_law_grounding() -> None:
         {
             "outcome": "ANSWERED",
             "answer": "별도 확인이 필요한 검토 후보를 설명합니다.",
-            "sources": [{"type": "USER_CLAUSE", "id": "uc_rev_chat_1"}],
+            "sources": [{"type": "USER_CLAUSE", "id": "SRC_USER_1"}],
             "limitations": [],
         }
     )
@@ -465,7 +562,7 @@ async def test_whole_review_includes_missing_standard_clause_category() -> None:
         {
             "outcome": "ANSWERED",
             "answer": "검토 후보를 설명합니다.",
-            "sources": [{"type": "USER_CLAUSE", "id": "uc_rev_chat_1"}],
+            "sources": [{"type": "USER_CLAUSE", "id": "SRC_USER_1"}],
             "limitations": [],
         }
     )
@@ -486,21 +583,24 @@ async def test_whole_review_includes_missing_standard_clause_category() -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    ("question", "answer"),
+    ("question", "answer", "uses_standard"),
     [
         (
             "이거 뭐가 문제야?",
             "사용자 조항은 책임 범위를 협의로 남겨 표준조항보다 기준이 불명확합니다.",
+            True,
         ),
         (
             "회사에 뭐라고 말해?",
             "손해배상 책임의 발생 요건과 범위를 계약서에 구체적으로 정해 주시기 바랍니다.",
+            False,
         ),
     ],
 )
 async def test_ambiguous_focused_question_uses_single_system_prompt_and_context(
     question: str,
     answer: str,
+    uses_standard: bool,
 ) -> None:
     tool = GroundingTool()
     model = ChatModel(
@@ -508,8 +608,12 @@ async def test_ambiguous_focused_question_uses_single_system_prompt_and_context(
             "outcome": "ANSWERED",
             "answer": answer,
             "sources": [
-                {"type": "USER_CLAUSE", "id": "uc_rev_chat_1"},
-                {"type": "STANDARD_CLAUSE", "id": "std_liability_1"},
+                {"type": "USER_CLAUSE", "id": "SRC_USER_1"},
+                *(
+                    [{"type": "STANDARD_CLAUSE", "id": "SRC_STANDARD_1"}]
+                    if uses_standard
+                    else []
+                ),
             ],
             "limitations": [],
         }
@@ -581,6 +685,239 @@ async def test_backend_resolves_compact_source_keys_to_actual_ids() -> None:
 
 
 @pytest.mark.asyncio
+async def test_standard_reference_has_exact_user_facing_standard_source() -> None:
+    model = ChatModel(
+        {
+            "outcome": "ANSWERED",
+            "answer": (
+                "대응 표준계약서 제17조 비밀준수에는 업무 종료 후 1년으로 "
+                "기재되어 있습니다."
+            ),
+            "sources": [
+                {"type": "STANDARD_CLAUSE", "id": "SRC_STANDARD_1"},
+            ],
+            "limitations": [],
+        }
+    )
+
+    response = await answer_review_question(
+        _review_with_confidentiality_clause(),
+        ChatRequest(
+            message="비밀유지 기간을 표준조항과 비교해줘.",
+            focus_clause_id="uc_confidentiality_1",
+        ),
+        runtime=SimpleNamespace(tools=(GroundingTool(),)),
+        model=model,
+        settings=_settings(),
+    )
+
+    assert response.outcome == "ANSWERED"
+    assert {source.id for source in response.sources} == {
+        "uc_confidentiality_1",
+        "std_confidentiality_17",
+    }
+    standard_source = next(
+        source for source in response.sources if source.type == "STANDARD_CLAUSE"
+    )
+    assert standard_source.display_label == (
+        "SW 프리랜서 용역 표준계약서 · 제17조 비밀준수"
+    )
+    assert all("liability" not in (source.id or "") for source in response.sources)
+
+
+@pytest.mark.asyncio
+async def test_missing_standard_source_is_safely_supplemented() -> None:
+    answer = "표준계약서 기준 제17조 비밀준수에는 종료 후 1년이 기재되어 있습니다."
+    model = SequenceChatModel(
+        [
+            (
+                {
+                    "outcome": "ANSWERED",
+                    "answer": answer,
+                    "sources": [{"type": "USER_CLAUSE", "id": "SRC_USER_1"}],
+                    "limitations": [],
+                },
+                "stop",
+            ),
+            (
+                {
+                    "outcome": "ANSWERED",
+                    "answer": answer,
+                    "sources": [
+                        {"type": "USER_CLAUSE", "id": "SRC_USER_1"},
+                        {"type": "STANDARD_CLAUSE", "id": "SRC_STANDARD_1"},
+                    ],
+                    "limitations": [],
+                },
+                "stop",
+            ),
+        ]
+    )
+
+    response = await answer_review_question(
+        _review_with_confidentiality_clause(),
+        ChatRequest(
+            message="비밀유지 기간을 표준조항과 비교해줘.",
+            focus_clause_id="uc_confidentiality_1",
+        ),
+        runtime=SimpleNamespace(tools=(GroundingTool(),)),
+        model=model,
+        settings=_settings(),
+    )
+
+    assert response.outcome == "ANSWERED"
+    assert len(model.runnables) == 1
+    assert {source.id for source in response.sources} == {
+        "uc_confidentiality_1",
+        "std_confidentiality_17",
+    }
+
+
+@pytest.mark.asyncio
+async def test_repeated_question_uses_same_deterministic_source_supplement() -> None:
+    invalid = {
+        "outcome": "ANSWERED",
+        "answer": "표준계약서 기준 제17조 비밀준수에는 1년이 기재되어 있습니다.",
+        "sources": [{"type": "USER_CLAUSE", "id": "SRC_USER_1"}],
+        "limitations": [],
+    }
+    model = SequenceChatModel([(invalid, "stop"), (invalid, "stop")])
+
+    response = await answer_review_question(
+        _review_with_confidentiality_clause(),
+        ChatRequest(
+            message="비밀유지 기간을 표준조항과 비교해줘.",
+            focus_clause_id="uc_confidentiality_1",
+        ),
+        runtime=SimpleNamespace(tools=(GroundingTool(),)),
+        model=model,
+        settings=_settings(),
+    )
+
+    assert response.outcome == "ANSWERED"
+    assert len(model.runnables) == 1
+    assert {source.id for source in response.sources} == {
+        "uc_confidentiality_1",
+        "std_confidentiality_17",
+    }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "question",
+    [
+        "법률 지식 없는 사람도 이해할 수 있도록 제5조를 설명해 줘.",
+        "계약서 제5조를 설명해 줘.",
+        "비밀유지 의무가 계약 종료 후에도 적용되는지 설명해 줘.",
+    ],
+)
+async def test_user_article_explanation_is_not_misread_as_standard_reference(
+    question: str,
+) -> None:
+    model = ChatModel(
+        {
+            "outcome": "ANSWERED",
+            "answer": (
+                "계약서 제5조는 계약 종료 후에도 업무상 비밀을 누설하지 "
+                "않도록 정한 조항입니다."
+            ),
+            "sources": [],
+            "limitations": [],
+        }
+    )
+
+    review = _review_with_confidentiality_clause()
+    first = await answer_review_question(
+        review,
+        ChatRequest(message=question, focus_clause_id="uc_confidentiality_1"),
+        runtime=SimpleNamespace(tools=(GroundingTool(),)),
+        model=model,
+        settings=_settings(),
+    )
+    second = await answer_review_question(
+        review,
+        ChatRequest(message=question, focus_clause_id="uc_confidentiality_1"),
+        runtime=SimpleNamespace(tools=(GroundingTool(),)),
+        model=model,
+        settings=_settings(),
+    )
+
+    for response in (first, second):
+        assert response.outcome == "ANSWERED"
+        assert [source.id for source in response.sources] == [
+            "uc_confidentiality_1"
+        ]
+        assert all(source.type != "STANDARD_CLAUSE" for source in response.sources)
+
+
+@pytest.mark.asyncio
+async def test_standard_text_other_article_number_does_not_require_extra_source() -> None:
+    model = ChatModel(
+        {
+            "outcome": "ANSWERED",
+            "answer": (
+                "사용자 계약서 제5조에는 기간이 없고 대응 표준조항에는 "
+                "업무 종료 후 1년으로 기재되어 있습니다."
+            ),
+            "sources": [],
+            "limitations": [],
+        }
+    )
+
+    response = await answer_review_question(
+        _review_with_confidentiality_clause(),
+        ChatRequest(
+            message="표준조항과 비교했을 때 빠진 내용과 추가된 내용을 알려 줘.",
+            focus_clause_id="uc_confidentiality_1",
+        ),
+        runtime=SimpleNamespace(tools=(GroundingTool(),)),
+        model=model,
+        settings=_settings(),
+    )
+
+    assert response.outcome == "ANSWERED"
+    assert {source.id for source in response.sources} == {
+        "uc_confidentiality_1",
+        "std_confidentiality_17",
+    }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "invalid_source",
+    [
+        {"type": "STANDARD_CLAUSE", "id": "SRC_STANDARD_99"},
+        {"type": "STANDARD_CLAUSE", "id": "SRC_USER_1"},
+        {"type": "LAW", "id": "SRC_LAW_99"},
+    ],
+)
+async def test_structurally_invalid_source_remains_blocked(
+    invalid_source: dict[str, str],
+) -> None:
+    invalid = {
+        "outcome": "ANSWERED",
+        "answer": "계약서 제5조의 비밀유지 의무를 설명합니다.",
+        "sources": [invalid_source],
+        "limitations": [],
+    }
+    model = SequenceChatModel([(invalid, "stop"), (invalid, "stop")])
+
+    response = await answer_review_question(
+        _review_with_confidentiality_clause(),
+        ChatRequest(
+            message="계약서 제5조를 설명해 줘.",
+            focus_clause_id="uc_confidentiality_1",
+        ),
+        runtime=SimpleNamespace(tools=(GroundingTool(),)),
+        model=model,
+        settings=_settings(),
+    )
+
+    assert response.outcome == "LLM_OUTPUT_INVALID"
+    assert len(model.runnables) == 2
+
+
+@pytest.mark.asyncio
 async def test_whole_review_question_selects_matching_clause_and_hides_source_key() -> (
     None
 ):
@@ -598,13 +935,27 @@ async def test_whole_review_question_selects_matching_clause_and_hides_source_ke
             "toxic_patterns": [],
         }
     )
-    model = ChatModel(
-        {
-            "outcome": "ANSWERED",
-            "answer": "SRC_USER_1에 따르면 하자는 을이 보완합니다.",
-            "sources": [{"type": "USER_CLAUSE", "id": "SRC_USER_1"}],
-            "limitations": [],
-        }
+    model = SequenceChatModel(
+        [
+            (
+                {
+                    "outcome": "ANSWERED",
+                    "answer": "SRC_USER_1에 따르면 하자는 을이 보완합니다.",
+                    "sources": [{"type": "USER_CLAUSE", "id": "SRC_USER_1"}],
+                    "limitations": [],
+                },
+                "stop",
+            ),
+            (
+                {
+                    "outcome": "ANSWERED",
+                    "answer": "계약 조항에 따르면 하자는 을이 보완합니다.",
+                    "sources": [{"type": "USER_CLAUSE", "id": "SRC_USER_1"}],
+                    "limitations": [],
+                },
+                "stop",
+            ),
+        ]
     )
 
     response = await answer_review_question(
@@ -615,7 +966,7 @@ async def test_whole_review_question_selects_matching_clause_and_hides_source_ke
         settings=_settings(),
     )
 
-    messages = model.runnable.prompts[0]
+    messages = model.runnables[0].prompts[0]
     context = json.loads(str(messages[1].content).split("\n", 1)[1])
     assert len(context["review_result"]["clause_results"]) == 1
     assert "하자가" in context["review_result"]["clause_results"][0]["user_clause"]
@@ -624,14 +975,70 @@ async def test_whole_review_question_selects_matching_clause_and_hides_source_ke
 
 
 @pytest.mark.asyncio
-async def test_backend_attaches_selected_sources_when_model_omits_them() -> None:
+async def test_short_follow_up_reuses_previous_user_question_context() -> None:
     model = ChatModel(
         {
             "outcome": "ANSWERED",
-            "answer": "손해배상 책임 범위는 상호 협의하도록 정해져 있습니다.",
-            "sources": [],
+            "answer": "업무 범위가 넓어 책임 대상이 불명확할 수 있기 때문입니다.",
+            "sources": [{"type": "USER_CLAUSE", "id": "SRC_USER_1"}],
             "limitations": [],
         }
+    )
+
+    response = await answer_review_question(
+        _review_with_scope_clauses(),
+        ChatRequest(
+            message="왜?",
+            history=[
+                ChatHistoryMessage(
+                    role="user",
+                    content="을의 업무 범위가 왜 불리한가요?",
+                ),
+                ChatHistoryMessage(
+                    role="assistant",
+                    content="업무 범위가 넓게 정해져 있습니다.",
+                ),
+            ],
+        ),
+        runtime=SimpleNamespace(tools=(GroundingTool(),)),
+        model=model,
+        settings=_settings(),
+    )
+
+    context = json.loads(
+        str(model.runnable.prompts[0][1].content).split("\n", 1)[1]
+    )
+    assert response.outcome == "ANSWERED"
+    assert len(context["review_result"]["clause_results"]) == 1
+    assert "백엔드 API 개발" in (
+        context["review_result"]["clause_results"][0]["user_clause"]
+    )
+
+
+@pytest.mark.asyncio
+async def test_backend_supplements_deterministic_user_source() -> None:
+    answer = "손해배상 책임 범위는 상호 협의하도록 정해져 있습니다."
+    model = SequenceChatModel(
+        [
+            (
+                {
+                    "outcome": "ANSWERED",
+                    "answer": answer,
+                    "sources": [],
+                    "limitations": [],
+                },
+                "stop",
+            ),
+            (
+                {
+                    "outcome": "ANSWERED",
+                    "answer": answer,
+                    "sources": [{"type": "USER_CLAUSE", "id": "SRC_USER_1"}],
+                    "limitations": [],
+                },
+                "stop",
+            ),
+        ]
     )
 
     response = await answer_review_question(
@@ -643,6 +1050,7 @@ async def test_backend_attaches_selected_sources_when_model_omits_them() -> None
     )
 
     assert response.outcome == "ANSWERED"
+    assert len(model.runnables) == 1
     assert {source.id for source in response.sources} == {
         "uc_rev_chat_1",
     }
@@ -654,7 +1062,7 @@ async def test_particle_suffix_question_selects_only_payment_clause() -> None:
         {
             "outcome": "ANSWERED",
             "answer": "용역대금은 3,000,000원이고 매월 말일에 지급합니다.",
-            "sources": [],
+            "sources": [{"type": "USER_CLAUSE", "id": "SRC_USER_1"}],
             "limitations": [],
         }
     )
@@ -678,30 +1086,34 @@ async def test_particle_suffix_question_selects_only_payment_clause() -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    ("question", "expected_id", "expected_text"),
+    ("question", "expected_ids", "expected_text"),
     [
         (
             "을의 업무 범위에는 무엇이 포함되나요?",
-            "uc_rev_chat_1",
+            {"uc_rev_chat_1"},
             "API 명세서",
         ),
         (
             "추가 업무가 발생했을 때 자동으로 을이 수행해야 하나요?",
-            "uc_rev_chat_3",
+            {"uc_rev_chat_2", "uc_rev_chat_3"},
             "별도 서면 합의",
         ),
     ],
 )
-async def test_user_clause_ranking_ignores_standard_clause_text(
+async def test_clause_ranking_searches_user_and_standard_clause_text(
     question: str,
-    expected_id: str,
+    expected_ids: set[str],
     expected_text: str,
 ) -> None:
+    model_sources = [
+        {"type": "USER_CLAUSE", "id": f"SRC_USER_{index}"}
+        for index in range(1, len(expected_ids) + 1)
+    ]
     model = ChatModel(
         {
             "outcome": "ANSWERED",
             "answer": "질문과 직접 관련된 사용자 계약서 문언을 확인했습니다.",
-            "sources": [],
+            "sources": model_sources,
             "limitations": [],
         }
     )
@@ -716,9 +1128,71 @@ async def test_user_clause_ranking_ignores_standard_clause_text(
 
     context = json.loads(str(model.runnable.prompts[0][-1].content).split("\n", 1)[1])
     selected = context["review_result"]["clause_results"]
-    assert len(selected) == 1
-    assert expected_text in selected[0]["user_clause"]
-    assert {source.id for source in response.sources} == {expected_id}
+    assert any(expected_text in item["user_clause"] for item in selected)
+    assert {source.id for source in response.sources} == expected_ids
+
+
+@pytest.mark.asyncio
+async def test_whole_review_risk_question_limits_candidates_to_requested_count() -> None:
+    model = ChatModel(
+        {
+            "outcome": "ANSWERED",
+            "answer": "확인된 조항 가운데 주의할 내용을 세 가지 범위에서 설명합니다.",
+            "sources": [{"type": "USER_CLAUSE", "id": "SRC_USER_1"}],
+            "limitations": [],
+        }
+    )
+
+    response = await answer_review_question(
+        _review_with_scope_clauses(),
+        ChatRequest(
+            message="이 계약서에서 수급사업자에게 가장 불리한 조항 3개를 쉬운 말로 설명해 줘."
+        ),
+        runtime=SimpleNamespace(tools=(GroundingTool(),)),
+        model=model,
+        settings=_settings(),
+    )
+
+    context = json.loads(str(model.runnable.prompts[0][-1].content).split("\n", 1)[1])
+    selected_count = len(context["review_result"]["clause_results"]) + len(
+        context["review_result"]["missing_standard_clauses"]
+    )
+    assert response.outcome == "ANSWERED"
+    assert selected_count == 3
+    assert len(response.sources) <= 6
+
+
+@pytest.mark.asyncio
+async def test_multiple_topics_returns_partial_answer_for_found_clauses() -> None:
+    model = ChatModel(
+        {
+            "outcome": "ANSWERED",
+            "answer": "대금과 검수 관련 문구는 확인되지만 지연 책임 문구는 확인되지 않습니다.",
+            "sources": [
+                {"type": "USER_CLAUSE", "id": "SRC_USER_1"},
+                {"type": "USER_CLAUSE", "id": "SRC_USER_2"},
+            ],
+            "limitations": [],
+        }
+    )
+
+    response = await answer_review_question(
+        _review_with_scope_clauses(),
+        ChatRequest(
+            message="대금 지급, 검수, 지연 책임 조항 사이에 충돌하거나 모호한 부분이 있는지 찾아줘."
+        ),
+        runtime=SimpleNamespace(tools=(GroundingTool(),)),
+        model=model,
+        settings=_settings(),
+    )
+
+    assert response.outcome == "ANSWERED"
+    assert "지연 책임 항목은 현재 검토 결과에서 명확히 확인되지 않았습니다." == (
+        response.limitations[-1]
+    )
+    assert response.answer and response.answer.startswith(
+        "확인된 조항을 기준으로 설명합니다."
+    )
 
 
 @pytest.mark.asyncio
@@ -730,7 +1204,7 @@ async def test_missing_standard_is_searched_separately_from_user_clauses() -> No
                 "사용자 계약서에는 특정 관할 법원이 없고, "
                 "표준조항 후보는 법정 관할 법원을 제시합니다."
             ),
-            "sources": [],
+            "sources": [{"type": "STANDARD_CLAUSE", "id": "SRC_STANDARD_1"}],
             "limitations": [],
         }
     )
@@ -747,7 +1221,9 @@ async def test_missing_standard_is_searched_separately_from_user_clauses() -> No
     assert context["review_result"]["clause_results"] == []
     assert len(context["review_result"]["missing_standard_clauses"]) == 1
     assert {source.id for source in response.sources} == {"std_jurisdiction_22"}
-    assert response.sources[0].display_label == "제22조 관할 법원"
+    assert response.sources[0].display_label == (
+        "SW 프리랜서 용역 표준계약서 · 제22조 관할 법원"
+    )
 
 
 @pytest.mark.asyncio
@@ -824,7 +1300,8 @@ async def test_backend_supplements_each_directly_matched_user_clause() -> None:
                 "계약 위반과 서면 통지라는 해지 조건도 충족해야 합니다."
             ),
             "sources": [
-                {"type": "USER_CLAUSE", "id": "uc_rev_chat_4"},
+                {"type": "USER_CLAUSE", "id": "SRC_USER_1"},
+                {"type": "USER_CLAUSE", "id": "SRC_USER_2"},
             ],
             "limitations": [],
         }
@@ -948,6 +1425,109 @@ async def test_repeated_incomplete_answer_is_output_invalid() -> None:
 
 
 @pytest.mark.asyncio
+async def test_internal_terms_in_answer_or_limitations_are_repaired_once() -> None:
+    model = SequenceChatModel(
+        [
+            (
+                {
+                    "outcome": "ANSWERED",
+                    "answer": "review_result의 source_key를 확인했습니다.",
+                    "sources": [{"type": "USER_CLAUSE", "id": "SRC_USER_1"}],
+                    "limitations": ["required_source_keys가 비어 있습니다."],
+                },
+                "stop",
+            ),
+            (
+                {
+                    "outcome": "ANSWERED",
+                    "answer": "사용자 계약서 조항과 대응 표준조항을 비교했습니다.",
+                    "sources": [
+                        {"type": "USER_CLAUSE", "id": "SRC_USER_1"},
+                        {"type": "STANDARD_CLAUSE", "id": "SRC_STANDARD_1"},
+                    ],
+                    "limitations": [],
+                },
+                "stop",
+            ),
+        ]
+    )
+
+    response = await answer_review_question(
+        _review(),
+        ChatRequest(
+            message="사용자 조항과 표준조항의 차이를 설명해줘.",
+            focus_clause_id="uc_rev_chat_1",
+        ),
+        runtime=SimpleNamespace(tools=(GroundingTool(),)),
+        model=model,
+        settings=_settings(),
+    )
+
+    assert response.outcome == "ANSWERED"
+    assert len(model.runnables) == 2
+    assert "review_result" not in (response.answer or "")
+    assert all("source_key" not in item for item in response.limitations)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "unsafe_answer",
+    [
+        "이 표준조항은 사용자 계약서에 적용된다.",
+        "이 조항이 적용될 가능성이 높다.",
+        "이 사용자 조항은 법적으로 위법이다.",
+        "원본 standard_contract_v2.md 경로를 참고했습니다.",
+    ],
+)
+async def test_unsafe_legal_or_internal_file_expression_is_repaired_once(
+    unsafe_answer: str,
+) -> None:
+    model = SequenceChatModel(
+        [
+            (
+                {
+                    "outcome": "ANSWERED",
+                    "answer": unsafe_answer,
+                    "sources": [{"type": "USER_CLAUSE", "id": "SRC_USER_1"}],
+                    "limitations": [],
+                },
+                "stop",
+            ),
+            (
+                {
+                    "outcome": "ANSWERED",
+                    "answer": (
+                        "사용자 계약서의 책임 범위 문구는 대응 표준조항과 차이가 "
+                        "있으며 실제 적용 여부는 계약 전체 문구를 함께 확인해야 합니다."
+                    ),
+                    "sources": [
+                        {"type": "USER_CLAUSE", "id": "SRC_USER_1"},
+                        {"type": "STANDARD_CLAUSE", "id": "SRC_STANDARD_1"},
+                    ],
+                    "limitations": [],
+                },
+                "stop",
+            ),
+        ]
+    )
+
+    response = await answer_review_question(
+        _review(),
+        ChatRequest(message="책임 조항의 차이를 설명해줘.", focus_clause_id="uc_rev_chat_1"),
+        runtime=SimpleNamespace(tools=(GroundingTool(),)),
+        model=model,
+        settings=_settings(),
+    )
+
+    assert response.outcome == "ANSWERED"
+    assert len(model.runnables) == 2
+    assert ".md" not in (response.answer or "")
+    assert "적용된다" not in (response.answer or "")
+    assert "가능성이 높다" not in (response.answer or "")
+    assert "위법이다" not in (response.answer or "")
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("status", ["NO_RESULT", "TIMEOUT"])
 async def test_legal_grounding_failure_still_calls_llm_with_clause_context(
     status: str,
@@ -957,7 +1537,10 @@ async def test_legal_grounding_failure_still_calls_llm_with_clause_context(
         {
             "outcome": "ANSWERED",
             "answer": "조항 문언과 표준 대응 후보를 기준으로는 책임 범위를 더 구체화할 필요가 있습니다.",
-            "sources": [{"type": "USER_CLAUSE", "id": "uc_rev_chat_1"}],
+            "sources": [
+                {"type": "USER_CLAUSE", "id": "SRC_USER_1"},
+                {"type": "STANDARD_CLAUSE", "id": "SRC_STANDARD_1"},
+            ],
             "limitations": [],
         }
     )
@@ -1013,13 +1596,13 @@ async def test_all_grounding_absent_limits_answer_without_llm_call() -> None:
         {
             "outcome": "ANSWERED",
             "answer": "",
-            "sources": [{"type": "USER_CLAUSE", "id": "uc_rev_chat_1"}],
+            "sources": [{"type": "USER_CLAUSE", "id": "SRC_USER_1"}],
             "limitations": [],
         },
         {
             "outcome": "ANSWERED",
             "answer": "   \n\t",
-            "sources": [{"type": "USER_CLAUSE", "id": "uc_rev_chat_1"}],
+            "sources": [{"type": "USER_CLAUSE", "id": "SRC_USER_1"}],
             "limitations": [],
         },
     ],

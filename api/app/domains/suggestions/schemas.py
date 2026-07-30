@@ -16,6 +16,23 @@ class SuggestionOutcome(StrEnum):
     LLM_OUTPUT_INVALID = "LLM_OUTPUT_INVALID"
 
 
+class SuggestionEvidenceLevel(StrEnum):
+    """표준조항 근거의 확정 수준."""
+
+    CONFIRMED_STANDARD = "CONFIRMED_STANDARD"
+    CANDIDATE_STANDARD = "CANDIDATE_STANDARD"
+
+
+class SuggestionReasonCode(StrEnum):
+    """협의 문구를 생성하지 못한 비민감 사유."""
+
+    USER_CLAUSE_MISSING = "USER_CLAUSE_MISSING"
+    STANDARD_CANDIDATE_MISSING = "STANDARD_CANDIDATE_MISSING"
+    STANDARD_CLAUSE_ID_MISSING = "STANDARD_CLAUSE_ID_MISSING"
+    CLAUSE_CATEGORY_MISSING = "CLAUSE_CATEGORY_MISSING"
+    REQUIRED_VALUE_MISSING = "REQUIRED_VALUE_MISSING"
+
+
 class SuggestionSourceKey(StrEnum):
     """LLM이 선택하는 검증된 입력 근거의 논리 키."""
 
@@ -123,6 +140,15 @@ class SuggestionResponse(BaseModel):
         description="제안 생성 결과 유형 (GENERATED, INSUFFICIENT_GROUNDING, REQUIRED_VALUE_MISSING, GENERATED_FACT_NOT_GROUNDED, LLM_OUTPUT_INVALID)"
     )
     text: str | None = Field(default=None, description="제안 문구 내용")
+    evidence_level: SuggestionEvidenceLevel | None = Field(
+        default=None,
+        description="협의 문구가 참고한 표준조항 근거의 확정 수준",
+    )
+    message: str | None = Field(default=None, description="사용자용 결과 안내 문구")
+    reason_code: SuggestionReasonCode | None = Field(
+        default=None,
+        description="생성 불가 원인을 구분하는 비민감 사유 코드",
+    )
     purpose: str | None = Field(default=None, description="요청된 수정 목적")
     key_changes: list[str] = Field(
         default_factory=list, description="주요 변경 요점 목록"
