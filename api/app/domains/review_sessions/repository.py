@@ -6,7 +6,7 @@ from typing import Protocol
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.db.models import ReviewSessionRow
+from app.core.db.models import ReviewRow, ReviewSessionRow
 from app.domains.review_sessions.domain import ReviewSession
 from app.domains.review_sessions.mapper import (
     review_session_from_row,
@@ -29,6 +29,8 @@ class ReviewSessionRepository(Protocol):
     ) -> ReviewSession | None: ...
 
     def save(self, entity: ReviewSession) -> None: ...
+
+    def has_reviews(self, session_id: str) -> bool: ...
 
     def list_expired(self, now: datetime) -> list[ReviewSession]: ...
 
@@ -69,6 +71,12 @@ class SqlAlchemyReviewSessionRepository:
         if row is None:
             raise LookupError(f"검토 세션을 찾을 수 없습니다: {entity.id}")
         update_review_session_row(row, entity)
+
+    def has_reviews(self, session_id: str) -> bool:
+        statement = (
+            select(ReviewRow.id).where(ReviewRow.session_id == session_id).limit(1)
+        )
+        return self._session.scalar(statement) is not None
 
     def list_expired(self, now: datetime) -> list[ReviewSession]:
         statement = select(ReviewSessionRow).where(

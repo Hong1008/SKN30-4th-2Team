@@ -33,7 +33,9 @@ class ReviewSessionResponse(BaseModel):
 
     session_id: str = Field(description="검토 세션 고유 식별자")
     review_state: ReviewSessionState = Field(description="현재 검토 세션 상태")
-    upload: UploadInfo | None = Field(default=None, description="업로드 파일 메타데이터")
+    upload: UploadInfo | None = Field(
+        default=None, description="업로드 파일 메타데이터"
+    )
     scope_status: ScopeStatus | None = Field(
         default=None,
         description=(
@@ -42,7 +44,9 @@ class ReviewSessionResponse(BaseModel):
         ),
     )
     scope_message: str | None = Field(default=None, description="범위 판별 안내 메시지")
-    suggested_contract_type: str | None = Field(default=None, description="자동 추천된 계약 유형 코드")
+    suggested_contract_type: str | None = Field(
+        default=None, description="자동 추천된 계약 유형 코드"
+    )
     candidates: list[ContractTypeCandidate] = Field(
         default_factory=list, description="계약 유형 추천 후보 목록"
     )
@@ -73,11 +77,20 @@ class ReviewSessionResponse(BaseModel):
     expires_at: datetime = Field(description="세션 만료 일시")
 
 
+class ReviewSessionDeleteResponse(BaseModel):
+    """업로드 세션과 원본 파일 폐기 응답."""
+
+    session_id: str = Field(description="폐기한 검토 세션 고유 식별자")
+    deleted: bool = Field(description="저장된 세션과 원본 파일 폐기 여부")
+
+
 class ContractTypeSelectionRequest(BaseModel):
     """계약 유형 선택 요청."""
 
     selected_contract_type: str = Field(
-        min_length=1, max_length=64, description="선택한 계약 유형 코드 (예: SW_FREELANCE)"
+        min_length=1,
+        max_length=64,
+        description="선택한 계약 유형 코드 (예: SW_FREELANCE)",
     )
     selection_source: SelectionSource = Field(
         default=SelectionSource.MANUAL,

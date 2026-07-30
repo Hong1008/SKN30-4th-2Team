@@ -1,4 +1,4 @@
-import { API_BASE_URL } from '../config'
+﻿import { API_BASE_URL } from '../config'
 import { client } from './client'
 import type {
   ApiResponse,
@@ -11,6 +11,7 @@ import type {
   ReviewCancelData,
   ReviewData,
   ReviewSessionData,
+  ReviewSessionDeleteData,
   SuggestionResponse,
   SelectionSource,
 } from '../types'
@@ -30,6 +31,9 @@ export const api = {
 
   getSession: (sessionId: string, signal?: AbortSignal): Promise<ApiResponse<ReviewSessionData>> =>
     client(`/review-sessions/${encodeURIComponent(sessionId)}`, { signal }),
+
+  deleteSession: (sessionId: string): Promise<ApiResponse<ReviewSessionDeleteData>> =>
+    client(`/review-sessions/${encodeURIComponent(sessionId)}`, { method: 'DELETE' }),
 
   extendSession: (sessionId: string): Promise<ApiResponse<ReviewSessionData>> =>
     client(`/review-sessions/${encodeURIComponent(sessionId)}/extend`, { method: 'POST' }),

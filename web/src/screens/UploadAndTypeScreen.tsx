@@ -1,4 +1,4 @@
-import { createClientId } from '../utils/clientId'
+﻿import { createClientId } from '../utils/clientId'
 import { useEffect, useState, useRef } from "react"
 
 import {
@@ -89,6 +89,7 @@ export default function UploadAndTypeScreen({
 
   const [emptyDocError, setEmptyDocError] = useState(false)
   const [isStartingReview, setIsStartingReview] = useState(false)
+  const [isRemovingFile, setIsRemovingFile] = useState(false)
   const [privacyNoticeConfirmed, setPrivacyNoticeConfirmed] = useState(false)
 
   useEffect(() => () => uploadControllerRef.current?.abort(), [])
@@ -338,6 +339,22 @@ export default function UploadAndTypeScreen({
     }
   }
 
+  const removeUploadedFile = async () => {
+    if (!sessionId || isRemovingFile || isStartingReview) return
+    setIsRemovingFile(true)
+    setErrorMsg("")
+    try {
+      await api.deleteSession(sessionId)
+      reset()
+      showToast("업로드한 파일을 삭제했습니다.", "success")
+    } catch (error: any) {
+      setErrorMsg(
+        getErrorMessage(error, "파일을 삭제하지 못했습니다. 다시 시도해 주세요."),
+      )
+    } finally {
+      setIsRemovingFile(false)
+    }
+  }
   const reset = () => {
     uploadControllerRef.current?.abort()
 
@@ -569,9 +586,9 @@ export default function UploadAndTypeScreen({
                 </p>
               </div>
               <button
-                onClick={reset}
-                disabled={isStartingReview}
-                aria-label="파일 제거"
+                onClick={() => void removeUploadedFile()}
+                disabled={isStartingReview || isRemovingFile}
+                aria-label={isRemovingFile ? "파일 제거 중" : "파일 제거"}
                 className="text-slate-400 hover:text-rose-500 transition-colors"
               >
                 <X className="w-4 h-4" />
@@ -590,7 +607,7 @@ export default function UploadAndTypeScreen({
                   <input
                     type="checkbox"
                     checked={privacyNoticeConfirmed}
-                    disabled={isStartingReview}
+                    disabled={isStartingReview || isRemovingFile}
                     onChange={(event) => setPrivacyNoticeConfirmed(event.target.checked)}
                     aria-describedby="privacy-notice-description"
                     className="mt-0.5 size-4 shrink-0 accent-blue-600"

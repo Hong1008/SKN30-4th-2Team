@@ -289,3 +289,24 @@ def confirm_out_of_scope(
     SqlAlchemyReviewSessionRepository(db_session).save(entity)
     db_session.commit()
     return entity
+
+
+def delete_review_session(
+    db_session: Session,
+    storage: FileStorage,
+    entity: ReviewSession,
+) -> bool:
+    """검토 시작 전 세션 레코드와 저장된 원본 파일을 폐기한다."""
+    repository = SqlAlchemyReviewSessionRepository(db_session)
+    if repository.has_reviews(entity.id):
+        raise ConflictError(
+            code="REVIEW_ALREADY_STARTED",
+            message="검토가 시작된 세션은 파일 화면에서 제거할 수 없습니다.",
+            next_action="START_NEW_REVIEW",
+        )
+    storage_key = entity.storage_key
+    deleted = repository.delete(entity.id)
+    db_session.commit()
+    if storage_key is not None:
+        storage.delete(storage_key)
+    return deleted

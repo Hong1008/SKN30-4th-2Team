@@ -1,4 +1,4 @@
-export type Screen =
+﻿export type Screen =
   | 'upload-and-type'
   | 'out-of-scope'
   | 'processing'
@@ -83,6 +83,11 @@ export interface ReviewSessionData {
   allowed_actions: AllowedAction[];
   expires_at: string;
   can_start_review: boolean;
+}
+
+export interface ReviewSessionDeleteData {
+  session_id: string;
+  deleted: boolean;
 }
 
 export interface ContractTypeCandidate {

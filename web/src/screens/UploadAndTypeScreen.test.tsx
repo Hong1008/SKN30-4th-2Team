@@ -1,3 +1,4 @@
+﻿import { useState } from 'react'
 import { fireEvent, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
@@ -8,6 +9,7 @@ vi.mock("../api/api", () => ({
   api: {
     uploadContract: vi.fn(),
     getSession: vi.fn(),
+    deleteSession: vi.fn(),
     selectContractType: vi.fn(),
     startReview: vi.fn(),
   },
@@ -37,6 +39,19 @@ const props = {
   onOutOfScope: vi.fn(),
   setSessionExpiresAt: vi.fn(),
 }
+function StatefulUploadScreen({ initialSessionId = null }: { initialSessionId?: string | null }) {
+  const [sessionId, setSessionId] = useState<string | null>(initialSessionId)
+  return (
+    <UploadAndTypeScreen
+      {...props}
+      sessionId={sessionId}
+      setSessionId={(id) => {
+        props.setSessionId(id)
+        setSessionId(id)
+      }}
+    />
+  )
+}
 const input = (container: HTMLElement) =>
   container.querySelector('input[type="file"]') as HTMLInputElement
 const file = (size: number) =>
@@ -45,6 +60,8 @@ const file = (size: number) =>
 beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(api.uploadContract).mockReset()
+  vi.mocked(api.deleteSession).mockReset()
+  vi.mocked(api.deleteSession).mockResolvedValue({ data: { deleted: true } } as never)
 })
 
 describe("계약서 업로드", () => {
@@ -101,14 +118,16 @@ describe("계약서 업로드", () => {
         suggested_contract_type: 'SW_FREELANCE', candidates: [], expires_at: '2099-01-01T00:00:00Z',
       },
     } as never)
-    const { container } = render(<UploadAndTypeScreen {...props} />)
+    const { container } = render(<StatefulUploadScreen />)
     fireEvent.change(input(container), { target: { files: [file(5)] } })
     const firstCheckbox = await screen.findByRole('checkbox')
     await userEvent.click(firstCheckbox)
     expect(firstCheckbox).toBeChecked()
 
     await userEvent.click(screen.getByRole('button', { name: '파일 제거' }))
-    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+    await waitFor(() =>
+      expect(screen.queryByRole('checkbox')).not.toBeInTheDocument(),
+    )
     fireEvent.change(input(container), { target: { files: [file(5)] } })
 
     expect(await screen.findByRole('checkbox')).not.toBeChecked()
@@ -221,4 +240,53 @@ describe("계약서 업로드", () => {
     expect(await screen.findByText(/서버 허용 제한\(0\.0MB\)/)).toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "같은 파일 다시 시도" })).not.toBeInTheDocument()
   })
-})
+
+  it("파일 제거 성공 후에만 로컬 세션과 업로드 화면을 초기화한다", async () => {
+    localStorage.setItem("draft_review_session_id", "session-delete")
+    vi.mocked(api.getSession).mockResolvedValue({
+      data: {
+        upload: { file_name: "contract.pdf", size_bytes: 5 },
+        selected_contract_type: "SW_FREELANCE",
+        suggested_contract_type: "SW_FREELANCE",
+        candidates: [],
+        expires_at: "2099-01-01T00:00:00Z",
+      },
+    } as never)
+    vi.mocked(api.deleteSession).mockResolvedValue({
+      data: { session_id: "session-delete", deleted: true },
+    } as never)
+
+    render(<StatefulUploadScreen initialSessionId="session-delete" />)
+    await userEvent.click(await screen.findByRole("button", { name: "파일 제거" }))
+
+    await waitFor(() =>
+      expect(api.deleteSession).toHaveBeenCalledWith("session-delete"),
+    )
+    expect(props.setSessionId).toHaveBeenCalledWith(null)
+    expect(localStorage.getItem("draft_review_session_id")).toBeNull()
+    await waitFor(() =>
+      expect(screen.getByText(/파일을 이곳에 드래그/)).toBeInTheDocument(),
+    )
+  })
+
+  it("파일 제거 API가 실패하면 업로드 상태와 세션을 유지한다", async () => {
+    vi.mocked(api.getSession).mockResolvedValue({
+      data: {
+        upload: { file_name: "contract.pdf", size_bytes: 5 },
+        selected_contract_type: "SW_FREELANCE",
+        suggested_contract_type: "SW_FREELANCE",
+        candidates: [],
+        expires_at: "2099-01-01T00:00:00Z",
+      },
+    } as never)
+    vi.mocked(api.deleteSession).mockRejectedValue({
+      userMessage: "파일 삭제 요청에 실패했습니다.",
+    })
+
+    render(<UploadAndTypeScreen {...props} sessionId="session-delete" />)
+    await userEvent.click(await screen.findByRole("button", { name: "파일 제거" }))
+
+    expect(await screen.findByText("파일 삭제 요청에 실패했습니다.")).toBeInTheDocument()
+    expect(screen.getByText("contract.pdf")).toBeInTheDocument()
+    expect(props.setSessionId).not.toHaveBeenCalledWith(null)
+  })})

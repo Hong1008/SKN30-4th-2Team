@@ -396,6 +396,112 @@
             }
           }
         }
+      },
+      "delete": {
+        "tags": [
+          "review-sessions"
+        ],
+        "summary": "Delete Session",
+        "description": "Cookie 소유자의 업로드 세션과 원본 파일을 폐기한다.",
+        "operationId": "delete_session_api_v1_review_sessions__session_id__delete",
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_ReviewSessionDeleteResponse_"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "작업 처리 또는 대기 용량 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "리소스가 없거나 현재 익명 세션에서 접근할 수 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "현재 상태 또는 멱등 키 충돌",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "익명 세션 만료",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "요청 값 검증 실패",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "외부 서비스 사용 불가",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "외부 서비스 시간 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/review-sessions/{session_id}/extend": {
@@ -2037,6 +2143,24 @@
           "meta"
         ],
         "title": "ApiResponse[ReviewResultsResponse]"
+      },
+      "ApiResponse_ReviewSessionDeleteResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ReviewSessionDeleteResponse",
+            "description": "성공 응답 데이터 본문"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ApiMeta",
+            "description": "요청 메타데이터"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "title": "ApiResponse[ReviewSessionDeleteResponse]"
       },
       "ApiResponse_ReviewSessionResponse_": {
         "properties": {
@@ -3835,6 +3959,27 @@
         ],
         "title": "ReviewResultsSummary",
         "description": "결과 화면 상단 요약."
+      },
+      "ReviewSessionDeleteResponse": {
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "title": "Session Id",
+            "description": "폐기한 검토 세션 고유 식별자"
+          },
+          "deleted": {
+            "type": "boolean",
+            "title": "Deleted",
+            "description": "저장된 세션과 원본 파일 폐기 여부"
+          }
+        },
+        "type": "object",
+        "required": [
+          "session_id",
+          "deleted"
+        ],
+        "title": "ReviewSessionDeleteResponse",
+        "description": "업로드 세션과 원본 파일 폐기 응답."
       },
       "ReviewSessionResponse": {
         "properties": {
