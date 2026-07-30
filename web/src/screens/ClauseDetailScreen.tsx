@@ -278,13 +278,13 @@ export default function ClauseDetailScreen({ clause, reviewId, onBack, onChatbot
             {loadingSuggestion ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronRight className="w-4 h-4" />}
           </button>
         )}
-        {metadata?.features.chat && <button
+        {/* {metadata?.features.chat && <button
           onClick={onChatbot}
           className="flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-medium text-slate-900 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/15"
         >
           <MessageSquare className="w-4 h-4" />
           이 조항에 대해 질문하기
-        </button>}
+        </button>} */}
       </div>
 
       {suggestionError && <p className="text-sm text-rose-600" role="alert">{suggestionError}</p>}
