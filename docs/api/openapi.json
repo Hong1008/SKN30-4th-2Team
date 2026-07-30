@@ -398,6 +398,114 @@
         }
       }
     },
+    "/api/v1/review-sessions/{session_id}/extend": {
+      "post": {
+        "tags": [
+          "review-sessions"
+        ],
+        "summary": "Extend Session",
+        "description": "사용자 요청 시 세션 보관 시간을 현재부터 30분으로 재설정한다.",
+        "operationId": "extend_session_api_v1_review_sessions__session_id__extend_post",
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_ReviewSessionResponse_"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "작업 처리 또는 대기 용량 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "리소스가 없거나 현재 익명 세션에서 접근할 수 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "현재 상태 또는 멱등 키 충돌",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "익명 세션 만료",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "요청 값 검증 실패",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "외부 서비스 사용 불가",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "외부 서비스 시간 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/review-sessions/{session_id}/contract-type": {
       "patch": {
         "tags": [
@@ -4042,6 +4150,15 @@
         "title": "StandardMatchStatus",
         "description": "표준조항 후보 선택 상태."
       },
+      "SuggestionEvidenceLevel": {
+        "type": "string",
+        "enum": [
+          "CONFIRMED_STANDARD",
+          "CANDIDATE_STANDARD"
+        ],
+        "title": "SuggestionEvidenceLevel",
+        "description": "표준조항 근거의 확정 수준."
+      },
       "SuggestionOutcome": {
         "type": "string",
         "enum": [
@@ -4053,6 +4170,18 @@
         ],
         "title": "SuggestionOutcome",
         "description": "제안 생성 결과 유형."
+      },
+      "SuggestionReasonCode": {
+        "type": "string",
+        "enum": [
+          "USER_CLAUSE_MISSING",
+          "STANDARD_CANDIDATE_MISSING",
+          "STANDARD_CLAUSE_ID_MISSING",
+          "CLAUSE_CATEGORY_MISSING",
+          "REQUIRED_VALUE_MISSING"
+        ],
+        "title": "SuggestionReasonCode",
+        "description": "협의 문구를 생성하지 못한 비민감 사유."
       },
       "SuggestionRequest": {
         "properties": {
@@ -4101,6 +4230,40 @@
             ],
             "title": "Text",
             "description": "제안 문구 내용"
+          },
+          "evidence_level": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SuggestionEvidenceLevel"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "협의 문구가 참고한 표준조항 근거의 확정 수준"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message",
+            "description": "사용자용 결과 안내 문구"
+          },
+          "reason_code": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SuggestionReasonCode"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "생성 불가 원인을 구분하는 비민감 사유 코드"
           },
           "purpose": {
             "anyOf": [
