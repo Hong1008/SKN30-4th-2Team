@@ -39,9 +39,9 @@
 <rect x="2220" y="650" width="220" height="100" rx="16" fill="#fdf7ed" stroke="#d8912b" stroke-width="3"/>
 <text x="2330" y="692" text-anchor="middle" font-family="Apple SD Gothic Neo, sans-serif" font-size="22" font-weight="700" fill="#172033">Embed · Rerank</text>
 <text x="2330" y="722" text-anchor="middle" font-family="Apple SD Gothic Neo, sans-serif" font-size="22" font-weight="700" fill="#172033">MCP 전용 Pod</text>
-<rect x="2220" y="875" width="220" height="100" rx="16" fill="#fdf7ed" stroke="#d8912b" stroke-width="3"/>
-<text x="2330" y="917" text-anchor="middle" font-family="Apple SD Gothic Neo, sans-serif" font-size="22" font-weight="700" fill="#172033">법령 API</text>
-<text x="2330" y="947" text-anchor="middle" font-family="Apple SD Gothic Neo, sans-serif" font-size="22" font-weight="700" fill="#172033">원문·조문 조회</text>
+<rect x="2030" y="1115" width="330" height="100" rx="16" fill="#fdf7ed" stroke="#d8912b" stroke-width="3"/>
+<text x="2195" y="1157" text-anchor="middle" font-family="Apple SD Gothic Neo, sans-serif" font-size="22" font-weight="700" fill="#172033">외부 법령 API</text>
+<text x="2195" y="1187" text-anchor="middle" font-family="Apple SD Gothic Neo, sans-serif" font-size="22" font-weight="700" fill="#172033">원문·조문 조회</text>
 <path d="M330 550H620" fill="none" stroke="#243242" stroke-width="3.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
 <path d="M770 455V610H590" fill="none" stroke="#243242" stroke-width="3.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
 <path d="M920 402H1030V720H1080" fill="none" stroke="#243242" stroke-width="3.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
@@ -51,7 +51,7 @@
 <path d="M1515 765V875H1470" fill="none" stroke="#243242" stroke-width="3.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
 <path d="M1335 675V430H1880V700H1950" fill="none" stroke="#243242" stroke-width="3.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
 <path d="M1515 675V600H2330V650" fill="none" stroke="#243242" stroke-width="3.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
-<path d="M1590 735H1810V925H2220" fill="none" stroke="#243242" stroke-width="3.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M1590 735H1810V1165H2030" fill="none" stroke="#243242" stroke-width="3.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
 <path d="M1260 675V520H970V402H920" fill="none" stroke="#243242" stroke-width="3.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
 <rect x="390" y="1225" width="260" height="92" rx="16" fill="#f3f8fb" stroke="#4da1b7" stroke-width="3"/>
 <text x="520" y="1263" text-anchor="middle" font-family="Apple SD Gothic Neo, sans-serif" font-size="22" font-weight="700" fill="#172033">GitHub Actions</text>
