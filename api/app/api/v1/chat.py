@@ -8,7 +8,7 @@ from app.core.common.responses import (
     COMMON_ERROR_RESPONSES,
 )
 from app.core.idempotency import IdempotencyContextDep, idempotent
-from app.core.llm.dependencies import ChatModelDep
+from app.core.llm.dependencies import ChatModelDep, RouterModelDep
 from app.core.llm.mcp.dependencies import WorkShieldMCPRuntimeDep
 from app.domains.chat.schemas import ChatRequest, ChatResponse
 from app.domains.chat.service import answer_review_question
@@ -38,6 +38,7 @@ async def chat_message(
     owned: OwnedReviewDep,
     payload: ChatRequest,
     runtime: WorkShieldMCPRuntimeDep,
+    router_model: RouterModelDep,
     model: ChatModelDep,
     idem_ctx: IdempotencyContextDep,
 ):
@@ -46,6 +47,7 @@ async def chat_message(
         owned,
         payload,
         runtime=runtime,
+        router_model=router_model,
         model=model,
         settings=idem_ctx.settings,
     )

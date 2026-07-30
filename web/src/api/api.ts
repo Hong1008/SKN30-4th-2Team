@@ -101,7 +101,7 @@ export const api = {
       body: JSON.stringify({
         message,
         focus_clause_id: focusClauseId ?? null,
-        history: history.slice(-10),
+        history: history.slice(-2),
       }),
     })
   },

@@ -10,9 +10,11 @@ from starlette.requests import Request
 
 from app.config import Settings, get_settings
 from app.core.llm.dependencies import (
+    ROUTER_LLM_POLICY,
     get_chat_model,
     get_mcp_runtime,
     get_mcp_tools,
+    get_router_model,
 )
 from app.core.llm.mcp.types import WorkShieldMCPRuntime
 from app.core.llm.types import ReasoningMode
@@ -45,6 +47,27 @@ def test_get_chat_model_defaults_reasoning_to_off(monkeypatch) -> None:
 
     assert get_chat_model(settings) is expected
     assert calls == [(settings, ReasoningMode.OFF)]
+
+
+def test_get_router_model_uses_short_zero_temperature_policy(monkeypatch) -> None:
+    settings = Settings(
+        app_env="local",
+        llm_provider="ollama",
+        llm_model="runtime-selected-model",
+    )
+    expected = object()
+    calls = []
+
+    def fake_create(current_settings, reasoning, policy):
+        calls.append((current_settings, reasoning, policy))
+        return expected
+
+    monkeypatch.setattr("app.core.llm.dependencies.create_chat_model", fake_create)
+
+    assert get_router_model(settings) is expected
+    assert calls == [(settings, ReasoningMode.OFF, ROUTER_LLM_POLICY)]
+    assert ROUTER_LLM_POLICY.temperature == 0
+    assert ROUTER_LLM_POLICY.max_completion_tokens == 16
 
 
 @pytest.mark.asyncio
