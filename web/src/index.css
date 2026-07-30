@@ -56,3 +56,18 @@
 button:not(:disabled) {
   cursor: pointer;
 }
+
+.dim-wh {
+  position: relative;
+}
+
+.dim-wh::before {
+  content: '';
+  position: absolute;
+  display: block;
+  background-color: white;
+  height: 40px;
+  width: 20px;
+  left: -10px;
+  z-index: -15;
+}
