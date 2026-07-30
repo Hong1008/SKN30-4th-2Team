@@ -87,12 +87,14 @@ export function MainApp() {
   const [selectedClause, setSelectedClause] = useState<ClauseResult | null>(null)
   const [sessionExpiresAt, setSessionExpiresAt] = useState<string | null>(null)
   const [isStartingNewReview, setIsStartingNewReview] = useState(false)
+  const [isExtendingSession, setIsExtendingSession] = useState(false)
   const [showNewReviewConfirm, setShowNewReviewConfirm] = useState(false)
   const [reviewIdToDiscard, setReviewIdToDiscard] = useState<string | null>(null)
   const [chatTarget, setChatTarget] = useState<{ reviewId: string; clause?: ClauseResult } | null>(null)
   const [isChatOpen, setIsChatOpen] = useState(false)
   const discardRequestKey = useRef<string | null>(null)
   const chatTriggerRef = useRef<HTMLElement | null>(null)
+  const isProcessingRoute = location.pathname.includes('/progress')
 
   const openChat = (id: string, clause?: ClauseResult) => {
     chatTriggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
@@ -119,7 +121,7 @@ export function MainApp() {
   }
 
   useEffect(() => {
-    if (!sessionExpiresAt) return
+    if (!sessionExpiresAt || isProcessingRoute) return
     const expiresAt = new Date(sessionExpiresAt).getTime()
     if (!Number.isFinite(expiresAt)) return
     const timeout = window.setTimeout(() => {
@@ -128,7 +130,7 @@ export function MainApp() {
       navigate('/review', { replace: true })
     }, Math.max(0, expiresAt - Date.now()))
     return () => window.clearTimeout(timeout)
-  }, [sessionExpiresAt])
+  }, [sessionExpiresAt, isProcessingRoute])
 
   // Recovery logic for session and review IDs
   useEffect(() => {
@@ -143,6 +145,8 @@ export function MainApp() {
 
     if (savedReview) {
       api.pollReviewStatus(savedReview).then(res => {
+        setSessionId(res.data.session_id)
+        localStorage.setItem(SESSION_ID_KEY, res.data.session_id)
         setSessionExpiresAt(res.data.expires_at)
         if (res.data.review_state === 'COMPLETED') {
           if (isRoot) navigate(`/review/${savedReview}/results`, { replace: true })
@@ -181,6 +185,39 @@ export function MainApp() {
     }
     setReviewIdToDiscard(targetReviewId)
     setShowNewReviewConfirm(true)
+  }
+
+  const extendSession = async () => {
+    if (!sessionId || isExtendingSession || isProcessingRoute) return
+    const expiresAt = sessionExpiresAt ? new Date(sessionExpiresAt).getTime() : NaN
+    if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) return
+    setIsExtendingSession(true)
+    try {
+      const response = await api.extendSession(sessionId)
+      setSessionExpiresAt(response.data.expires_at)
+      showToast('세션 유지 시간이 30분 연장되었습니다.', 'success')
+    } catch (error: any) {
+      if (error?.status === 404 || error?.status === 410) {
+        clearLocalReview()
+        showToast('세션이 만료되었습니다. 새 검토를 시작해 주세요.', 'error')
+        navigate('/review', { replace: true })
+      } else {
+        showToast(getErrorMessage(error, '세션 시간을 연장하지 못했습니다. 다시 시도해 주세요.'), 'error')
+      }
+    } finally {
+      setIsExtendingSession(false)
+    }
+  }
+
+  const refreshReviewExpiry = async (id: string) => {
+    try {
+      const response = await api.pollReviewStatus(id)
+      setSessionId(response.data.session_id)
+      localStorage.setItem(SESSION_ID_KEY, response.data.session_id)
+      setSessionExpiresAt(response.data.expires_at)
+    } catch {
+      // 결과 화면의 기존 오류 처리 흐름이 실제 접근 가능 여부를 안내한다.
+    }
   }
 
   const startNewReview = async () => {
@@ -244,6 +281,9 @@ export function MainApp() {
           )}
           onStartNewReview={() => requestStartNewReview()}
           isStartingNewReview={isStartingNewReview}
+          canExtendSession={Boolean(sessionId && sessionExpiresAt) && !isProcessingRoute}
+          onExtendSession={() => void extendSession()}
+          isExtendingSession={isExtendingSession}
           navigationLocked={navigationLocked}
         />
 
@@ -279,7 +319,9 @@ export function MainApp() {
               <Route path="/review/:id/progress" element={
                 <ProcessingRoute
                   fallbackReviewId={reviewId}
-                  onDone={(id) => navigate(`/review/${id}/results`)}
+                  onDone={(id) => {
+                    void refreshReviewExpiry(id).finally(() => navigate(`/review/${id}/results`))
+                  }}
                   onRetry={(id) => {
                     setReviewId(id)
                     localStorage.setItem(REVIEW_ID_KEY, id)

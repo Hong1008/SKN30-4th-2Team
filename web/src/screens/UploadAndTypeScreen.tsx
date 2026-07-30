@@ -89,6 +89,7 @@ export default function UploadAndTypeScreen({
 
   const [emptyDocError, setEmptyDocError] = useState(false)
   const [isStartingReview, setIsStartingReview] = useState(false)
+  const [privacyNoticeConfirmed, setPrivacyNoticeConfirmed] = useState(false)
 
   useEffect(() => () => uploadControllerRef.current?.abort(), [])
 
@@ -117,6 +118,7 @@ export default function UploadAndTypeScreen({
 
         setSessionExpiresAt(data.expires_at)
 
+        setPrivacyNoticeConfirmed(false)
         setUploadState("success")
       })
 
@@ -199,6 +201,7 @@ export default function UploadAndTypeScreen({
       }
 
       setUploadState("success")
+      setPrivacyNoticeConfirmed(false)
       setPendingFile(null)
       setSelectedType("")
       setSuggestedType(response.data.suggested_contract_type)
@@ -235,7 +238,7 @@ export default function UploadAndTypeScreen({
     }
   }
   const handleNext = async () => {
-    if (!sessionId || startLockedRef.current) return
+    if (!sessionId || !privacyNoticeConfirmed || startLockedRef.current) return
     startLockedRef.current = true
     setIsStartingReview(true)
 
@@ -361,6 +364,7 @@ export default function UploadAndTypeScreen({
     startRequestKey.current = null
     startLockedRef.current = false
     setIsStartingReview(false)
+    setPrivacyNoticeConfirmed(false)
 
     localStorage.removeItem(SESSION_ID_KEY)
 
@@ -550,6 +554,7 @@ export default function UploadAndTypeScreen({
 
         {/* Success */}
         {uploadState === "success" && (
+          <div className="space-y-4">
           <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-emerald-500">
             <div className="flex items-center gap-4">
               <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center shrink-0">
@@ -572,6 +577,29 @@ export default function UploadAndTypeScreen({
                 <X className="w-4 h-4" />
               </button>
             </div>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-5" aria-labelledby="privacy-notice-title">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="mt-0.5 size-5 shrink-0 text-blue-500" aria-hidden="true" />
+              <div className="min-w-0">
+                <h2 id="privacy-notice-title" className="text-sm font-bold text-slate-900">개인정보 포함 여부를 확인해 주세요</h2>
+                <p id="privacy-notice-description" className="mt-2 max-w-2xl break-keep text-xs leading-5 text-slate-600">
+                  개인정보는 자동으로 가려지지 않습니다. 검토에 불필요한 주민등록번호, 계좌번호, 연락처, 주소 등은 업로드 전에 삭제하거나 가려 주세요. 업로드 문서는 처리 완료 또는 세션 만료 후 삭제됩니다.
+                </p>
+                <label className={`mt-4 flex items-start gap-2.5 rounded-xl border p-3 text-xs leading-5 text-slate-700 transition-colors ${privacyNoticeConfirmed ? 'border-blue-200 bg-blue-50/50' : 'border-slate-200 bg-white/80'} ${isStartingReview ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:border-blue-200 hover:bg-white'}`}>
+                  <input
+                    type="checkbox"
+                    checked={privacyNoticeConfirmed}
+                    disabled={isStartingReview}
+                    onChange={(event) => setPrivacyNoticeConfirmed(event.target.checked)}
+                    aria-describedby="privacy-notice-description"
+                    className="mt-0.5 size-4 shrink-0 accent-blue-600"
+                  />
+                  <span>문서에 불필요한 개인정보가 없는지 확인했으며, 개인정보가 자동으로 마스킹되지 않는다는 안내를 확인했습니다.</span>
+                </label>
+              </div>
+            </div>
+          </div>
           </div>
         )}
         {/* ── 2. Contract Type Section ── */}
@@ -637,9 +665,9 @@ export default function UploadAndTypeScreen({
       <div className="sticky bottom-4 z-20 flex flex-col-reverse gap-3 rounded-2xl border border-slate-200/80 bg-white/95 p-3 shadow-[0_8px_24px_rgba(15,23,42,0.07)] backdrop-blur-xl sm:flex-row sm:items-center sm:justify-end">
         <button
           onClick={handleNext}
-          disabled={uploadState !== "success" || !selectedType || isStartingReview}
+          disabled={uploadState !== "success" || !selectedType || !privacyNoticeConfirmed || isStartingReview}
           className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-5 text-sm font-semibold transition-[background-color,box-shadow,transform] duration-150 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/20 ${
-            uploadState === "success" && selectedType && !isStartingReview
+            uploadState === "success" && selectedType && privacyNoticeConfirmed && !isStartingReview
               ? "bg-blue-600 text-white shadow-[0_1px_2px_rgba(37,99,235,0.2),0_6px_16px_rgba(37,99,235,0.16)] hover:-translate-y-px hover:bg-blue-700 hover:shadow-md active:translate-y-0 active:bg-blue-800"
               : "cursor-not-allowed bg-slate-200 text-slate-500"
           }`}

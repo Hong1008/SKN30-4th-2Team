@@ -64,10 +64,54 @@ describe("계약서 업로드", () => {
     vi.mocked(api.startReview).mockReturnValue(new Promise(() => {}))
     render(<UploadAndTypeScreen {...props} sessionId="session-1" />)
     const startButton = await screen.findByRole("button", { name: /선택한 유형으로 검토 시작/ })
+    await userEvent.click(screen.getByRole('checkbox', { name: /개인정보가 자동으로 마스킹되지 않는다는 안내/ }))
     await userEvent.dblClick(startButton)
     await waitFor(() => expect(api.selectContractType).toHaveBeenCalledTimes(1))
     expect(api.startReview).toHaveBeenCalledTimes(1)
     expect(startButton).toBeDisabled()
+    expect(screen.getByRole('checkbox')).toBeDisabled()
+  })
+
+  it('업로드 완료 후 개인정보 안내를 표시하고 확인 전에는 검토 시작을 차단한다', async () => {
+    vi.mocked(api.getSession).mockResolvedValue({
+      data: {
+        upload: { file_name: 'contract.pdf', size_bytes: 5 },
+        selected_contract_type: 'SW_FREELANCE', suggested_contract_type: 'SW_FREELANCE', candidates: [],
+        expires_at: '2099-01-01T00:00:00Z',
+      },
+    } as never)
+    render(<UploadAndTypeScreen {...props} sessionId="session-privacy" />)
+
+    expect(await screen.findByText('개인정보 포함 여부를 확인해 주세요')).toBeInTheDocument()
+    expect(screen.getByText(/개인정보는 자동으로 가려지지 않습니다/)).toBeInTheDocument()
+    expect(screen.getByText(/업로드 문서는 처리 완료 또는 세션 만료 후 삭제됩니다/)).toBeInTheDocument()
+    const checkbox = screen.getByRole('checkbox', { name: /문서에 불필요한 개인정보가 없는지 확인/ })
+    const startButton = screen.getByRole('button', { name: /선택한 유형으로 검토 시작/ })
+    expect(checkbox).not.toBeChecked()
+    expect(startButton).toBeDisabled()
+
+    await userEvent.click(checkbox)
+    expect(startButton).toBeEnabled()
+  })
+
+  it('파일을 제거하고 다른 파일을 업로드하면 개인정보 확인 상태를 초기화한다', async () => {
+    vi.mocked(api.uploadContract).mockResolvedValue({
+      data: {
+        session_id: 'session-new', can_start_review: true, allowed_actions: ['START_REVIEW'],
+        suggested_contract_type: 'SW_FREELANCE', candidates: [], expires_at: '2099-01-01T00:00:00Z',
+      },
+    } as never)
+    const { container } = render(<UploadAndTypeScreen {...props} />)
+    fireEvent.change(input(container), { target: { files: [file(5)] } })
+    const firstCheckbox = await screen.findByRole('checkbox')
+    await userEvent.click(firstCheckbox)
+    expect(firstCheckbox).toBeChecked()
+
+    await userEvent.click(screen.getByRole('button', { name: '파일 제거' }))
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+    fireEvent.change(input(container), { target: { files: [file(5)] } })
+
+    expect(await screen.findByRole('checkbox')).not.toBeChecked()
   })
   it("정확히 최대 허용 크기인 파일은 서버로 전송한다", async () => {
     vi.mocked(api.uploadContract).mockResolvedValue({
