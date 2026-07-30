@@ -157,7 +157,9 @@ async def test_backend_binds_ids_from_source_keys_without_exposing_them_to_llm()
         {
             "outcome": "GENERATED",
             "suggestion": "귀책사유로 직접 발생한 손해를 배상한다.",
-            "major_changes": ["책임 범위를 귀책사유 기준으로 명확화"],
+            "major_changes": [
+                "민법 제390조 참고 원문과 표준조항을 바탕으로 책임 범위를 명확화"
+            ],
             "used_source_keys": ["SRC_USER", "SRC_STANDARD", "SRC_GROUNDING"],
             "required_confirmations": [],
         }
@@ -448,7 +450,7 @@ async def test_structural_failure_is_repaired_once() -> None:
                 "outcome": "GENERATED",
                 "suggestion": "필수 source key가 없는 최초 응답",
             },
-            _generated_payload("귀책사유로 발생한 손해의 책임 범위를 협의한다."),
+            _generated_payload("귀책사유로 직접 발생한 손해를 배상한다."),
         ]
     )
 
@@ -516,7 +518,7 @@ async def test_repairable_post_generation_failures_are_repaired_once(
     model = SequenceModel(
         [
             _generated_payload(suggestion),
-            _generated_payload("책임 범위는 당사자가 협의한다."),
+            _generated_payload("귀책사유로 직접 발생한 손해를 배상한다."),
         ]
     )
 
@@ -533,6 +535,65 @@ async def test_repairable_post_generation_failures_are_repaired_once(
 
     assert response.outcome == outcome
     assert len(model.prompts) == expected_attempts
+
+
+@pytest.mark.asyncio
+async def test_vague_term_is_removed_when_purpose_requests_clarity() -> None:
+    model = SequenceModel(
+        [
+            _generated_payload(
+                "귀책사유로 직접 발생한 손해는 상호 협의하여 정한 범위에서 배상한다."
+            ),
+            _generated_payload("귀책사유로 직접 발생한 손해를 배상한다."),
+        ]
+    )
+
+    response = await generate_suggestion(
+        _review(),
+        SuggestionRequest(
+            user_clause_id="uc_rev_suggestion_1",
+            purpose="손해배상 책임 범위를 명확히 표현",
+            inputs={
+                "responsibility_scope": "귀책사유로 직접 발생한 손해에 대한 책임 범위"
+            },
+        ),
+        runtime=SimpleNamespace(tools=(GroundingTool(),)),
+        model=model,
+        settings=_settings(),
+    )
+
+    assert response.outcome == "GENERATED"
+    assert response.text == "귀책사유로 직접 발생한 손해를 배상한다."
+    assert len(model.prompts) == 2
+    assert "VAGUE_TERM_RETAINED" in model.prompts[1]
+
+
+@pytest.mark.asyncio
+async def test_unexplained_grounding_source_is_removed_deterministically() -> None:
+    model = SequenceModel(
+        [
+            {
+                **_generated_payload("귀책사유로 직접 발생한 손해를 배상한다."),
+                "used_source_keys": ["SRC_USER", "SRC_STANDARD", "SRC_GROUNDING"],
+            },
+        ]
+    )
+
+    response = await generate_suggestion(
+        _review(),
+        SuggestionRequest(
+            user_clause_id="uc_rev_suggestion_1",
+            purpose="손해배상 책임 범위를 명확히 표현",
+        ),
+        runtime=SimpleNamespace(tools=(GroundingTool(),)),
+        model=model,
+        settings=_settings(),
+    )
+
+    assert response.outcome == "GENERATED"
+    assert response.used_source_keys == ["SRC_USER", "SRC_STANDARD"]
+    assert response.grounding_source_ids == []
+    assert len(model.prompts) == 1
 
 
 @pytest.mark.asyncio

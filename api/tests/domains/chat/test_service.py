@@ -528,6 +528,62 @@ async def test_user_standard_and_law_sources_can_be_combined() -> None:
 
 
 @pytest.mark.asyncio
+async def test_false_law_unavailable_limitation_is_regenerated_once() -> None:
+    model = SequenceChatModel(
+        [
+            (
+                {
+                    "outcome": "ANSWERED",
+                    "answer": "사용자 조항과 대응 표준조항을 비교합니다.",
+                    "sources": [
+                        {"type": "USER_CLAUSE", "id": "SRC_USER_1"},
+                        {"type": "STANDARD_CLAUSE", "id": "SRC_STANDARD_1"},
+                    ],
+                    "limitations": ["법령 근거를 확인할 수 없습니다."],
+                },
+                "stop",
+            ),
+            (
+                {
+                    "outcome": "ANSWERED",
+                    "answer": (
+                        "사용자 조항과 대응 표준조항을 비교하고, 민법 제390조 "
+                        "참고 원문을 함께 확인했습니다."
+                    ),
+                    "sources": [
+                        {"type": "USER_CLAUSE", "id": "SRC_USER_1"},
+                        {"type": "STANDARD_CLAUSE", "id": "SRC_STANDARD_1"},
+                        {"type": "LAW", "id": "SRC_LAW_1"},
+                    ],
+                    "limitations": [],
+                },
+                "stop",
+            ),
+        ]
+    )
+
+    response = await answer_review_question(
+        _review(),
+        ChatRequest(
+            message="이 조항을 표준조항 및 법령 근거와 비교해 줘.",
+            focus_clause_id="uc_rev_chat_1",
+        ),
+        runtime=SimpleNamespace(tools=(GroundingTool(),)),
+        model=model,
+        settings=_settings(),
+    )
+
+    assert response.outcome == "ANSWERED"
+    assert len(model.runnables) == 2
+    assert response.limitations == []
+    assert {source.type for source in response.sources} == {
+        "USER_CLAUSE",
+        "STANDARD_CLAUSE",
+        "LAW",
+    }
+
+
+@pytest.mark.asyncio
 async def test_plain_question_does_not_fetch_law_grounding() -> None:
     """일반 설명 질문은 법령 MCP를 호출하지 않는다."""
     tool = GroundingTool()

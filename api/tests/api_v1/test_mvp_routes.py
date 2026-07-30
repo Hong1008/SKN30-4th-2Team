@@ -337,11 +337,10 @@ async def test_full_mvp_flow_and_browser_isolation(tmp_path: Path) -> None:
         assert suggestion_data["used_source_keys"] == [
             "SRC_USER",
             "SRC_STANDARD",
-            "SRC_GROUNDING",
         ]
         assert suggestion_data["user_clause_ids"] == [user_clause_id]
         assert suggestion_data["standard_clause_ids"] == ["std_1"]
-        assert suggestion_data["grounding_source_ids"] == ["law_1"]
+        assert suggestion_data["grounding_source_ids"] == []
         assert user_clause_id not in calls["suggestion_prompt"]
         assert "std_1" not in calls["suggestion_prompt"]
         assert "law_1" not in calls["suggestion_prompt"]
