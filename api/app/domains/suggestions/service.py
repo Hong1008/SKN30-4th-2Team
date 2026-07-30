@@ -54,6 +54,10 @@ NUMBER_PATTERN = re.compile(r"\d+(?:[.,]\d+)*(?:%|년|개월|일|원)?")
 LEGAL_ASSERTION_PATTERN = re.compile(
     r"표준계약서상\s*반드시|법적으로|(?:위법|불법|합법)"
 )
+CLARIFICATION_PURPOSE_PATTERN = re.compile(r"(?:명확|구체|확정|한정)")
+VAGUE_TERM_PATTERN = re.compile(
+    r"(?:상호\s*협의|추후\s*(?:협의|결정)|별도\s*(?:협의|결정))"
+)
 CYRILLIC_PATTERN = re.compile(r"[\u0400-\u04ff]")
 CJK_IDEOGRAPH_PATTERN = re.compile(r"[\u4e00-\u9fff]")
 REPAIR_INSTRUCTION = (
@@ -352,6 +356,12 @@ async def generate_suggestion(
     grounding_source_ids = (
         [item.source_id for item in grounding.items] if has_law_grounding else []
     )
+    grounding_reference_markers = {
+        marker.strip()
+        for item in grounding.items
+        for marker in (item.law_name, item.article)
+        if marker and marker.strip()
+    }
     context = _model_context(
         review=review,
         clause=clause,
@@ -386,6 +396,12 @@ async def generate_suggestion(
         "문자 없이 한국어로만 작성하세요. 중국어 단어(예: 免责)를 쓰지 말고 "
         "'책임 면제'처럼 한글로 풀어 쓰세요. major_changes를 완전한 한국어로 "
         "작성할 수 없으면 빈 배열로 반환하세요.\n"
+        "purpose가 범위나 조건을 명확히·구체화·확정·한정하는 요청이고 "
+        "provided_inputs에 그 기준이 있으면, 사용자 원문의 '상호 협의', '추후 결정', "
+        "'별도 협의' 같은 미확정 표현을 suggestion에 다시 남기지 마세요. "
+        "SRC_GROUNDING은 법령 참고 원문의 내용을 suggestion 또는 major_changes에 "
+        "실제로 사용한 경우에만 선택하세요. SRC_GROUNDING을 선택하면 "
+        "major_changes에 참고한 법령명이나 조문을 명시하세요.\n"
         + json.dumps(context, ensure_ascii=False, default=str)
     )
     source_text = json.dumps(context, ensure_ascii=False, default=str)
@@ -427,6 +443,15 @@ async def generate_suggestion(
                 "UNGROUNDED_NUMBER",
                 repairable=True,
                 outcome="GENERATED_FACT_NOT_GROUNDED",
+            )
+        if (
+            CLARIFICATION_PURPOSE_PATTERN.search(payload.purpose)
+            and VAGUE_TERM_PATTERN.search(output.suggestion)
+        ):
+            raise SuggestionOutputFailure(
+                "VAGUE_TERM_RETAINED",
+                repairable=True,
+                outcome="LLM_OUTPUT_INVALID",
             )
         used_source_keys = set(output.used_source_keys)
         if not used_source_keys:
@@ -496,6 +521,24 @@ async def generate_suggestion(
             level=logging.WARNING,
         )
         return _response("INSUFFICIENT_GROUNDING", payload=payload)
+    if SuggestionSourceKey.GROUNDING in output.used_source_keys:
+        explained_changes = " ".join(output.major_changes)
+        if not any(
+            marker in explained_changes
+            for marker in grounding_reference_markers
+        ):
+            log_event(
+                event="llm.suggestion.validation_failed",
+                review_id=review.id,
+                state="SANITIZED",
+                reason="GROUNDING_SOURCE_NOT_EXPLAINED",
+                level=logging.WARNING,
+            )
+            output.used_source_keys = [
+                key
+                for key in output.used_source_keys
+                if key is not SuggestionSourceKey.GROUNDING
+            ]
     used_source_keys = set(output.used_source_keys)
     required_confirmations = list(output.required_confirmations)
     if not has_law_grounding:

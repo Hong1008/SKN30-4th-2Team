@@ -3,6 +3,7 @@
 import asyncio
 import base64
 import json
+import logging
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any, AsyncContextManager
@@ -28,6 +29,9 @@ from app.domains.reviews.schemas import (
     ReviewClauseResult,
 )
 from app.core.storage.protocol import FileStorage
+
+
+logger = logging.getLogger("uvicorn.error")
 
 
 class InvalidMCPReviewResultError(ValueError):
@@ -338,6 +342,7 @@ async def execute_review(
             "next_action": "CONTACT_SUPPORT",
         }
     except Exception:
+        logger.exception("MCP 검토 실패: review_id=%s", review_id)
         status = None
         result_payload = None
         error = {

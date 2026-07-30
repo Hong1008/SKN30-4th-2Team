@@ -148,6 +148,11 @@ UNSUPPORTED_APPLICATION_PATTERN = re.compile(
     r"법적으로|위법(?:이다|합니다)|불법(?:이다|합니다)|"
     r"유효(?:하다|합니다)|무효(?:다|입니다)"
 )
+FALSE_GROUNDING_UNAVAILABLE_PATTERN = re.compile(
+    r"(?:법령|법률)(?:\s*원문|\s*근거|\s*정보)?.{0,20}"
+    r"(?:확인할\s*수\s*없|확인되지\s*않|확인하지\s*못|"
+    r"조회되지\s*않|조회하지\s*못|제공되지\s*않|없습니다|없음)"
+)
 FILE_OR_PATH_PATTERN = re.compile(
     r"(?:[A-Za-z0-9_.-]+\.md\b|(?:^|\s)[/\\\\][^\s]+)"
 )
@@ -166,6 +171,7 @@ COMMON_SYSTEM_PROMPT = """당신은 현재 계약 검토 문맥에 근거해 답
 - 여러 주제를 함께 물으면 확인된 각 주제의 조항을 함께 비교하고, 찾지 못한 주제만 limitations에 사용자용 표현으로 밝히세요. 일부 근거가 있다는 이유로 전체 답변을 거부하지 마세요.
 - 전체 계약의 불리한 조항이나 위험을 묻고 개수를 지정하면 확인된 후보 중 그 개수까지만 답하세요. 후보가 부족하면 확인된 개수만 답하고 개수를 맞추려고 조항을 만들지 마세요.
 - 법령 근거가 없더라도 사용자 조항, 표준조항 또는 비교·검토 결과가 있으면 확인 가능한 범위에서 설명하거나 협의문구를 작성하세요. 법령 조회가 실패하거나 결과가 없으면 법령을 추측하지 말고 법령 근거를 확인하지 못했다는 한계를 limitations에 밝히세요.
+- grounding의 상태가 OK이고 항목이 있으면 법령 근거가 없거나 확인되지 않았다고 표현하지 마세요. 법령을 답변에 직접 사용하지 않을 때는 법령 부재를 limitations에 쓰지 말고, 직접 사용하면 해당 LAW source_key를 sources에 포함하세요.
 - 법률적 확정 판단이 어려우면 그 한계를 분명히 밝히고 "적용된다", "적용될 가능성이 높다", "법적으로", 합법·위법·불법·유효·무효·승소 가능성을 단정하지 마세요. 표준조항이 사용자 계약서에 자동 적용되는 것처럼 표현하지 마세요.
 - 사용자 조항, 표준조항, 비교·검토 결과와 법령 근거가 모두 없을 때만 INSUFFICIENT_GROUNDING을 반환하세요.
 - review_result.required_source_keys가 있으면 질문에 직접 관련된 근거가 이미 선별된 것입니다. 이 근거로 답할 수 있는데도 INSUFFICIENT_GROUNDING을 반환하지 마세요.
@@ -1416,6 +1422,33 @@ async def answer_review_question(
                             f"직전 응답은 {failure} 검증에 실패했습니다. 동일한 JSON "
                             "근거만 사용하고 새 계약 내용·숫자·법령을 추가하지 말며 "
                             "문제를 제거해 전체 응답을 한 번만 다시 작성하세요."
+                        )
+                    ),
+                ]
+                continue
+            return _invalid_response(review, failure)
+        if law_ids and any(
+            FALSE_GROUNDING_UNAVAILABLE_PATTERN.search(item)
+            for item in output.limitations
+        ):
+            failure = "FALSE_GROUNDING_UNAVAILABLE"
+            if attempt == 0:
+                log_event(
+                    event="llm.chat.validation_failed",
+                    review_id=review.id,
+                    state=attempt + 1,
+                    reason=failure,
+                    level=logging.WARNING,
+                )
+                messages = [
+                    *messages,
+                    HumanMessage(
+                        content=(
+                            "직전 응답은 법령 원문 조회가 성공했는데도 법령 근거가 "
+                            "없거나 확인되지 않았다고 표현했습니다. 동일한 JSON의 "
+                            "grounding만 사용하고, 법령을 답변에 직접 쓰지 않으면 해당 "
+                            "제한 문구를 제거하세요. 법령명이나 조문을 답변에 쓰면 해당 "
+                            "LAW source_key를 sources에 포함해 전체 응답을 다시 작성하세요."
                         )
                     ),
                 ]
