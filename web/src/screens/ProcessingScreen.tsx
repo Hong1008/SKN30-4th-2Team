@@ -34,6 +34,8 @@ interface Props {
 
 type Mode = "running" | "error" | "done"
 
+const CONNECTION_WATCHDOG_MS = 10_000
+
 export default function ProcessingScreen({
   reviewId,
   onDone,
@@ -85,6 +87,8 @@ export default function ProcessingScreen({
     let terminalReached = false
     let hasSseEvent = false
     let lastSequence = -1
+    let lastServerActivityAt = Date.now()
+    let watchdogTimer: ReturnType<typeof setTimeout> | null = null
     const initialController = new AbortController()
     const pollingController = new AbortController()
 
@@ -96,9 +100,21 @@ export default function ProcessingScreen({
       }
     }
 
+    const clearWatchdog = () => {
+      if (watchdogTimer) {
+        clearTimeout(watchdogTimer)
+        watchdogTimer = null
+      }
+    }
+
+    const noteServerActivity = () => {
+      lastServerActivityAt = Date.now()
+    }
+
     const finishStream = () => {
       terminalReached = true
       stopPolling()
+      clearWatchdog()
       initialController.abort()
       pollingController.abort()
       source?.close()
@@ -110,8 +126,7 @@ export default function ProcessingScreen({
       reviewError?: ReviewData["error"],
     ) => {
       if (!subscribed || terminalReached) return
-      if (nextProgress) {
-        if (nextProgress.sequence <= lastSequence) return
+      if (nextProgress && nextProgress.sequence > lastSequence) {
         lastSequence = nextProgress.sequence
         setProgress(nextProgress)
         const index = stages.findIndex(
@@ -148,6 +163,7 @@ export default function ProcessingScreen({
             pollingController.signal,
           )
           if (!subscribed || terminalReached || !pollingStarted) return
+          noteServerActivity()
           update(
             response.data.review_state,
             response.data.progress,
@@ -190,6 +206,7 @@ export default function ProcessingScreen({
       .pollReviewStatus(reviewId, initialController.signal)
       .then((response) => {
         if (!subscribed || terminalReached || hasSseEvent) return
+        noteServerActivity()
         update(
           response.data.review_state,
           response.data.progress,
@@ -212,11 +229,15 @@ export default function ProcessingScreen({
           const sequence = Number.isFinite(data.sequence)
             ? data.sequence
             : Number(event.lastEventId)
-          if (!Number.isFinite(sequence) || sequence <= lastSequence) return
+          if (
+            !Number.isFinite(sequence) ||
+            (sequence <= lastSequence && !isTerminalReviewState(data.review_state))
+          ) return
           if (!hasSseEvent) {
             hasSseEvent = true
             initialController.abort()
           }
+          noteServerActivity()
           stopPolling()
           update(
             data.review_state,
@@ -231,15 +252,29 @@ export default function ProcessingScreen({
       source.addEventListener("progress", onEvent)
       source.addEventListener("completed", onEvent)
       source.addEventListener("failed", onEvent)
-      source.onopen = () => stopPolling()
+      source.onopen = () => {
+        noteServerActivity()
+        stopPolling()
+      }
       source.onerror = () => startPolling()
     } catch {
       startPolling()
     }
 
+    const monitorConnection = () => {
+      if (!subscribed || terminalReached || pollingStarted) return
+      if (Date.now() - lastServerActivityAt >= CONNECTION_WATCHDOG_MS) {
+        startPolling()
+        return
+      }
+      watchdogTimer = setTimeout(monitorConnection, 1_000)
+    }
+    watchdogTimer = setTimeout(monitorConnection, 1_000)
+
     return () => {
       subscribed = false
       stopPolling()
+      clearWatchdog()
       initialController.abort()
       pollingController.abort()
       source?.close()
@@ -260,9 +295,34 @@ export default function ProcessingScreen({
       setActiveStep(0)
 
       setProgress(null)
+      setReviewState("QUEUED")
+      setErrorMessage("")
+      setRetryable(false)
+      setMode("running")
 
       onRetry(response.data.review_id)
     } catch (error: any) {
+      if (
+        error?.code === "REVIEW_NOT_COMPLETED" ||
+        error?.code === "REVIEW_ALREADY_RUNNING"
+      ) {
+        try {
+          const latest = await api.pollReviewStatus(reviewId)
+          if (
+            latest.data.review_state === "QUEUED" ||
+            latest.data.review_state === "REVIEWING"
+          ) {
+            setReviewState(latest.data.review_state)
+            setProgress(latest.data.progress)
+            setErrorMessage("")
+            setRetryable(false)
+            setMode("running")
+            return
+          }
+        } catch {
+          // 원래 재시도 오류를 사용자에게 안내한다.
+        }
+      }
       setErrorMessage(getErrorMessage(error, "재시도 요청에 실패했습니다."))
 
       setRetryable(
