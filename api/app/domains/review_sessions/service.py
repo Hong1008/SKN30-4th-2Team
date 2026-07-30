@@ -305,8 +305,8 @@ def delete_review_session(
             next_action="START_NEW_REVIEW",
         )
     storage_key = entity.storage_key
-    deleted = repository.delete(entity.id)
-    db_session.commit()
     if storage_key is not None:
         storage.delete(storage_key)
+    deleted = repository.delete(entity.id)
+    db_session.commit()
     return deleted

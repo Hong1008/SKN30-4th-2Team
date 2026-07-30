@@ -434,3 +434,32 @@ async def test_delete_session_removes_record_file_and_cookie(tmp_path: Path) -> 
         assert (
             await owner.get(f"/api/v1/review-sessions/{session_id}")
         ).status_code == 404
+
+
+async def test_delete_session_storage_failure_preserves_session(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app = create_test_app(tmp_path)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app, raise_app_exceptions=False),
+        base_url="http://test",
+    ) as owner:
+        created = await owner.post(
+            "/api/v1/review-sessions",
+            files={"file": ("contract.pdf", _pdf(), "application/pdf")},
+        )
+        session_id = created.json()["data"]["session_id"]
+        storage_keys = list(app.state.test_storage.list_keys())
+
+        def fail_delete(_storage_key: str) -> None:
+            raise OSError("storage is unavailable")
+
+        monkeypatch.setattr(app.state.test_storage, "delete", fail_delete)
+        failed = await owner.delete(f"/api/v1/review-sessions/{session_id}")
+
+        assert failed.status_code == 500
+        assert (
+            await owner.get(f"/api/v1/review-sessions/{session_id}")
+        ).status_code == 200
+        assert list(app.state.test_storage.list_keys()) == storage_keys

@@ -260,7 +260,7 @@ describe("계약서 업로드", () => {
     await userEvent.click(await screen.findByRole("button", { name: "파일 제거" }))
 
     await waitFor(() =>
-      expect(api.deleteSession).toHaveBeenCalledWith("session-delete"),
+      expect(api.deleteSession).toHaveBeenCalledWith("session-delete", expect.any(AbortSignal)),
     )
     expect(props.setSessionId).toHaveBeenCalledWith(null)
     expect(localStorage.getItem("draft_review_session_id")).toBeNull()
@@ -289,4 +289,63 @@ describe("계약서 업로드", () => {
     expect(await screen.findByText("파일 삭제 요청에 실패했습니다.")).toBeInTheDocument()
     expect(screen.getByText("contract.pdf")).toBeInTheDocument()
     expect(props.setSessionId).not.toHaveBeenCalledWith(null)
+  })
+  it("빈 문서 응답에서 생성된 세션을 삭제한 뒤 재업로드 상태로 전환한다", async () => {
+    vi.mocked(api.uploadContract).mockResolvedValue({
+      data: {
+        session_id: "session-empty",
+        can_start_review: false,
+        allowed_actions: ["REUPLOAD"],
+        candidates: [],
+        expires_at: "2099-01-01T00:00:00Z",
+      },
+    } as never)
+    const { container } = render(<StatefulUploadScreen />)
+
+    fireEvent.change(input(container), { target: { files: [file(5)] } })
+
+    expect(await screen.findByText("검토 가능한 조항이 없습니다")).toBeInTheDocument()
+    expect(api.deleteSession).toHaveBeenCalledWith("session-empty", expect.any(AbortSignal))
+    expect(localStorage.getItem("draft_review_session_id")).toBeNull()
+  })
+
+  it("빈 문서 세션 정리에 실패하면 세션과 파일 화면을 보존한다", async () => {
+    vi.mocked(api.uploadContract).mockResolvedValue({
+      data: {
+        session_id: "session-empty-failed",
+        can_start_review: false,
+        allowed_actions: ["REUPLOAD"],
+        candidates: [],
+        expires_at: "2099-01-01T00:00:00Z",
+      },
+    } as never)
+    vi.mocked(api.deleteSession).mockRejectedValue({
+      userMessage: "빈 문서 세션 삭제 실패",
+    })
+    const { container } = render(<StatefulUploadScreen />)
+
+    fireEvent.change(input(container), { target: { files: [file(5)] } })
+
+    expect(await screen.findByText("빈 문서 세션 삭제 실패")).toBeInTheDocument()
+    expect(screen.getByText("contract.pdf")).toBeInTheDocument()
+    expect(localStorage.getItem("draft_review_session_id")).toBe("session-empty-failed")
+  })
+
+  it("파일 삭제 중에는 유형 선택과 검토 시작을 차단한다", async () => {
+    vi.mocked(api.getSession).mockResolvedValue({
+      data: {
+        upload: { file_name: "contract.pdf", size_bytes: 5 },
+        selected_contract_type: "SW_FREELANCE",
+        suggested_contract_type: "SW_FREELANCE",
+        candidates: [],
+        expires_at: "2099-01-01T00:00:00Z",
+      },
+    } as never)
+    vi.mocked(api.deleteSession).mockReturnValue(new Promise(() => {}))
+    render(<UploadAndTypeScreen {...props} sessionId="session-delete" />)
+    await userEvent.click(await screen.findByRole("checkbox"))
+    await userEvent.click(screen.getByRole("button", { name: "파일 제거" }))
+
+    expect(screen.getByRole("button", { name: /SW 프리랜서/ })).toBeDisabled()
+    expect(screen.getByRole("button", { name: /선택한 유형으로 검토 시작/ })).toBeDisabled()
   })})

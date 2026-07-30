@@ -74,6 +74,7 @@ export default function UploadAndTypeScreen({
   const uploadLockedRef = useRef(false)
 
   const uploadControllerRef = useRef<AbortController | null>(null)
+  const deleteControllerRef = useRef<AbortController | null>(null)
 
   const [pendingFile, setPendingFile] = useState<File | null>(null)
 
@@ -92,7 +93,13 @@ export default function UploadAndTypeScreen({
   const [isRemovingFile, setIsRemovingFile] = useState(false)
   const [privacyNoticeConfirmed, setPrivacyNoticeConfirmed] = useState(false)
 
-  useEffect(() => () => uploadControllerRef.current?.abort(), [])
+  useEffect(
+    () => () => {
+      uploadControllerRef.current?.abort()
+      deleteControllerRef.current?.abort()
+    },
+    [],
+  )
 
   useEffect(() => {
     if (!sessionId || uploadState !== "idle") return
@@ -120,6 +127,9 @@ export default function UploadAndTypeScreen({
         setSessionExpiresAt(data.expires_at)
 
         setPrivacyNoticeConfirmed(false)
+        setEmptyDocError(
+          data.can_start_review === false && data.allowed_actions?.includes("REUPLOAD"),
+        )
         setUploadState("success")
       })
 
@@ -195,9 +205,26 @@ export default function UploadAndTypeScreen({
         response.data.can_start_review === false &&
         response.data.allowed_actions?.includes("REUPLOAD")
       ) {
-        setUploadState("idle")
-        setEmptyDocError(true)
-        setPendingFile(null)
+        const rejectedSessionId = response.data.session_id
+        setSessionId(rejectedSessionId)
+        setSessionExpiresAt(response.data.expires_at)
+        localStorage.setItem(SESSION_ID_KEY, rejectedSessionId)
+        try {
+          await api.deleteSession(rejectedSessionId, controller.signal)
+          reset()
+          setEmptyDocError(true)
+        } catch (cleanupError: any) {
+          if (cleanupError?.name === "AbortError") return
+          setUploadState("success")
+          setEmptyDocError(true)
+          setPendingFile(null)
+          setErrorMsg(
+            getErrorMessage(
+              cleanupError,
+              "빈 문서의 서버 세션을 정리하지 못했습니다. 파일 제거를 다시 시도해 주세요.",
+            ),
+          )
+        }
         return
       }
 
@@ -233,13 +260,14 @@ export default function UploadAndTypeScreen({
           : message)
       }
     } finally {
-      uploadLockedRef.current = false
-      if (uploadControllerRef.current === controller)
+      if (uploadControllerRef.current === controller) {
+        uploadLockedRef.current = false
         uploadControllerRef.current = null
+      }
     }
   }
   const handleNext = async () => {
-    if (!sessionId || !privacyNoticeConfirmed || startLockedRef.current) return
+    if (!sessionId || !privacyNoticeConfirmed || startLockedRef.current || isRemovingFile) return
     startLockedRef.current = true
     setIsStartingReview(true)
 
@@ -343,8 +371,10 @@ export default function UploadAndTypeScreen({
     if (!sessionId || isRemovingFile || isStartingReview) return
     setIsRemovingFile(true)
     setErrorMsg("")
+    const controller = new AbortController()
+    deleteControllerRef.current = controller
     try {
-      await api.deleteSession(sessionId)
+      await api.deleteSession(sessionId, controller.signal)
       reset()
       showToast("업로드한 파일을 삭제했습니다.", "success")
     } catch (error: any) {
@@ -352,6 +382,8 @@ export default function UploadAndTypeScreen({
         getErrorMessage(error, "파일을 삭제하지 못했습니다. 다시 시도해 주세요."),
       )
     } finally {
+      if (deleteControllerRef.current === controller)
+        deleteControllerRef.current = null
       setIsRemovingFile(false)
     }
   }
@@ -359,6 +391,10 @@ export default function UploadAndTypeScreen({
     uploadControllerRef.current?.abort()
 
     uploadControllerRef.current = null
+
+    deleteControllerRef.current?.abort()
+
+    deleteControllerRef.current = null
 
     uploadLockedRef.current = false
 
@@ -628,7 +664,7 @@ export default function UploadAndTypeScreen({
               return (
                 <button
                   key={type.code}
-                  disabled={uploadState === "uploading" || isStartingReview}
+                  disabled={uploadState === "uploading" || isStartingReview || isRemovingFile}
                   onClick={() => {
                     setSelectedType(type.code)
 
@@ -682,9 +718,9 @@ export default function UploadAndTypeScreen({
       <div className="sticky bottom-4 z-20 flex flex-col-reverse gap-3 rounded-2xl border border-slate-200/80 bg-white/95 p-3 shadow-[0_8px_24px_rgba(15,23,42,0.07)] backdrop-blur-xl sm:flex-row sm:items-center sm:justify-end">
         <button
           onClick={handleNext}
-          disabled={uploadState !== "success" || !selectedType || !privacyNoticeConfirmed || isStartingReview}
+          disabled={uploadState !== "success" || !selectedType || !privacyNoticeConfirmed || isStartingReview || isRemovingFile}
           className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-5 text-sm font-semibold transition-[background-color,box-shadow,transform] duration-150 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/20 ${
-            uploadState === "success" && selectedType && privacyNoticeConfirmed && !isStartingReview
+            uploadState === "success" && selectedType && privacyNoticeConfirmed && !isStartingReview && !isRemovingFile
               ? "bg-blue-600 text-white shadow-[0_1px_2px_rgba(37,99,235,0.2),0_6px_16px_rgba(37,99,235,0.16)] hover:-translate-y-px hover:bg-blue-700 hover:shadow-md active:translate-y-0 active:bg-blue-800"
               : "cursor-not-allowed bg-slate-200 text-slate-500"
           }`}
