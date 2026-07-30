@@ -131,9 +131,9 @@ uv run pytest -q -m integration tests/integration/test_real_llm_flow.py -s
 
 1. 브라우저 A에서 파일을 업로드한다.
 2. 개발자 도구에서 HttpOnly Cookie와 `credentials: include`를 확인한다.
-3. localStorage·sessionStorage·URL에 토큰이 없는지 확인한다.
+3. localStorage·sessionStorage·URL에 세션 토큰이 없는지 확인한다. sessionStorage에는 현재 review_id의 챗봇 대화만 저장되는지 확인한다.
 4. `allowed_actions`, `can_start_review`에 따라 화면이 분기되는지 확인한다.
-5. 새로고침 후 `session_id`, `review_id`만으로 복구한다.
+5. 새로고침 후 `session_id`, `review_id`와 현재 검토의 챗봇 대화가 복구되는지 확인한다.
 6. 시크릿 창에서 같은 ID를 열었을 때 404인지 확인한다.
 7. SSE를 끊고 상태 조회 후 재연결되는지 확인한다.
 

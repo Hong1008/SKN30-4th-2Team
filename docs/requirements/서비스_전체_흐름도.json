@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "document_type": "service_flow_and_state_machine",
   "service": "WorkShield",
   "scope": "MVP",
@@ -35,7 +35,7 @@
   "review_state_machine": {
     "initial_state": "READY",
     "states": [
-      {"id": "READY", "screen": "S01", "description": "개인정보 자동 마스킹 미지원 안내를 확인하고 파일을 선택할 수 있는 초기 상태"},
+      {"id": "READY", "screen": "S01", "description": "파일을 선택하고 업로드할 수 있는 초기 상태"},
       {"id": "UPLOADING", "screen": "S01", "description": "파일 업로드 중"},
       {"id": "ANALYZING_CONTRACT_TYPE", "screen": "S02", "description": "계약 유형 후보 분석 중"},
       {"id": "TYPE_SELECTION_REQUIRED", "screen": "S02", "description": "사용자의 계약 유형 선택이 필요함"},
@@ -45,6 +45,7 @@
       {"id": "REVIEWING", "screen": "S04", "description": "계약서 검토 중"},
       {"id": "COMPLETED", "screen": "S05", "description": "검토 결과 생성 완료"},
       {"id": "FAILED", "screen": "S09", "description": "업로드·분석·검토 처리 실패"},
+      {"id": "CANCELLED", "screen": "S01", "description": "새 검토 시작으로 기존 검토를 취소하고 임시 데이터를 정리하는 상태"},
       {"id": "EXPIRED", "screen": "S09", "description": "검토 세션 만료"}
     ],
     "transitions": [
@@ -120,7 +121,7 @@
         "from": "READY_TO_REVIEW",
         "event": "review_requested",
         "to": "QUEUED",
-        "guard": "selected_contract_type이 존재하고 범위 외 상태는 계속 진행 재확인을 완료함",
+        "guard": "selected_contract_type이 존재하고, 범위 외 상태는 계속 진행 재확인을 완료했으며, 개인정보 안내를 확인함",
         "action": "review_id 생성 및 검토 요청 접수"
       },
       {
@@ -148,6 +149,24 @@
         "action": "진행 표시 종료, 오류와 재시도 가능 여부 표시"
       },
       {
+        "from": "QUEUED",
+        "event": "new_review_confirmed",
+        "to": "CANCELLED",
+        "action": "대기열에서 작업을 제거하고 임시 파일·중간 결과를 정리한 뒤 업로드 화면으로 이동"
+      },
+      {
+        "from": "REVIEWING",
+        "event": "new_review_confirmed",
+        "to": "CANCELLED",
+        "action": "검토 전용 stdio MCP 실행을 중단하고 임시 파일·중간 결과를 정리한 뒤 업로드 화면으로 이동"
+      },
+      {
+        "from": "CANCELLED",
+        "event": "cleanup_completed",
+        "to": "READY",
+        "action": "새 파일 업로드 대기"
+      },
+      {
         "from": "COMPLETED",
         "event": "result_or_detail_viewed",
         "to": "COMPLETED",
@@ -166,6 +185,19 @@
         "to": "EXPIRED",
         "action": "임시 파일·결과·대화 이력 정리"
       }
+    ]
+  },
+  "session_lifecycle": {
+    "ttl_minutes": 30,
+    "extension": {
+      "event": "extend_requested",
+      "guard": "만료 전 유효한 세션",
+      "action": "세션·현재 review·접근 Cookie 만료 시각을 현재부터 30분으로 재설정"
+    },
+    "rules": [
+      "일반 조회, 챗봇 질문, 화면 이동으로 세션 TTL을 자동 연장하지 않는다.",
+      "검토 진행 중에는 완료 전까지 세션을 만료시키지 않는다.",
+      "만료된 세션은 연장하지 않고 새 검토를 안내한다."
     ]
   },
   "contract_type_branches": [
@@ -307,7 +339,7 @@
     "검토 결과와 챗봇 답변은 법적 판단이 아닌 검토 후보·참고 설명으로 제공한다.",
     "results가 비어 있어도 ‘문제 없음’으로 표시하지 않고 최상위 status를 우선한다.",
     "진행률은 프론트엔드 임의 타이머가 아니라 서버의 실제 진행 이벤트를 review_id와 연결해 표시한다.",
-    "계약서 원문, 대화 이력, 협의 문구 제안은 영구 저장하지 않는다.",
+    "계약서 원문과 협의 문구 제안은 영구 저장하지 않으며, 챗봇 대화는 같은 탭의 review_id별 sessionStorage에만 보관해 새로고침 후 복원한다. 새 검토·세션 만료·탭 또는 브라우저 종료 시 초기화한다.",
     "매칭 점수와 신뢰도 수치는 MVP 화면에 표시하지 않는다."
   ],
   "post_mvp_extensions": [
@@ -317,7 +349,6 @@
     "같은 조항의 복수 대안 문구",
     "원문과 제안문의 레드라인 비교",
     "제안 문구 직접 편집·임시 저장",
-    "수정 문구 재검토",
-    "검토 진행 취소"
+    "수정 문구 재검토"
   ]
 }
