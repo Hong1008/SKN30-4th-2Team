@@ -116,7 +116,7 @@ export default function Header({
               className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
             >
               <Plus className="size-4" />
-              {isStartingNewReview ? '정리 중' : '새 검토'}
+              {isStartingNewReview ? '처리 중' : '새 검토'}
             </button>
           )}
           {timeLeft !== null && <div className="hidden items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 sm:flex">

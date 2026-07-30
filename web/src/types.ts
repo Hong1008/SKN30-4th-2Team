@@ -320,6 +320,8 @@ export interface RequiredConfirmation {
 export interface SuggestionResponse {
   outcome: string;
   text: string | null;
+  evidence_level?: 'CONFIRMED_STANDARD' | 'CANDIDATE_STANDARD' | null;
+  reason_code?: 'USER_CLAUSE_MISSING' | 'STANDARD_CANDIDATE_MISSING' | 'STANDARD_CLAUSE_ID_MISSING' | 'CLAUSE_CATEGORY_MISSING' | 'REQUIRED_VALUE_MISSING' | null;
   purpose: string | null;
   key_changes: string[];
   used_source_keys: string[];

@@ -4,6 +4,11 @@ import { describe, expect, it, vi } from 'vitest'
 import Header from './Header'
 
 describe('검토 진행 중 헤더', () => {
+  it('새 검토 처리 중에는 버튼을 비활성화하고 처리 중으로 표시한다', () => {
+    render(<Header currentScreen="processing" onNavigate={vi.fn()} expiresAt={null} canStartNewReview onStartNewReview={vi.fn()} isStartingNewReview navigationLocked />)
+    expect(screen.getByRole('button', { name: '처리 중' })).toBeDisabled()
+  })
+
   it('일반 이동은 잠그고 새 검토 버튼은 유지한다', async () => {
     const onNavigate = vi.fn()
     const onStartNewReview = vi.fn()

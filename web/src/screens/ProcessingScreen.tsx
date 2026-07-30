@@ -312,7 +312,7 @@ export default function ProcessingScreen({
       <section className="relative rounded-2xl border border-slate-200 bg-white px-5 py-3">
         <span
           aria-hidden="true"
-          className="absolute bottom-9 left-[34px] top-9 w-px bg-slate-200"
+          className="absolute bottom-9 left-[38px] top-9 w-px bg-slate-200"
         />
         {stages.map((stage, index) => {
           const complete = mode === "done" || index < activeStep

@@ -9,6 +9,7 @@ import { useMetadata } from '../contexts/MetadataContext'
 import { getMetadataLabel } from '../utils/metadata'
 import { mapClauseResult } from '../utils/reviewResults'
 import { REVIEW_ID_KEY, SESSION_ID_KEY } from '../config'
+import { getStandardContractLabel } from '../utils/standardContractLabel'
 
 const CLAUSE_VISUALS: Record<ResultCode, {
   accent: string
@@ -553,7 +554,7 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot, onRe
                       <div className="w-4 h-4 rounded border-2 border-[#94A3B8] shrink-0 flex items-center justify-center" aria-hidden="true" />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-slate-900">{item.standard.title}</p>
-                        <p className="mt-1 text-xs text-slate-600">{item.standard.standard_contract_label}</p>
+                        <p className="mt-1 text-xs text-slate-600">{getStandardContractLabel(item.standard.standard_contract_label)}</p>
                       </div>
                       {open ? <ChevronUp className="w-4 h-4 text-slate-500 shrink-0" /> : <ChevronDown className="w-4 h-4 text-slate-500 shrink-0" />}
                     </button>

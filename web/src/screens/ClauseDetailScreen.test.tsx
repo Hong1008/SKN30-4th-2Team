@@ -41,6 +41,60 @@ beforeEach(() => {
 })
 
 describe("협의문구 출처", () => {
+  it('계약서와 표준조항 본문을 동일한 제한 높이의 스크롤 영역으로 표시한다', () => {
+    render(<ClauseDetailScreen clause={clause} reviewId="rev_suggestion" onBack={vi.fn()} onChatbot={vi.fn()} />)
+
+    expect(screen.getByTestId('user-clause-scroll')).toHaveClass('overflow-y-auto')
+    expect(screen.getByTestId('standard-clause-scroll')).toHaveClass('overflow-y-auto')
+    expect(screen.getByTestId('user-clause-scroll').parentElement).toHaveClass('h-[380px]', 'sm:h-[420px]')
+    expect(screen.getByTestId('standard-clause-scroll').parentElement).toHaveClass('h-[380px]', 'sm:h-[420px]')
+  })
+
+  it('미확정 후보 기반 안내를 표시하고 후보 미확정 조항도 생성을 요청한다', async () => {
+    vi.mocked(api.suggestions).mockResolvedValue({
+      data: {
+        outcome: 'GENERATED',
+        text: '계약 원문을 확인해 협의해 주세요.',
+        evidence_level: 'CANDIDATE_STANDARD',
+        message: '표준조항 후보를 참고한 초안입니다. 원문과 계약 맥락을 확인해 주세요.',
+        purpose: '책임 범위 명확화',
+        key_changes: [], used_source_keys: [], user_clause_ids: [], standard_clause_ids: [], grounding_source_ids: [],
+        sources: [], required_confirmations: [], missing_inputs: [], disclaimer: '법률 자문이 아닙니다.',
+      },
+    } as never)
+    render(<ClauseDetailScreen clause={{ ...clause, matchStatus: 'NO_CANDIDATE', standardText: undefined }} reviewId="rev_suggestion" onBack={vi.fn()} onChatbot={vi.fn()} />)
+
+    await userEvent.click(screen.getByRole('button', { name: /협의 문구 제안 보기/ }))
+
+    expect(api.suggestions).toHaveBeenCalledTimes(1)
+    expect(await screen.findByText('표준조항 후보 기반')).toBeInTheDocument()
+    expect(screen.getByText(/원문과 계약 맥락을 확인해 주세요/)).toBeInTheDocument()
+  })
+
+  it('확인 사항과 누락 입력의 내부 필드명을 사용자용 문구로 바꾼다', async () => {
+    vi.mocked(api.suggestions).mockResolvedValue({
+      data: {
+        outcome: 'REQUIRED_VALUE_MISSING', text: null, evidence_level: null,
+        message: '협의 문구 생성에 필요한 입력값을 확인해 주세요.',
+        reason_code: 'REQUIRED_VALUE_MISSING', purpose: '책임 범위 명확화',
+        key_changes: [], used_source_keys: [], user_clause_ids: [], standard_clause_ids: [], grounding_source_ids: [], sources: [],
+        required_confirmations: [{ field: 'law_grounding', placeholder: '관련 법령 원문을 별도로 확인해 주세요.' }],
+        missing_inputs: ['liability_limit', 'private_internal_key'], disclaimer: '법률 자문이 아닙니다.',
+      },
+    } as never)
+    render(<ClauseDetailScreen clause={clause} reviewId="rev_suggestion" onBack={vi.fn()} onChatbot={vi.fn()} />)
+
+    await userEvent.click(screen.getByRole('button', { name: /협의 문구 제안 보기/ }))
+
+    expect(await screen.findByText('법령 근거 확인')).toBeInTheDocument()
+    expect(screen.getByText('책임 한도')).toBeInTheDocument()
+    expect(screen.getByText('추가 확인 정보')).toBeInTheDocument()
+    expect(screen.queryByText('law_grounding')).not.toBeInTheDocument()
+    expect(screen.queryByText('liability_limit')).not.toBeInTheDocument()
+    expect(screen.queryByText('private_internal_key')).not.toBeInTheDocument()
+    expect(screen.queryByText('REQUIRED_VALUE_MISSING')).not.toBeInTheDocument()
+  })
+
   it("내부 ID와 URL 링크 없이 표시용 출처를 출력한다", async () => {
     vi.mocked(api.suggestions).mockResolvedValue({
       data: {
@@ -104,5 +158,25 @@ describe("협의문구 출처", () => {
     expect(screen.queryByText(/uc_rev_suggestion_1/)).not.toBeInTheDocument()
     expect(screen.queryByText(/std_liability_1/)).not.toBeInTheDocument()
     expect(screen.queryByText(/law_1/)).not.toBeInTheDocument()
+    expect(screen.getByText('출처: SW 프리랜서 용역 표준계약서')).toBeInTheDocument()
+    expect(screen.queryByText(/\.md/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/버전: 2025/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/si_subcontract-2025-art13/)).not.toBeInTheDocument()
+  })
+
+  it('표준계약서 표시명이 없으면 내부 정보 대신 기본 출처를 표시한다', async () => {
+    render(
+      <ClauseDetailScreen
+        clause={{ ...clause, standardContractLabel: undefined }}
+        reviewId="rev_suggestion"
+        onBack={vi.fn()}
+        onChatbot={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByText('출처: 표준계약서')).toBeInTheDocument()
+    expect(screen.queryByText(/\.md/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/버전:/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/si_subcontract-2025-art13/)).not.toBeInTheDocument()
   })
 })

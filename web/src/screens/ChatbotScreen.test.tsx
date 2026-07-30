@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ChatbotScreen from './ChatbotScreen'
@@ -23,10 +23,23 @@ describe('챗봇 요청 상태', () => {
     await userEvent.type(input, '이 조항을 설명해줘')
     await userEvent.click(screen.getByRole('button', { name: '질문 전송' }))
     expect(screen.getByRole('status')).toHaveTextContent('답변을 작성하고 있습니다')
+    expect(screen.getAllByTestId('typing-dot')).toHaveLength(3)
+    screen.getAllByTestId('typing-dot').forEach(dot => expect(dot).toHaveClass('animate-bounce'))
     expect(input).toBeDisabled()
     expect(api.chat).toHaveBeenCalledTimes(1)
     await userEvent.click(screen.getByRole('button', { name: '질문 전송' }))
     expect(api.chat).toHaveBeenCalledTimes(1)
+  })
+
+  it('한글 조합 중 Enter는 전송하지 않고 입력값을 유지한다', async () => {
+    render(<ChatbotScreen {...props} />)
+    const input = screen.getByPlaceholderText('검토 결과에 대해 질문해 주세요')
+    await userEvent.type(input, '계약을 설명해줘')
+
+    fireEvent.keyDown(input, { key: 'Enter', code: 'Enter', isComposing: true })
+
+    expect(api.chat).not.toHaveBeenCalled()
+    expect(input).toHaveValue('계약을 설명해줘')
   })
 
   it('출처의 내부 ID를 표시하지 않고 안전한 라벨을 사용한다', async () => {

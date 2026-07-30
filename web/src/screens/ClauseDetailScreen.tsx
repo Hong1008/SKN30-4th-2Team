@@ -8,6 +8,8 @@ import { useMetadata } from '../contexts/MetadataContext'
 import { getMetadataLabel, getStatusPresentation } from '../utils/metadata'
 import { getErrorMessage, getSafeKoreanMessage } from '../utils/apiErrors'
 import SourceReferences, { type SourceReference } from '../components/SourceReferences'
+import { getStandardContractLabel } from '../utils/standardContractLabel'
+import { getSuggestionFieldLabel } from '../utils/suggestionFields'
 
 interface Props {
   clause: ClauseResult
@@ -66,7 +68,7 @@ export default function ClauseDetailScreen({ clause, reviewId, onBack, onChatbot
   }
 
   const createSuggestion = async () => {
-    if (!reviewId || clause.matchStatus !== 'CANDIDATE_SELECTED' || !clause.standardText) return
+    if (!reviewId || !clause.id || !suggestionPurpose.trim()) return
     setLoadingSuggestion(true)
     setSuggestionError('')
     setSuggestion(null)
@@ -94,13 +96,13 @@ export default function ClauseDetailScreen({ clause, reviewId, onBack, onChatbot
     clause.status,
     clause.status,
   )
-  const canCreateSuggestion = clause.matchStatus === 'CANDIDATE_SELECTED'
-    && Boolean(clause.standardText)
+  const canCreateSuggestion = Boolean(clause.id)
+  const suggestionConfirmations = suggestion?.required_confirmations ?? []
   const suggestionInputFields = suggestion
-    ? Array.from(new Map<string, string>([
-        ...suggestion.required_confirmations.map(item => [item.field, item.placeholder] as [string, string]),
-        ...suggestion.missing_inputs.map(field => [field, field] as [string, string]),
-      ]).entries())
+    ? [...new Set(suggestion.missing_inputs)].map(field => ({
+        field,
+        label: getSuggestionFieldLabel(field),
+      }))
     : []
   const suggestionSources: SourceReference[] = suggestion?.sources.map(source => ({
     type: source.type,
@@ -142,7 +144,7 @@ export default function ClauseDetailScreen({ clause, reviewId, onBack, onChatbot
       {/* Comparison */}
       <div className="grid gap-5 md:grid-cols-2">
         {/* User clause */}
-        <div className="flex min-h-[320px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white">
+        <div className="flex h-[380px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white sm:h-[420px]">
           <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 bg-slate-50">
             <p className="text-xs font-semibold text-slate-900">업로드한 계약서</p>
             <button
@@ -154,13 +156,13 @@ export default function ClauseDetailScreen({ clause, reviewId, onBack, onChatbot
               {copied === 'user' ? '복사됨' : '복사'}
             </button>
           </div>
-          <pre className="flex-1 whitespace-pre-wrap break-words px-5 py-5 font-sans text-sm leading-7 text-slate-800">
+          <pre data-testid="user-clause-scroll" className="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap break-words px-5 py-5 font-sans text-sm leading-7 text-slate-800">
             {clause.excerpt}
           </pre>
         </div>
 
         {/* Standard clause */}
-        <div className="flex min-h-[320px] flex-col overflow-hidden rounded-2xl border border-blue-200 bg-blue-50/25">
+        <div className="flex h-[380px] flex-col overflow-hidden rounded-2xl border border-blue-200 bg-blue-50/25 sm:h-[420px]">
           <div className="flex items-center justify-between px-5 py-3.5 border-b border-blue-200 bg-blue-50/60">
             <p className="text-xs font-semibold text-blue-600">대응 표준조항 {clause.standardTitle && `(${clause.standardTitle})`}</p>
             <button
@@ -172,12 +174,12 @@ export default function ClauseDetailScreen({ clause, reviewId, onBack, onChatbot
               {copied === 'standard' ? '복사됨' : '복사'}
             </button>
           </div>
-          <pre className="flex-1 whitespace-pre-wrap break-words px-5 py-5 font-sans text-sm leading-7 text-slate-800">
+          <pre data-testid="standard-clause-scroll" className="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap break-words px-5 py-5 font-sans text-sm leading-7 text-slate-800">
             {clause.standardText || '매칭된 표준 조항이 없습니다.'}
           </pre>
-          {clause.standardContractLabel && (
+          {clause.matchStatus === 'CANDIDATE_SELECTED' && (
             <div className="border-t border-blue-100 px-5 py-3 text-xs leading-5 text-slate-500">
-              <p>{clause.standardContractLabel}</p>
+              <p>출처: {getStandardContractLabel(clause.standardContractLabel)}</p>
             </div>
           )}
         </div>
@@ -302,7 +304,15 @@ export default function ClauseDetailScreen({ clause, reviewId, onBack, onChatbot
               LLM_OUTPUT_INVALID: '생성 결과 검증 실패',
             }[suggestion.outcome] || suggestion.outcome}
           </p>
-          {suggestion.outcome !== 'GENERATED' && <p className="text-sm text-amber-700">{getStatusPresentation(metadata?.draft_outcome_details, suggestion.outcome)?.message || '협의 문구 생성 조건을 확인해 주세요.'}</p>}
+          {suggestion.evidence_level && (
+            <p className="text-xs font-semibold text-slate-600">
+              {suggestion.evidence_level === 'CONFIRMED_STANDARD'
+                ? '확정된 표준조항 기반'
+                : '표준조항 후보 기반'}
+            </p>
+          )}
+          {suggestion.message && <p className="text-sm text-amber-700">{suggestion.message}</p>}
+          {suggestion.outcome !== 'GENERATED' && !suggestion.message && <p className="text-sm text-amber-700">{getStatusPresentation(metadata?.draft_outcome_details, suggestion.outcome)?.message || '협의 문구 생성 조건을 확인해 주세요.'}</p>}
           {suggestion.text
             ? <p className="whitespace-pre-wrap text-sm leading-7 text-slate-800">{suggestion.text}</p>
             : <p className="text-sm text-slate-600">제안 생성에 필요한 정보가 부족합니다.</p>}
@@ -312,16 +322,27 @@ export default function ClauseDetailScreen({ clause, reviewId, onBack, onChatbot
               {suggestion.key_changes.map(change => <li key={change}>{change}</li>)}
             </ul>
           )}
+          {suggestionConfirmations.length > 0 && (
+            <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50/50 p-3 text-xs text-amber-800">
+              <p className="font-semibold">확인이 필요한 사항</p>
+              {suggestionConfirmations.map((item, index) => (
+                <div key={`${item.field}-${index}`}>
+                  <p className="font-medium">{getSuggestionFieldLabel(item.field)}</p>
+                  <p className="mt-0.5 leading-5">{item.placeholder}</p>
+                </div>
+              ))}
+            </div>
+          )}
           {suggestionInputFields.length > 0 && (
             <div className="space-y-2 text-xs text-amber-700">
               <p className="font-semibold">확인이 필요한 항목</p>
-              {suggestionInputFields.map(([field, placeholder]) => (
+              {suggestionInputFields.map(({ field, label }) => (
                 <label key={field} className="block space-y-1">
-                  <span>{field}</span>
+                  <span>{label}</span>
                   <input
                     value={suggestionInputs[field] || ''}
                     onChange={(event) => setSuggestionInputs(previous => ({ ...previous, [field]: event.target.value }))}
-                    placeholder={placeholder}
+                    placeholder={`${label}을 입력해 주세요`}
                     className="w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
                   />
                 </label>
