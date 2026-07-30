@@ -2,7 +2,7 @@ import { createClientId } from './utils/clientId'
 import { useState, useEffect, useRef } from 'react'
 import { BrowserRouter, Routes, Route, useNavigate, useLocation, useParams, Navigate } from 'react-router-dom'
 import type { Screen, ClauseResult } from './types'
-import { SESSION_ID_KEY, REVIEW_ID_KEY } from './config'
+import { SESSION_ID_KEY, REVIEW_ID_KEY, getChatHistoryStorageKey } from './config'
 import Header from './components/Header'
 import HorizontalStepper from './components/HorizontalStepper'
 import UploadAndTypeScreen from './screens/UploadAndTypeScreen'
@@ -110,7 +110,7 @@ export function MainApp() {
     setChatTarget(null)
     chatTriggerRef.current = null
   }
-  const clearLocalReview = () => {
+  const clearLocalReview = (reviewIdToClear: string | null = reviewId) => {
     clearChat()
     setSessionId(null)
     setReviewId(null)
@@ -118,6 +118,7 @@ export function MainApp() {
     setSessionExpiresAt(null)
     localStorage.removeItem(SESSION_ID_KEY)
     localStorage.removeItem(REVIEW_ID_KEY)
+    if (reviewIdToClear) sessionStorage.removeItem(getChatHistoryStorageKey(reviewIdToClear))
   }
 
   useEffect(() => {
@@ -231,14 +232,14 @@ export function MainApp() {
       discardRequestKey.current = null
       setReviewIdToDiscard(null)
       setShowNewReviewConfirm(false)
-      clearLocalReview()
+      clearLocalReview(reviewIdToDiscard)
       navigate('/review', { replace: true })
     } catch (error: any) {
       if (error?.status === 404 || error?.status === 410) {
         discardRequestKey.current = null
         setReviewIdToDiscard(null)
         setShowNewReviewConfirm(false)
-        clearLocalReview()
+        clearLocalReview(reviewIdToDiscard)
         navigate('/review', { replace: true })
       } else {
         showToast(getErrorMessage(error, '기존 검토를 정리하지 못했습니다. 다시 시도해 주세요.'), 'error')

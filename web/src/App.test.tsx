@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { MainApp } from './App'
 import { api } from './api/api'
-import { SESSION_ID_KEY } from './config'
+import { SESSION_ID_KEY, getChatHistoryStorageKey } from './config'
 
 const showToast = vi.fn()
 
@@ -31,6 +31,7 @@ beforeEach(() => {
 describe('진행 중 새 검토 시작', () => {
   it('URL의 review ID를 취소하고 완료 전에는 화면 이동과 중복 요청을 막는다', async () => {
     let finishDelete: ((value: unknown) => void) | undefined
+    sessionStorage.setItem(getChatHistoryStorageKey('rev_from_url'), '[]')
     vi.mocked(api.deleteReview).mockReturnValue(new Promise(resolve => { finishDelete = resolve }) as never)
     render(<MemoryRouter initialEntries={['/review/rev_from_url/progress']}><MainApp /></MemoryRouter>)
 
@@ -44,6 +45,7 @@ describe('진행 중 새 검토 시작', () => {
 
     finishDelete?.({ data: { review_id: 'rev_from_url', review_state: 'CANCELLED', deleted: true } })
     expect(await screen.findByText('업로드 화면')).toBeInTheDocument()
+    expect(sessionStorage.getItem(getChatHistoryStorageKey('rev_from_url'))).toBeNull()
   })
 
   it('취소 실패 시 진행 화면과 확인창을 유지한다', async () => {

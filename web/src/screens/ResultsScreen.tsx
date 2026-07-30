@@ -8,7 +8,7 @@ import { getErrorMessage } from '../utils/apiErrors'
 import { useMetadata } from '../contexts/MetadataContext'
 import { getMetadataLabel } from '../utils/metadata'
 import { mapClauseResult } from '../utils/reviewResults'
-import { REVIEW_ID_KEY, SESSION_ID_KEY } from '../config'
+import { REVIEW_ID_KEY, SESSION_ID_KEY, getChatHistoryStorageKey } from '../config'
 import { getStandardContractLabel } from '../utils/standardContractLabel'
 
 const CLAUSE_VISUALS: Record<ResultCode, {
@@ -99,6 +99,7 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot, onRe
       if (error?.status === 404 || error?.status === 410) {
         localStorage.removeItem(SESSION_ID_KEY)
         localStorage.removeItem(REVIEW_ID_KEY)
+        sessionStorage.removeItem(getChatHistoryStorageKey(reviewId))
         setErrorMessage('검토 결과를 찾을 수 없거나 보관 기간이 만료되었습니다.')
       } else if (error?.status === 409) {
         onReviewInProgress?.()
@@ -134,11 +135,13 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot, onRe
       discardRequestKey.current = null
       localStorage.removeItem(SESSION_ID_KEY)
       localStorage.removeItem(REVIEW_ID_KEY)
+      sessionStorage.removeItem(getChatHistoryStorageKey(reviewId))
       window.location.assign('/review')
     } catch (error: any) {
       if (error?.status === 404 || error?.status === 410) {
         localStorage.removeItem(SESSION_ID_KEY)
         localStorage.removeItem(REVIEW_ID_KEY)
+        sessionStorage.removeItem(getChatHistoryStorageKey(reviewId))
         window.location.assign('/review')
         return
       }

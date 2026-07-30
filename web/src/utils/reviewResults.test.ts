@@ -44,4 +44,22 @@ describe('표준조항 사용자 표시 변환', () => {
     expect(result.standardContractLabel).toBe('SI 하도급 표준계약서')
     expect(JSON.stringify(result)).not.toContain('.md')
   })
+
+  it('내부 카테고리 코드는 한국어 표시명으로 바꾼다', () => {
+    const result = mapClauseResult({
+      user_clause_id: 'uc_review_2',
+      user_clause: '제3조 납품 및 검수',
+      deviation: { code: 'NONE', label: '표준 대응 후보 있음' },
+      match: {
+        status: 'CANDIDATE_SELECTED',
+        standard: {
+          ...standard,
+          category: { code: 'DELIVERY_INSPECTION', label: 'DELIVERY_INSPECTION' },
+        },
+      },
+      explanation: '표준 대응 후보가 확인됐습니다.',
+      toxic_patterns: [],
+    })
+    expect(result.category).toBe('납품 및 검수')
+  })
 })

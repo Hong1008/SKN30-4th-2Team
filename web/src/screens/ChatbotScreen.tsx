@@ -6,6 +6,7 @@ import { useMetadata } from '../contexts/MetadataContext'
 import { getStatusPresentation } from '../utils/metadata'
 import { getErrorMessage } from '../utils/apiErrors'
 import SourceReferences, { type SourceReference } from '../components/SourceReferences'
+import { getChatHistoryStorageKey } from '../config'
 
 interface Props {
   reviewId: string
@@ -34,23 +35,57 @@ interface Message {
   retryPrompt?: string
 }
 
+const readMessages = (reviewId: string): Message[] => {
+  try {
+    const raw = sessionStorage.getItem(getChatHistoryStorageKey(reviewId))
+    if (!raw) return []
+    const parsed: unknown = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((item): item is Message => (
+      typeof item === 'object' && item !== null
+      && typeof item.id === 'string'
+      && (item.role === 'user' || item.role === 'assistant')
+      && typeof item.text === 'string'
+    ))
+  } catch {
+    return []
+  }
+}
+
 export default function ChatbotScreen({ reviewId, focusClauseId, focusClauseName, focusClauseTitle, focusClauseStatus, focusClauseCategory, onClose, onClearFocus, onReviewUnavailable, isOpen }: Props) {
   const { metadata } = useMetadata()
-  const [messages, setMessages] = useState<Message[]>([])
+  const [messages, setMessages] = useState<Message[]>(() => readMessages(reviewId))
   const [input, setInput] = useState('')
   const [isSending, setIsSending] = useState(false)
   const [error, setError] = useState('')
   const [errorRetryable, setErrorRetryable] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const loadedReviewId = useRef(reviewId)
+  const restoringReviewId = useRef<string | null>(null)
 
   useEffect(() => {
-    setMessages([])
+    if (loadedReviewId.current === reviewId) return
+    loadedReviewId.current = reviewId
+    restoringReviewId.current = reviewId
+    setMessages(readMessages(reviewId))
     setInput('')
     setIsSending(false)
     setError('')
     setErrorRetryable(false)
   }, [reviewId])
+  useEffect(() => {
+    if (restoringReviewId.current === reviewId) {
+      restoringReviewId.current = null
+      return
+    }
+    const key = getChatHistoryStorageKey(reviewId)
+    if (messages.length === 0) {
+      sessionStorage.removeItem(key)
+      return
+    }
+    sessionStorage.setItem(key, JSON.stringify(messages))
+  }, [messages, reviewId])
   useEffect(() => { if (isOpen) inputRef.current?.focus() }, [isOpen])
   // scrollIntoView의 반환값(Promise일 수 있음)이 React effect의 cleanup으로 전달되지 않게 한다.
   useEffect(() => {

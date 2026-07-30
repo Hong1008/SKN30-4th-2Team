@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ChatbotScreen from './ChatbotScreen'
@@ -13,7 +13,10 @@ const props = {
   isOpen: true,
 }
 
-beforeEach(() => vi.clearAllMocks())
+beforeEach(() => {
+  vi.clearAllMocks()
+  sessionStorage.clear()
+})
 
 describe('챗봇 요청 상태', () => {
   it('답변 대기 중 입력 표시와 중복 전송 차단을 적용한다', async () => {
@@ -66,5 +69,25 @@ describe('챗봇 요청 상태', () => {
     expect(screen.getByText('SW 프리랜서 표준계약서 · 제5조 · 대금 지급')).toBeInTheDocument()
     expect(screen.getByText('민법 제390조')).toBeInTheDocument()
     expect(screen.queryByText(/internal_/)).not.toBeInTheDocument()
+  })
+
+  it('같은 검토 세션에서는 새로고침 후에도 대화를 복원한다', async () => {
+    vi.mocked(api.chat).mockResolvedValue({
+      data: {
+        answer: '복원할 답변입니다.', refused: false, disclaimer: '', limitations: [],
+        outcome: 'ANSWERED', tool_status: 'OK', retryable: false, sources: [],
+      },
+    } as never)
+    const view = render(<ChatbotScreen {...props} />)
+    await userEvent.type(screen.getByPlaceholderText('검토 결과에 대해 질문해 주세요'), '복원할 질문')
+    await userEvent.click(screen.getByRole('button', { name: '질문 전송' }))
+    await screen.findByText('복원할 답변입니다.')
+    await waitFor(() => expect(sessionStorage.length).toBe(1))
+
+    view.unmount()
+    render(<ChatbotScreen {...props} />)
+
+    expect(await screen.findByText('복원할 질문')).toBeInTheDocument()
+    expect(screen.getByText('복원할 답변입니다.')).toBeInTheDocument()
   })
 })
