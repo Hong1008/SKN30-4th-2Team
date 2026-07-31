@@ -2,6 +2,9 @@
 
 * 상태: Accepted
 * 결정일: 2026-07-28
+* 현행 상태: 런타임·포맷 선택 근거는 유지한다. 답변과 질문 분류의 역할 분리는
+  `0728-vllm-production-provider.md`와 `0730-langgraph-chat-prompt-routing.md`를
+  우선한다.
 
 ## 1. 배경
 
@@ -429,4 +432,3 @@ BF16은 원본 품질 기준선으로 필요하지만, 8B급에서도 가중치�
 * 모델별 라이선스와 상업적 사용 조건
 * 프롬프트와 sampling parameter
 * 사용자에게 공개하는 모델명과 provider 정보
-

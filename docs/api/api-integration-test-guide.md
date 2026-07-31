@@ -94,13 +94,13 @@ BE-B 통과 조건:
 - 다른 브라우저의 상태·SSE 접근은 404다.
 - 실제 파일 접근은 FileStorage 인터페이스를 통한다.
 
-## 실제 Ollama 구조화 출력 테스트
+## 실제 vLLM Qwen3.5 9B 구조화 출력 테스트
 
 ```powershell
 $env:RUN_LLM_INTEGRATION = "1"
-$env:LLM_INTEGRATION_PROVIDER = "ollama"
-$env:LLM_INTEGRATION_MODEL = "hf.co/unsloth/Qwen3.5-4B-GGUF:Q4_K_M"
-$env:OLLAMA_BASE_URL = "http://127.0.0.1:11434"
+$env:LLM_INTEGRATION_PROVIDER = "vllm"
+$env:LLM_INTEGRATION_MODEL = "RedHatAI/Qwen3.5-9B-FP8-dynamic"
+$env:VLLM_BASE_URL = "https://<pod-id>-8000.proxy.runpod.net"
 $env:LLM_TEST_TIMEOUT = "180"
 uv run pytest -q -m integration tests/integration/test_real_llm_flow.py -s
 ```
@@ -108,24 +108,31 @@ uv run pytest -q -m integration tests/integration/test_real_llm_flow.py -s
 이 테스트는 고정된 MCP 검토·grounding fixture를 사용해 모델의 구조화
 출력과 출처 ID 준수만 격리한다. Chat과 Suggestions 성공 여부를 별도로
 표시하며, 출처를 누락하거나 허용 목록 밖 ID를 만들면
-`LLM_OUTPUT_INVALID`로 실패해야 한다.
+`LLM_OUTPUT_INVALID`로 실패해야 한다. `VLLM_API_KEY`는 실행 전 비추적
+비밀 저장소 또는 프로세스 환경으로만 주입하고, 명령·로그에 직접 넣지 않는다.
 
-2026-07-25 Qwen3.5 4B Q4_K_M 검증 결과와 채택 결정은
-`docs/adr/0725-ollama-qwen35-4b-validation.md`에 기록한다.
+현행 답변 모델의 provider·model ID·배포 게이트는
+`docs/adr/0728-vllm-production-provider.md`를 따른다. Qwen3.5 4B와
+Gemini Gemma 4 31B 결과는 이전 후보 평가 기록이며, 현행 운영 검증 결과로
+사용하지 않는다.
 
-Gemini API의 Gemma 4 31B를 같은 기준으로 비교할 때:
+## OpenAI 질문 분류 경계 검증
 
-```powershell
-$env:RUN_LLM_INTEGRATION = "1"
-$env:LLM_INTEGRATION_PROVIDER = "gemini"
-$env:LLM_INTEGRATION_MODEL = "gemma-4-31b-it"
-$env:LLM_TEST_TIMEOUT = "180"
-uv run pytest -q -m integration tests/integration/test_real_llm_flow.py -s
-```
+현재 실환경 LLM 테스트는 vLLM 답변·제안의 구조화 출력만 검증한다. OpenAI
+router는 아래 단위·API 통합 검증을 별도 수행한다.
 
-`GEMINI_API_KEY`는 비추적 `.env`에만 저장하고 명령·로그에 직접 넣지
-않는다. 2026-07-25 결과와 외부 전송 제한은
-`docs/adr/0725-gemini-gemma4-31b-validation.md`에서 관리한다.
+1. `ROUTER_LLM_PROVIDER=openai`, `ROUTER_LLM_MODEL`과
+   `OPENAI_API_KEY`를 비추적 환경변수로 설정한다.
+2. `tests/domains/chat/test_service.py`와 `tests/api_v1/test_mvp_routes.py`로
+   router의 라벨 파싱 실패·시간 초과·근거 없는 질문 차단을 검증한다.
+3. 테스트 double 또는 provider 요청 기록으로 router 입력이 현재 `message`의
+   앞 80자와 라벨 정의뿐인지 확인한다. `history`, 계약서 원문, 조항, 검토
+   결과와 법령 원문이 포함되면 실패다.
+4. router 호출 실패 시 외부 답변 모델로 폴백하지 않고 계약된 오류 또는
+   안내 응답을 반환하는지 확인한다.
+
+실제 OpenAI 호출을 추가로 실행할 때도 `OPENAI_API_KEY`는 비추적 비밀 저장소
+또는 환경변수에서만 읽고, 명령·테스트 로그에 직접 넣지 않는다.
 
 ## 프론트 수동 검증
 
@@ -161,9 +168,9 @@ uv run pytest -q -m integration tests/integration/test_real_llm_flow.py -s
 | 프론트 Cookie | 담당 진행 | Network 캡처 | FE | 본 백엔드 정리 범위 제외 |
 | 세션 격리 | 통과 | 실제 MCP A/B client 응답 | BE-A·BE-B | 실제 브라우저는 FE 확인 |
 | 장애·재시도 | 자동화 통과 | 오류 응답 테스트 | BE-B | 배포 환경 장애 주입 |
-| Qwen3.5 4B Chat | 조건부 통과 | Ollama 검증 ADR | BE-B | 표현 품질 평가 |
-| Qwen3.5 4B Suggestions | 모델 부적합 | Ollama 검증 ADR | BE-B | 서버 안전 차단은 통과 |
-| Gemini Gemma 4 31B | 평가 통과 | Gemini 검증 ADR | BE-B | 운영 사용 금지 |
+| vLLM Qwen3.5 9B Chat | 재검증 필요 | vLLM 운영 ADR·통합 로그 | BE-B | 운영 endpoint에서 실행 |
+| vLLM Qwen3.5 9B Suggestions | 재검증 필요 | vLLM 운영 ADR·통합 로그 | BE-B | 운영 endpoint에서 실행 |
+| OpenAI router 입력 경계 | 재검증 필요 | chat service·API 통합 테스트 | BE-B | 80자·비전송 필드 확인 |
 | 운영 로그 비수집 | 대기 | 로그 검색 결과 | 기술리드 | 배포 후 확인 |
 
 실패는 `API 계약`, `프론트 상태 처리`, `소유권/FileStorage`,

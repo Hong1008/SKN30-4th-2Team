@@ -2,6 +2,9 @@
 
 - 상태: 승인됨
 - 날짜: 2026-07-23
+- 현행 상태: 설정 계층의 기본 결정은 유지하되 provider·운영 경계는
+  `0728-vllm-production-provider.md`와 `0730-langgraph-chat-prompt-routing.md`로
+  갱신됐다.
 
 ## 맥락
 

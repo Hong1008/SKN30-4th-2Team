@@ -15,6 +15,10 @@
   * [LLM 모델 비교 검증](../splint/LLM%20검증.md)
   * [LLM 운영·검증 GitHub Issue](https://github.com/SKNETWORKS-FAMILY-AICAMP/SKN30-4th-2Team/issues/8)
 
+> 현행 상태: 이 문서는 초기 위험·후보 검토 기록이다. 현행 질문 분류와 답변
+> 생성의 역할 분리는 `0730-langgraph-chat-prompt-routing.md`와
+> `0728-vllm-production-provider.md`를 우선한다.
+
 ## 1. 배경
 
 WorkShield는 IT·SW 계약서를 표준계약서와 조항별로 비교하고, 표준 대비 차이와 누락 가능성, 주의 문구 유사 신호, 관련 법령 원문을 제공하는 서비스다.

@@ -3,6 +3,9 @@
 - 상태: 승인됨
 - 구현 상태: `feat/mvp-api` 로컬 검증 완료, main 반영 대기
 - 결정일: 2026-07-24
+- 현행 상태: API 기본 흐름 기록이다. LLM provider·모델 역할은
+  `0728-vllm-production-provider.md`와 `0730-langgraph-chat-prompt-routing.md`를
+  우선한다.
 - 대상 브랜치: `feat/mvp-api`
 - 기준 커밋: `e658b0d feat(api): 세션 및 리뷰 API 기본 흐름 구현`
 - 관련 ADR:
