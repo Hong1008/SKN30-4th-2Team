@@ -23,6 +23,8 @@ def _config() -> DeploymentConfig:
         cloudfront_origin_prefix_list_id="pl-1234",
         instance_type="t3.small",
         github_organization="example",
+        github_owner_id="123456",
+        github_repository_id="654321",
         github_repository="repository",
         github_environment="production",
         ghcr_owner="example",
