@@ -103,11 +103,7 @@ export default function ChatbotScreen({ reviewId, focusClauseId, focusClauseName
     if (!text || isSending) return
     setError('')
     setErrorRetryable(false)
-    const history = messages
-      .map(({ role, text }) => ({ role, content: text.slice(0, 2000) }))
-      // 본문 없는 제한 응답은 API의 history 최소 길이 검증(1자 이상)에 실패하므로 제외한다.
-      .filter(({ content }) => content.trim().length > 0)
-      .slice(-10)
+    const history = messages.slice(-2).map(({ role, text }) => ({ role, content: text.slice(0, 40) }))
     setMessages(previous => [...previous, { id: createClientId(), role: 'user', text }])
     setInput(''); setIsSending(true)
     try {

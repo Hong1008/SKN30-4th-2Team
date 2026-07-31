@@ -13,6 +13,7 @@ from app.core.llm.dependencies import (
     get_chat_model,
     get_mcp_runtime,
     get_mcp_tools,
+    get_router_model,
 )
 from app.core.llm.mcp.types import WorkShieldMCPRuntime
 from app.core.llm.types import ReasoningMode
@@ -33,6 +34,8 @@ def test_get_chat_model_defaults_reasoning_to_off(monkeypatch) -> None:
         app_env="local",
         llm_provider="ollama",
         llm_model="runtime-selected-model",
+        router_llm_provider=None,
+        router_llm_model=None,
     )
     expected = object()
     calls = []
@@ -45,6 +48,59 @@ def test_get_chat_model_defaults_reasoning_to_off(monkeypatch) -> None:
 
     assert get_chat_model(settings) is expected
     assert calls == [(settings, ReasoningMode.OFF)]
+
+
+def test_get_router_model_uses_short_zero_temperature_policy(monkeypatch) -> None:
+    settings = Settings(
+        app_env="local",
+        llm_provider="ollama",
+        llm_model="runtime-selected-model",
+        router_llm_provider="openai",
+        router_llm_model="gpt-4.1-nano",
+        openai_api_key="openai-secret",
+        router_llm_timeout_seconds=2.5,
+    )
+    expected = object()
+    calls = []
+
+    def fake_create(current_settings, reasoning, policy):
+        calls.append((current_settings, reasoning, policy))
+        return expected
+
+    monkeypatch.setattr("app.core.llm.dependencies.create_chat_model", fake_create)
+
+    assert get_router_model(settings) is expected
+    router_settings, reasoning, policy = calls[0]
+    assert router_settings.llm_provider.value == "openai"
+    assert router_settings.llm_model == "gpt-4.1-nano"
+    assert reasoning is ReasoningMode.OFF
+    assert policy.temperature == 0
+    assert policy.timeout_seconds == 2.5
+    assert policy.max_completion_tokens == 8
+
+
+def test_get_router_model_defaults_to_answer_provider(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = Settings(
+        app_env="local",
+        llm_provider="ollama",
+        llm_model="runtime-selected-model",
+        router_llm_provider=None,
+        router_llm_model=None,
+    )
+    calls = []
+
+    def fake_create(current_settings, reasoning, policy):
+        calls.append((current_settings, reasoning, policy))
+        return object()
+
+    monkeypatch.setattr("app.core.llm.dependencies.create_chat_model", fake_create)
+
+    get_router_model(settings)
+
+    assert calls[0][0].llm_provider.value == "ollama"
+    assert calls[0][0].llm_model == "runtime-selected-model"
 
 
 @pytest.mark.asyncio

@@ -5,6 +5,7 @@ from typing import Any
 import pytest
 
 from app.config import Settings
+from app.core.llm.policy import LLMPolicy
 from app.core.llm.provider.openai import build_openai_model
 from app.core.llm.types import LLMConfigurationError, ReasoningMode
 
@@ -68,6 +69,28 @@ def test_openai_passes_runtime_model_and_selected_api_key(
     assert call["model"] == "runtime-selected-model"
     assert call["api_key"].get_secret_value() == "openai-secret"
     assert "openai-secret" not in repr(call["api_key"])
+
+
+def test_openai_applies_router_generation_policy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("app.core.llm.provider.openai.ChatOpenAI", FakeOpenAIModel)
+    policy = LLMPolicy(
+        timeout_seconds=3,
+        temperature=0,
+        top_p=1,
+        seed=42,
+        max_completion_tokens=8,
+    )
+
+    build_openai_model(_settings(), ReasoningMode.OFF, policy)
+
+    call = FakeOpenAIModel.calls[-1]
+    assert call["timeout"] == 3
+    assert call["max_completion_tokens"] == 8
+    assert call["temperature"] == 0
+    assert call["top_p"] == 1
+    assert call["seed"] == 42
 
 
 def test_openai_rejects_off_for_always_on_model(

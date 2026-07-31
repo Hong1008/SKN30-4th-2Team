@@ -11,7 +11,7 @@ import json
 import httpx
 import pytest
 from fastapi import FastAPI
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage
 from pypdf import PdfWriter
 
 from app.api.v1.router import router as v1_router
@@ -19,7 +19,7 @@ from app.core.common.exception_handlers import register_exception_handlers
 from app.config import Settings, get_settings
 from app.core.db.database import Database
 from app.core.db.dependencies import get_database
-from app.core.llm.dependencies import get_chat_model
+from app.core.llm.dependencies import get_chat_model, get_router_model
 from app.core.llm.mcp.dependencies import get_workshield_runtime
 from app.domains.reviews.repository import SqlAlchemyReviewRepository
 from app.domains.reviews.domain import Review
@@ -44,33 +44,19 @@ class FakeStructuredRunnable:
         self._calls = calls
 
     async def ainvoke(self, _prompt: object):
-        call_name = (
-            "chat_completion"
-            if self._schema.__name__ == "ChatStructuredOutput"
-            else "suggestion_completion"
-        )
-        self._calls[call_name] = self._calls.get(call_name, 0) + 1
-        await asyncio.sleep(0.02)
-        if self._schema.__name__ == "ChatStructuredOutput":
-            assert isinstance(_prompt, list)
-            user_message = _prompt[-1]
-            assert isinstance(user_message, HumanMessage)
-            context = json.loads(str(user_message.content).split("\n", 1)[1])
-            clause = (
-                context.get("current_clause_context")
-                or context["review_result"]["clause_results"][0]
+        if "category" in getattr(self._schema, "model_fields", {}):
+            self._calls["router_completion"] = (
+                self._calls.get("router_completion", 0) + 1
             )
             return {
-                "outcome": "ANSWERED",
-                "answer": "현재 검토 결과에서는 책임 범위를 추가로 확인할 수 있습니다.",
-                "sources": [
-                    {
-                        "type": "USER_CLAUSE",
-                        "id": clause["source_key"],
-                    }
-                ],
-                "limitations": ["법률 자문이 아닙니다."],
+                "raw": AIMessage(content="조항 질문"),
+                "parsed": self._schema(category="조항 질문"),
+                "parsing_error": None,
             }
+        self._calls["suggestion_completion"] = (
+            self._calls.get("suggestion_completion", 0) + 1
+        )
+        await asyncio.sleep(0.02)
         self._calls["suggestion_prompt"] = _prompt
         return {
             "outcome": "GENERATED",
@@ -87,6 +73,16 @@ class FakeChatModel:
 
     def with_structured_output(self, schema: type, **_kwargs: object):
         return FakeStructuredRunnable(schema, self._calls)
+
+    async def ainvoke(self, prompt: list[object]) -> AIMessage:
+        self._calls["chat_completion"] = self._calls.get("chat_completion", 0) + 1
+        await asyncio.sleep(0.02)
+        assert isinstance(prompt[-1], HumanMessage)
+        if "질문 분류기" in str(prompt[-1].content):
+            return AIMessage(content="조항 질문")
+        return AIMessage(
+            content="현재 검토 결과에서는 책임 범위를 추가로 확인할 수 있습니다."
+        )
 
 
 def create_mvp_app(tmp_path: Path) -> tuple[FastAPI, dict[str, int]]:
@@ -202,6 +198,7 @@ def create_mvp_app(tmp_path: Path) -> tuple[FastAPI, dict[str, int]]:
     app.dependency_overrides[get_file_storage] = lambda: storage
     app.dependency_overrides[get_workshield_runtime] = lambda: runtime
     app.dependency_overrides[get_chat_model] = lambda: FakeChatModel(calls)
+    app.dependency_overrides[get_router_model] = lambda: FakeChatModel(calls)
     app.dependency_overrides[get_settings] = lambda: settings
     return app, calls
 
@@ -290,9 +287,10 @@ async def test_full_mvp_flow_and_browser_isolation(tmp_path: Path) -> None:
             "code": "LIABILITY",
             "label": "LIABILITY",
         }
-        assert clause_result["match"]["standard"][
-            "standard_contract_label"
-        ] == "SW 프리랜서 용역 표준계약서"
+        assert (
+            clause_result["match"]["standard"]["standard_contract_label"]
+            == "SW 프리랜서 용역 표준계약서"
+        )
         assert set(clause_result["match"]["standard"]) == {
             "standard_contract_label",
             "category",

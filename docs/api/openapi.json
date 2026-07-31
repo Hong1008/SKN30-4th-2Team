@@ -2252,27 +2252,6 @@
         ],
         "title": "CategoryMetadata"
       },
-      "ChatHistoryMessage": {
-        "properties": {
-          "role": {
-            "$ref": "#/components/schemas/ChatRole",
-            "description": "발화 주체 (user 또는 assistant)"
-          },
-          "content": {
-            "type": "string",
-            "maxLength": 2000,
-            "minLength": 1,
-            "title": "Content",
-            "description": "대화 메시지 내용"
-          }
-        },
-        "type": "object",
-        "required": [
-          "role",
-          "content"
-        ],
-        "title": "ChatHistoryMessage"
-      },
       "ChatOutcome": {
         "type": "string",
         "enum": [
@@ -2290,8 +2269,7 @@
             "type": "string",
             "maxLength": 2000,
             "minLength": 1,
-            "title": "Message",
-            "description": "사용자 질문 메시지"
+            "title": "Message"
           },
           "focus_clause_id": {
             "anyOf": [
@@ -2303,17 +2281,18 @@
                 "type": "null"
               }
             ],
-            "title": "Focus Clause Id",
-            "description": "질문의 대상이 되는 사용자 조항 식별자"
+            "title": "Focus Clause Id"
           },
           "history": {
             "items": {
-              "$ref": "#/components/schemas/ChatHistoryMessage"
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
             },
             "type": "array",
-            "maxItems": 10,
-            "title": "History",
-            "description": "이전 대화 히스토리 (최대 10개)"
+            "maxItems": 2,
+            "title": "History"
           }
         },
         "type": "object",
@@ -2325,8 +2304,7 @@
       "ChatResponse": {
         "properties": {
           "outcome": {
-            "$ref": "#/components/schemas/ChatOutcome",
-            "description": "질의응답 결과 유형 (ANSWERED, REFUSED, INSUFFICIENT_GROUNDING, LLM_OUTPUT_INVALID)"
+            "$ref": "#/components/schemas/ChatOutcome"
           },
           "answer": {
             "anyOf": [
@@ -2337,39 +2315,33 @@
                 "type": "null"
               }
             ],
-            "title": "Answer",
-            "description": "질의응답 답변 내용"
+            "title": "Answer"
           },
           "refused": {
             "type": "boolean",
-            "title": "Refused",
-            "description": "질문 거부/범위 외 여부"
+            "title": "Refused"
           },
           "sources": {
             "items": {
               "$ref": "#/components/schemas/ChatSource"
             },
             "type": "array",
-            "title": "Sources",
-            "description": "참조 근거 출처 목록"
+            "title": "Sources"
           },
           "limitations": {
             "items": {
               "type": "string"
             },
             "type": "array",
-            "title": "Limitations",
-            "description": "답변 관련 한계 사항"
+            "title": "Limitations"
           },
           "tool_status": {
             "type": "string",
-            "title": "Tool Status",
-            "description": "도구/MCP 연동 상태"
+            "title": "Tool Status"
           },
           "disclaimer": {
             "type": "string",
-            "title": "Disclaimer",
-            "description": "법률 자문 불가 면책 조항 문구"
+            "title": "Disclaimer"
           }
         },
         "type": "object",
@@ -2381,20 +2353,10 @@
         ],
         "title": "ChatResponse"
       },
-      "ChatRole": {
-        "type": "string",
-        "enum": [
-          "user",
-          "assistant"
-        ],
-        "title": "ChatRole",
-        "description": "대화 발화 주체."
-      },
       "ChatSource": {
         "properties": {
           "type": {
-            "$ref": "#/components/schemas/ChatSourceType",
-            "description": "참조 근거 유형 (USER_CLAUSE, STANDARD_CLAUSE, LAW)"
+            "$ref": "#/components/schemas/ChatSourceType"
           },
           "id": {
             "anyOf": [
@@ -2405,8 +2367,7 @@
                 "type": "null"
               }
             ],
-            "title": "Id",
-            "description": "참조 조항 또는 근거 식별자"
+            "title": "Id"
           },
           "display_label": {
             "anyOf": [
@@ -2417,8 +2378,7 @@
                 "type": "null"
               }
             ],
-            "title": "Display Label",
-            "description": "내부 식별자를 노출하지 않는 사용자용 출처 명칭"
+            "title": "Display Label"
           },
           "standard_contract_label": {
             "anyOf": [
@@ -2429,8 +2389,7 @@
                 "type": "null"
               }
             ],
-            "title": "Standard Contract Label",
-            "description": "표준조항 출처의 사용자용 표준계약서 명칭"
+            "title": "Standard Contract Label"
           },
           "law_name": {
             "anyOf": [
@@ -2441,8 +2400,7 @@
                 "type": "null"
               }
             ],
-            "title": "Law Name",
-            "description": "법령 명칭"
+            "title": "Law Name"
           },
           "article": {
             "anyOf": [
@@ -2453,8 +2411,7 @@
                 "type": "null"
               }
             ],
-            "title": "Article",
-            "description": "법령 조항 번호"
+            "title": "Article"
           },
           "source_url": {
             "anyOf": [
@@ -2465,8 +2422,7 @@
                 "type": "null"
               }
             ],
-            "title": "Source Url",
-            "description": "검증된 법령 원문 출처 URL"
+            "title": "Source Url"
           }
         },
         "type": "object",

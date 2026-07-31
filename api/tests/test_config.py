@@ -37,6 +37,49 @@ def test_production_accepts_vllm_provider() -> None:
     assert settings.selected_provider_key() is settings.vllm_api_key
 
 
+def test_production_allows_external_router_with_vllm_answer_model() -> None:
+    settings = Settings(
+        app_env="prod",
+        llm_provider="vllm",
+        llm_model="served-qwen-model",
+        router_llm_provider="openai",
+        router_llm_model="gpt-4.1-nano",
+        vllm_base_url="https://vllm.example.com/v1",
+        vllm_api_key="vllm-secret",
+        openai_api_key="openai-secret",
+        app_debug=False,
+        database_echo=False,
+    )
+
+    assert settings.router_llm_provider.value == "openai"
+    assert settings.router_llm_model == "gpt-4.1-nano"
+    assert settings.router_llm_timeout_seconds == 3
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"router_llm_provider": "openai"},
+        {"router_llm_model": "gpt-4.1-nano"},
+    ],
+)
+def test_router_provider_and_model_must_be_configured_together(
+    overrides: dict[str, str],
+) -> None:
+    router_values: dict[str, str | None] = {
+        "router_llm_provider": None,
+        "router_llm_model": None,
+    }
+    router_values.update(overrides)
+    with pytest.raises(ValidationError, match="ROUTER_LLM_PROVIDER"):
+        Settings(
+            app_env="local",
+            llm_provider="ollama",
+            llm_model="configured-model",
+            **router_values,
+        )
+
+
 def test_runpod_serverless_uses_call_only_api_key() -> None:
     settings = Settings(
         app_env="local",
