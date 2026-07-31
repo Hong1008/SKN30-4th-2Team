@@ -38,16 +38,15 @@ export default function HorizontalStepper({ currentScreen, onNavigate, navigatio
             const ahead = step.id > currentStep
 
             return (
-              <button
+              <div
                 key={step.id}
-                disabled={ahead || navigationLocked}
-                onClick={() => !ahead && !navigationLocked && onNavigate(step.nav)}
+                // disabled={ahead || navigationLocked}
+                // onClick={() => !ahead && !navigationLocked && onNavigate(step.nav)}
                 className={`
                   group relative flex min-w-0 flex-col items-center justify-center gap-2 px-1 text-center sm:flex-row sm:justify-start sm:gap-3 sm:px-4 sm:text-left
                   focus-visible:z-10 focus-visible:outline-none
                   focus-visible:ring-4 focus-visible:ring-inset
                   focus-visible:ring-blue-500/15
-                  ${ahead || navigationLocked ? 'cursor-default' : 'cursor-pointer'}
                 `}
               >
                 {index < STEPS.length - 1 && (
@@ -73,7 +72,7 @@ export default function HorizontalStepper({ currentScreen, onNavigate, navigatio
                   {done ? <Check className="size-4" strokeWidth={2.5} /> : step.id}
                 </span>
 
-                <span className="relative z-10 min-w-0 bg-white px-1 sm:pr-3">
+                <span className="relative z-5 min-w-0 bg-white dim-wh px-1 sm:pr-3">
                   <span
                     className={`block truncate text-[11px] leading-4 sm:text-[13px] sm:leading-5
                       ${current
@@ -94,7 +93,7 @@ export default function HorizontalStepper({ currentScreen, onNavigate, navigatio
                 {current && (
                   <span className="absolute inset-x-3 bottom-0 h-[2px] rounded-full bg-blue-600 sm:inset-x-5" />
                 )}
-              </button>
+              </div>
             )
           })}
         </nav>

@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react"
+import { act, render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { api } from "../api/api"
@@ -41,6 +41,74 @@ beforeEach(() => {
 })
 
 describe("협의문구 출처", () => {
+  it('조항 전환 후 이전 법령 근거 응답을 표시하지 않는다', async () => {
+    let resolveFirst: (value: unknown) => void
+    let resolveSecond: (value: unknown) => void
+    let firstSignal: AbortSignal | undefined
+    const firstResponse = new Promise(resolve => { resolveFirst = resolve })
+    const secondResponse = new Promise(resolve => { resolveSecond = resolve })
+    vi.mocked(api.getGrounding)
+      .mockImplementationOnce((_reviewId, _category, signal) => {
+        firstSignal = signal
+        return firstResponse as never
+      })
+      .mockImplementationOnce(() => secondResponse as never)
+    const firstClause = { ...clause, categoryCode: 'LIABILITY' }
+    const secondClause = { ...clause, id: 'uc_rev_suggestion_2', article: '제2조', categoryCode: 'PAYMENT' }
+    const { rerender } = render(
+      <ClauseDetailScreen clause={firstClause} reviewId="rev_suggestion" onBack={vi.fn()} onChatbot={vi.fn()} />,
+    )
+
+    rerender(
+      <ClauseDetailScreen clause={secondClause} reviewId="rev_suggestion" onBack={vi.fn()} onChatbot={vi.fn()} />,
+    )
+    expect(firstSignal?.aborted).toBe(true)
+
+    await act(async () => {
+      resolveFirst({
+        data: { items: [{ source_id: 'old', law_name: '이전 법령', article: '제1조', text: '이전 근거' }], grounding_status: 'OK', retryable: false },
+      })
+      resolveSecond({
+        data: { items: [{ source_id: 'new', law_name: '새 법령', article: '제2조', text: '새 근거' }], grounding_status: 'OK', retryable: false },
+      })
+      await Promise.resolve()
+    })
+
+    expect(await screen.findByText('새 근거')).toBeInTheDocument()
+    expect(screen.queryByText('이전 근거')).not.toBeInTheDocument()
+  })
+
+  it('카테고리가 없는 조항으로 전환하면 이전 법령 근거를 비운다', async () => {
+    vi.mocked(api.getGrounding).mockResolvedValueOnce({
+      data: {
+        items: [{ source_id: 'old', law_name: '이전 법령', article: '제1조', text: '이전 근거' }],
+        grounding_status: 'OK',
+        retryable: false,
+      },
+    } as never)
+    const { rerender } = render(
+      <ClauseDetailScreen
+        clause={{ ...clause, categoryCode: 'LIABILITY' }}
+        reviewId="rev_suggestion"
+        onBack={vi.fn()}
+        onChatbot={vi.fn()}
+      />,
+    )
+    expect(await screen.findByText('이전 근거')).toBeInTheDocument()
+
+    rerender(
+      <ClauseDetailScreen
+        clause={{ ...clause, id: 'uc_rev_suggestion_2', article: '제2조', categoryCode: undefined }}
+        reviewId="rev_suggestion"
+        onBack={vi.fn()}
+        onChatbot={vi.fn()}
+      />,
+    )
+
+    expect(screen.queryByText('이전 근거')).not.toBeInTheDocument()
+    expect(api.getGrounding).toHaveBeenCalledTimes(1)
+  })
+
   it('계약서와 표준조항 본문을 동일한 제한 높이의 스크롤 영역으로 표시한다', () => {
     render(<ClauseDetailScreen clause={clause} reviewId="rev_suggestion" onBack={vi.fn()} onChatbot={vi.fn()} />)
 

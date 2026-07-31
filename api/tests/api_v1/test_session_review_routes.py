@@ -171,9 +171,7 @@ async def test_session_extend_resets_expiration_and_cookie(
         original_expires_at = created.json()["data"]["expires_at"]
 
         await asyncio.sleep(0.01)
-        extended = await owner.post(
-            f"/api/v1/review-sessions/{session_id}/extend"
-        )
+        extended = await owner.post(f"/api/v1/review-sessions/{session_id}/extend")
 
     assert extended.status_code == 200
     assert extended.json()["data"]["expires_at"] > original_expires_at
@@ -183,9 +181,7 @@ async def test_session_extend_resets_expiration_and_cookie(
         transport=transport,
         base_url="http://test",
     ) as other:
-        denied = await other.post(
-            f"/api/v1/review-sessions/{session_id}/extend"
-        )
+        denied = await other.post(f"/api/v1/review-sessions/{session_id}/extend")
     assert denied.status_code == 404
 
 
@@ -409,3 +405,61 @@ async def test_empty_document_and_inactive_type_cannot_start_review(
     assert empty_selection.status_code == 409
     assert inactive_selection.status_code == 422
     assert inactive_selection.json()["error"]["code"] == "UNSUPPORTED_CONTRACT_TYPE"
+
+
+async def test_delete_session_removes_record_file_and_cookie(tmp_path: Path) -> None:
+    """소유자가 업로드 세션을 삭제하면 원본·레코드·Cookie를 함께 폐기한다."""
+    app = create_test_app(tmp_path)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://test",
+    ) as owner:
+        created = await owner.post(
+            "/api/v1/review-sessions",
+            files={"file": ("contract.pdf", _pdf(), "application/pdf")},
+        )
+        session_id = created.json()["data"]["session_id"]
+        assert list(app.state.test_storage.list_keys())
+
+        deleted = await owner.delete(f"/api/v1/review-sessions/{session_id}")
+
+        assert deleted.status_code == 200
+        assert deleted.json()["data"] == {
+            "session_id": session_id,
+            "deleted": True,
+        }
+        assert "workshield_session=" in deleted.headers["set-cookie"]
+        assert "Max-Age=0" in deleted.headers["set-cookie"]
+        assert list(app.state.test_storage.list_keys()) == []
+        assert (
+            await owner.get(f"/api/v1/review-sessions/{session_id}")
+        ).status_code == 404
+
+
+async def test_delete_session_storage_failure_preserves_session(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app = create_test_app(tmp_path)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app, raise_app_exceptions=False),
+        base_url="http://test",
+    ) as owner:
+        created = await owner.post(
+            "/api/v1/review-sessions",
+            files={"file": ("contract.pdf", _pdf(), "application/pdf")},
+        )
+        session_id = created.json()["data"]["session_id"]
+        storage_keys = list(app.state.test_storage.list_keys())
+
+        def fail_delete(_storage_key: str) -> None:
+            raise OSError("storage is unavailable")
+
+        monkeypatch.setattr(app.state.test_storage, "delete", fail_delete)
+        failed = await owner.delete(f"/api/v1/review-sessions/{session_id}")
+
+        assert failed.status_code == 500
+        assert (
+            await owner.get(f"/api/v1/review-sessions/{session_id}")
+        ).status_code == 200
+        assert list(app.state.test_storage.list_keys()) == storage_keys

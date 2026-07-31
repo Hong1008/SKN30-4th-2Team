@@ -10,5 +10,5 @@
 - `src/workshield_infra/stacks/`: Access, Foundation, Service CDK stack
 - `tests/`: 외부 계정에 연결하지 않는 결정론적 단위·policy test
 
-설치와 운영 순서는 [설치 가이드](../docs/infra/getting-started.md)에서 시작한다.
+설치와 운영 순서는 [설치 가이드](../docs/architecture/infra/getting-started.md)에서 시작한다.
 AWS나 RunPod를 직접 호출하는 검증은 unit test에 포함하지 않는다.

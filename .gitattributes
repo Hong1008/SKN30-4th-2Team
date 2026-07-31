@@ -1,0 +1,6 @@
+# Linux targets execute these files directly; CRLF would turn `bash` into `bash\r`.
+*.sh text eol=lf
+
+# Keep deployment runner scripts stable across Windows checkouts as well.
+.github/workflows/*.yml text eol=lf
+.github/workflows/*.yaml text eol=lf

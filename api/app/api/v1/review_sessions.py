@@ -13,12 +13,16 @@ from app.core.common.responses import (
 )
 from app.core.db.dependencies import DbSessionDep
 from app.core.llm.mcp.dependencies import WorkShieldMCPRuntimeDep
-from app.core.security.cookies import set_session_access_cookie
+from app.core.security.cookies import (
+    clear_session_access_cookie,
+    set_session_access_cookie,
+)
 from app.core.storage.dependencies import FileStorageDep
 from app.domains.review_sessions.schemas import (
     ContractTypeCandidate,
     ContractTypeSelectionRequest,
     OutOfScopeConfirmationRequest,
+    ReviewSessionDeleteResponse,
     ReviewSessionResponse,
     UploadInfo,
 )
@@ -27,6 +31,7 @@ from app.domains.review_sessions.activity import extend_review_session
 from app.domains.review_sessions.service import (
     confirm_out_of_scope,
     create_review_session,
+    delete_review_session,
     select_contract_type,
 )
 
@@ -132,6 +137,27 @@ async def create_session(
 def get_session(request: Request, owned: OwnedReviewSessionDep):
     """Cookie 소유자에게만 세션 상태를 반환한다."""
     return success_response(request, _response(owned))
+
+
+@router.delete(
+    "/{session_id}",
+    response_model=ApiResponse[ReviewSessionDeleteResponse],
+)
+def delete_session(
+    request: Request,
+    response: Response,
+    owned: OwnedReviewSessionDep,
+    db_session: DbSessionDep,
+    storage: FileStorageDep,
+    settings: SettingsDep,
+):
+    """Cookie 소유자의 업로드 세션과 원본 파일을 폐기한다."""
+    deleted = delete_review_session(db_session, storage, owned)
+    clear_session_access_cookie(response, settings)
+    return success_response(
+        request,
+        ReviewSessionDeleteResponse(session_id=owned.id, deleted=deleted),
+    )
 
 
 @router.post(

@@ -37,6 +37,7 @@
     "states": [
       {"id": "READY", "screen": "S01", "description": "파일을 선택하고 업로드할 수 있는 초기 상태"},
       {"id": "UPLOADING", "screen": "S01", "description": "파일 업로드 중"},
+      {"id": "REUPLOAD_REQUIRED", "screen": "S01", "description": "빈 문서로 검토를 시작하지 않고 재업로드가 필요한 상태"},
       {"id": "ANALYZING_CONTRACT_TYPE", "screen": "S02", "description": "계약 유형 후보 분석 중"},
       {"id": "TYPE_SELECTION_REQUIRED", "screen": "S02", "description": "사용자의 계약 유형 선택이 필요함"},
       {"id": "OUT_OF_SCOPE_CONFIRMATION_REQUIRED", "screen": "S03", "description": "범위 외 계약의 계속 진행 재확인이 필요함"},
@@ -90,8 +91,8 @@
       {
         "from": "ANALYZING_CONTRACT_TYPE",
         "event": "empty_document_detected",
-        "to": "FAILED",
-        "action": "빈 문서·스캔본·손상 가능성 및 재업로드 방법 안내"
+        "to": "REUPLOAD_REQUIRED",
+        "action": "업로드 세션과 원본 파일을 즉시 폐기한 뒤 빈 문서·스캔본·손상 가능성 및 재업로드 방법 안내. 폐기 실패 시 세션을 보존하고 정리 재시도 제공"
       },
       {
         "from": "ANALYZING_CONTRACT_TYPE",

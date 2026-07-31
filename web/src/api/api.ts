@@ -1,4 +1,4 @@
-import { API_BASE_URL } from '../config'
+﻿import { API_BASE_URL } from '../config'
 import { client } from './client'
 import type {
   ApiResponse,
@@ -11,6 +11,7 @@ import type {
   ReviewCancelData,
   ReviewData,
   ReviewSessionData,
+  ReviewSessionDeleteData,
   SuggestionResponse,
   SelectionSource,
 } from '../types'
@@ -19,17 +20,63 @@ const idempotencyHeaders = (idempotencyKey: string): HeadersInit => ({
   'Idempotency-Key': idempotencyKey,
 })
 
+const UPLOAD_TIMEOUT_MS = 60_000
+const SESSION_DELETE_TIMEOUT_MS = 15_000
+
+async function clientWithTimeout<T>(
+  endpoint: string,
+  options: RequestInit,
+  timeoutMs: number,
+  externalSignal?: AbortSignal,
+): Promise<T> {
+  const controller = new AbortController()
+  let timedOut = false
+  const abortFromExternal = () => controller.abort(externalSignal?.reason)
+  if (externalSignal?.aborted) abortFromExternal()
+  else externalSignal?.addEventListener('abort', abortFromExternal, { once: true })
+  const timeoutId = globalThis.setTimeout(() => {
+    timedOut = true
+    controller.abort()
+  }, timeoutMs)
+  try {
+    return await client<T>(endpoint, { ...options, signal: controller.signal })
+  } catch (error) {
+    if (!timedOut) throw error
+    throw {
+      name: 'RequestTimeoutError',
+      status: 504,
+      userMessage: '서버 응답 시간이 초과되었습니다. 다시 시도해 주세요.',
+    }
+  } finally {
+    globalThis.clearTimeout(timeoutId)
+    externalSignal?.removeEventListener('abort', abortFromExternal)
+  }
+}
+
 export const api = {
   getMetadata: (): Promise<ApiResponse<MetadataData>> => client('/metadata'),
 
   uploadContract(file: File, signal?: AbortSignal): Promise<ApiResponse<ReviewSessionData>> {
     const formData = new FormData()
     formData.append('file', file)
-    return client('/review-sessions', { method: 'POST', body: formData, signal })
+    return clientWithTimeout(
+      '/review-sessions',
+      { method: 'POST', body: formData },
+      UPLOAD_TIMEOUT_MS,
+      signal,
+    )
   },
 
   getSession: (sessionId: string, signal?: AbortSignal): Promise<ApiResponse<ReviewSessionData>> =>
     client(`/review-sessions/${encodeURIComponent(sessionId)}`, { signal }),
+
+  deleteSession: (sessionId: string, signal?: AbortSignal): Promise<ApiResponse<ReviewSessionDeleteData>> =>
+    clientWithTimeout(
+      `/review-sessions/${encodeURIComponent(sessionId)}`,
+      { method: 'DELETE' },
+      SESSION_DELETE_TIMEOUT_MS,
+      signal,
+    ),
 
   extendSession: (sessionId: string): Promise<ApiResponse<ReviewSessionData>> =>
     client(`/review-sessions/${encodeURIComponent(sessionId)}/extend`, { method: 'POST' }),

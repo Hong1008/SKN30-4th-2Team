@@ -62,4 +62,20 @@ describe('표준조항 사용자 표시 변환', () => {
     })
     expect(result.category).toBe('납품 및 검수')
   })
+
+  it('표준 후보가 없는 NO_MATCH 조항도 목록 모델로 유지한다', () => {
+    const result = mapClauseResult({
+      user_clause_id: 'uc_review_3',
+      user_clause: '제2조 (용어의 정의)\n용어의 정의는 다음과 같다.',
+      deviation: { code: 'NO_MATCH', label: '표준조항 검색 후보 없음' },
+      match: { status: 'NO_CANDIDATE' },
+      explanation: '대응할 표준조항 후보를 찾지 못했습니다.',
+      toxic_patterns: [],
+    })
+
+    expect(result.article).toBe('제2조')
+    expect(result.status).toBe('NO_MATCH')
+    expect(result.matchStatus).toBe('NO_CANDIDATE')
+    expect(result.category).toBe('기타')
+  })
 })

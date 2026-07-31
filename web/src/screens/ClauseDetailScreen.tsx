@@ -32,29 +32,43 @@ export default function ClauseDetailScreen({ clause, reviewId, onBack, onChatbot
   const [suggestionPurpose, setSuggestionPurpose] = useState('책임과 의무 범위를 명확히 하는 협의 문구')
   const [suggestionInputs, setSuggestionInputs] = useState<Record<string, string>>({})
   const suggestionRequestKey = useRef<string | null>(null)
+  const groundingControllerRef = useRef<AbortController | null>(null)
 
   const loadGrounding = useCallback(() => {
-    if (!reviewId || !clause.categoryCode) return
-    setLoadingGrounding(true)
+    groundingControllerRef.current?.abort()
+    groundingControllerRef.current = null
+    setLegalBasis([])
+    setGroundingStatus('')
     setGroundingMessage('')
     setGroundingRetryable(false)
-    api.getGrounding(reviewId, clause.categoryCode).then(res => {
+    if (!reviewId || !clause.categoryCode) {
+      setLoadingGrounding(false)
+      return
+    }
+    const controller = new AbortController()
+    groundingControllerRef.current = controller
+    const { signal } = controller
+    setLoadingGrounding(true)
+    api.getGrounding(reviewId, clause.categoryCode, signal).then(res => {
+        if (signal?.aborted) return
         setLegalBasis(res.data.items)
         setGroundingStatus(res.data.grounding_status)
         setGroundingMessage(getSafeKoreanMessage(res.data.message) || '')
         setGroundingRetryable(res.data.retryable === true)
-        setLoadingGrounding(false)
       }).catch((error) => {
+        if (signal?.aborted || error?.name === 'AbortError') return
         setLegalBasis([])
         setGroundingStatus(error?.code || 'REQUEST_FAILED')
         setGroundingMessage(getErrorMessage(error, '관련 법령 근거를 불러오지 못했습니다.'))
         setGroundingRetryable(error?.retryable === true)
-        setLoadingGrounding(false)
+      }).finally(() => {
+        if (!signal?.aborted) setLoadingGrounding(false)
       })
   }, [reviewId, clause.categoryCode])
 
   useEffect(() => {
     loadGrounding()
+    return () => groundingControllerRef.current?.abort()
   }, [loadGrounding])
 
   const groundingPresentation = getStatusPresentation(metadata?.grounding_status_details, groundingStatus)
@@ -264,13 +278,13 @@ export default function ClauseDetailScreen({ clause, reviewId, onBack, onChatbot
             {loadingSuggestion ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronRight className="w-4 h-4" />}
           </button>
         )}
-        {metadata?.features.chat && <button
+        {/* {metadata?.features.chat && <button
           onClick={onChatbot}
           className="flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-medium text-slate-900 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/15"
         >
           <MessageSquare className="w-4 h-4" />
           이 조항에 대해 질문하기
-        </button>}
+        </button>} */}
       </div>
 
       {suggestionError && <p className="text-sm text-rose-600" role="alert">{suggestionError}</p>}

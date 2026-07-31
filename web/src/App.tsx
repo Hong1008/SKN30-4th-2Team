@@ -50,11 +50,22 @@ function ClauseRoute({ fallbackReviewId, selectedClause, onBack, onChatbot }: {
 }) {
   const { id, clauseId } = useParams()
   const reviewId = id ?? fallbackReviewId
-  const [clause, setClause] = useState<ClauseResult | null>(selectedClause?.id === clauseId ? selectedClause : null)
-  const [isLoading, setIsLoading] = useState(selectedClause?.id !== clauseId)
+  const selectedClauseForRoute = selectedClause?.id === clauseId ? selectedClause : null
+  const [clause, setClause] = useState<ClauseResult | null>(selectedClauseForRoute)
+  const [isLoading, setIsLoading] = useState(!selectedClauseForRoute)
 
   useEffect(() => {
-    if (!reviewId || clause) return
+    if (selectedClauseForRoute) {
+      setClause(selectedClauseForRoute)
+      setIsLoading(false)
+      return
+    }
+    setClause(null)
+    if (!reviewId) {
+      setIsLoading(false)
+      return
+    }
+    setIsLoading(true)
     const controller = new AbortController()
     api.getResults(reviewId, controller.signal)
       .then((response) => {
@@ -68,10 +79,10 @@ function ClauseRoute({ fallbackReviewId, selectedClause, onBack, onChatbot }: {
       .catch(() => setClause(null))
       .finally(() => setIsLoading(false))
     return () => controller.abort()
-  }, [reviewId, clauseId, clause])
+  }, [reviewId, clauseId, selectedClauseForRoute])
 
   if (!reviewId) return <Navigate to="/review" replace />
-  if (isLoading) return <p className="text-sm text-slate-500">조항 정보를 불러오고 있습니다.</p>
+  if (isLoading || clause?.id !== clauseId) return <p className="text-sm text-slate-500">조항 정보를 불러오고 있습니다.</p>
   if (!clause) return <Navigate to={`/review/${reviewId}/results`} replace />
   return <ClauseDetailScreen clause={clause} reviewId={reviewId} onBack={() => onBack(reviewId)} onChatbot={() => onChatbot(reviewId, clause)} />
 }
