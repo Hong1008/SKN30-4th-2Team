@@ -208,6 +208,7 @@ export interface ContractTypeMeta {
 export interface MetaCodeLabel {
   code: string;
   label: string;
+  description?: string | null;
 }
 
 export interface StatusPresentation extends MetaCodeLabel {
@@ -254,6 +255,9 @@ export interface MetadataData {
   result_code_details: MetaCodeLabel[];
   progress_stages: string[];
   progress_stage_details: MetaCodeLabel[];
+  chat_progress_stage_details: MetaCodeLabel[];
+  chat_question_category_details: MetaCodeLabel[];
+  chat_refusal_reason_details: MetaCodeLabel[];
   grounding_statuses: string[];
   grounding_status_details?: StatusPresentation[];
   chat_outcomes: string[];
@@ -309,12 +313,74 @@ export interface ChatResponse {
   answer: string | null;
   sources: ChatSource[];
   refused: boolean;
+  refusal_reason?: 'OUT_OF_SCOPE' | 'INSUFFICIENT_GROUNDING' | null;
   limitations: string[];
   tool_status: string;
   disclaimer: string;
   message?: string | null;
   retryable?: boolean | null;
   next_action?: string | null;
+  conversation_token?: string | null;
+  question_category?: string | null;
+}
+
+/** SSE 답변 준비 단계에서 현재 처리 중인 공개 답변 묶음 정보. */
+export interface ChatStreamSegment {
+  index: number;
+  total: number;
+}
+
+export interface ChatStreamProgressEvent {
+  sequence: number;
+  stage: string;
+  message: string;
+  question_category?: string | null;
+  context_used?: boolean;
+  segment?: ChatStreamSegment | null;
+}
+
+export interface ChatStreamDeltaEvent {
+  sequence: number;
+  text: string;
+  segment?: ChatStreamSegment | null;
+}
+
+export interface ChatStreamSegmentCompleteEvent {
+  sequence: number;
+  segment?: ChatStreamSegment | null;
+  sources: ChatSource[];
+}
+
+export interface ChatStreamContinuation {
+  next_segment_offset: number;
+  remaining_segments: number;
+}
+
+export interface ChatStreamCompletedEvent {
+  sequence: number;
+  response: ChatResponse;
+  continuation?: ChatStreamContinuation | null;
+}
+
+export interface ChatStreamFailedEvent {
+  sequence?: number;
+  error: {
+    code?: string;
+    message?: string;
+    retryable?: boolean;
+    next_action?: string | null;
+  };
+  partial_answer_available?: boolean;
+  continuation?: ChatStreamContinuation | null;
+  conversation_token?: string | null;
+}
+
+export interface ChatStreamHandlers {
+  onProgress?: (event: ChatStreamProgressEvent) => void;
+  onDelta?: (event: ChatStreamDeltaEvent) => void;
+  onSegmentComplete?: (event: ChatStreamSegmentCompleteEvent) => void;
+  onCompleted?: (event: ChatStreamCompletedEvent) => void;
+  onFailed?: (event: ChatStreamFailedEvent) => void;
 }
 
 export interface RequiredConfirmation {

@@ -30,6 +30,10 @@ class CategoryMetadata(BaseModel):
 class ToxicPatternMetadata(BaseModel):
     code: str = Field(description="독소/주의 패턴 코드")
     label: str = Field(description="독소/주의 패턴 표시명")
+    description: str | None = Field(
+        default=None,
+        description="주의 문구 유사 신호의 MCP 제공 설명. 검토 결과 상태의 설명과는 별개",
+    )
     category: str | None = Field(default=None, description="연관 카테고리 코드")
     example_count: int = Field(default=0, description="예시 문구 개수")
 
@@ -37,6 +41,7 @@ class ToxicPatternMetadata(BaseModel):
 class ResultCodeMetadata(BaseModel):
     code: str = Field(description="결과 코드")
     label: str = Field(description="결과 코드 표시명")
+    description: str = Field(description="결과 코드의 플랫폼 검토 기준 설명")
 
 
 class ProgressStageMetadata(BaseModel):
@@ -89,6 +94,15 @@ class MetadataResponse(BaseModel):
     progress_stages: list[str] = Field(description="검토 진행 단계 코드 목록")
     progress_stage_details: list[ProgressStageMetadata] = Field(
         description="검토 진행 단계 코드 및 화면 표시명 목록"
+    )
+    chat_progress_stage_details: list[ProgressStageMetadata] = Field(
+        description="채팅 답변 준비 단계 코드 및 화면 표시명 목록"
+    )
+    chat_question_category_details: list[MetadataCode] = Field(
+        description="채팅 질문 유형 코드 및 화면 표시명 목록"
+    )
+    chat_refusal_reason_details: list[MetadataCode] = Field(
+        description="채팅 답변 제한 사유 코드·표시명·안내 목록"
     )
     grounding_statuses: list[GroundingStatus] = Field(
         description="법령 근거 조회 상태 코드 목록"

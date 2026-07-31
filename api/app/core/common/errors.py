@@ -66,5 +66,9 @@ class ExternalServiceError(AppError):
     """MCP 또는 LLM 등 외부 서비스 처리 오류."""
 
 
+class ExternalServiceConfigurationError(AppError):
+    """외부 서비스의 인증·모델·요청 설정 오류."""
+
+
 class ExternalServiceTimeoutError(ExternalServiceError):
     """외부 서비스가 제한 시간 안에 응답하지 않은 오류."""

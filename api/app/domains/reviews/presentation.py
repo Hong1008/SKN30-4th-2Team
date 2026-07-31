@@ -17,6 +17,7 @@ from app.domains.reviews.schemas import (
     ReviewResultsSummary,
     ReviewResultStandardClause,
     MissingStandardClauseResponse,
+    MCPClauseReviewCandidate,
 )
 
 
@@ -31,6 +32,10 @@ CLAUSE_EXPLANATIONS = {
 MISSING_EXPLANATION = (
     "이 표준조항에 대응하는 내용을 계약서 전체에서 찾지 못해 "
     "포함 여부 확인이 필요합니다."
+)
+TOXIC_PATTERNS_DESCRIPTION = (
+    MCPClauseReviewCandidate.model_fields["toxic_patterns"].description
+    or "탐지된 주의 문구 목록"
 )
 
 
@@ -79,6 +84,7 @@ def present_review_results(
     """검증된 저장 스냅샷에서 문서화된 결과 응답을 계산한다."""
     normalized = NormalizedReviewResult.model_validate(review.result)
     category_labels, toxic_labels = _metadata_labels(metadata_cache)
+    review_toxic_labels = normalized.toxic_pattern_labels
     counts = Counter(item.deviation.value for item in normalized.clause_results)
     clause_results = [
         ReviewClauseResultResponse(
@@ -100,7 +106,10 @@ def present_review_results(
             toxic_patterns=[
                 CodeLabel(
                     code=code,
-                    label=toxic_labels.get(code, code),
+                    label=review_toxic_labels.get(
+                        code,
+                        toxic_labels.get(code, TOXIC_PATTERNS_DESCRIPTION),
+                    ),
                 )
                 for code in item.toxic_patterns
             ],

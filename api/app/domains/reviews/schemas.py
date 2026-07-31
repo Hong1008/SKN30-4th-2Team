@@ -160,6 +160,10 @@ class NormalizedReviewResult(_MCPPublicModel):
     missing_standard_clauses: list[MCPMissingStandardCandidate] = Field(
         description="누락된 표준조항 체크리스트 목록"
     )
+    toxic_pattern_labels: dict[str, str] = Field(
+        default_factory=dict,
+        description="검토 시점 MCP 주의 패턴 코드와 기존 표시 제목의 스냅샷",
+    )
     message: str | None = Field(default=None, description="결과 안내 메시지")
 
 

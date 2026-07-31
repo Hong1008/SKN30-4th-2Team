@@ -72,6 +72,40 @@ RESULT_CODE_LABELS = {
     "NO_MATCH": "표준조항 검색 후보 없음",
     "MISSING": "표준조항 누락 가능성",
 }
+RESULT_CODE_DESCRIPTIONS = {
+    "NONE": "표준조항 후보가 있다는 신호이며 안전성이나 적법성을 뜻하지 않습니다.",
+    "EXTRA": "비슷한 표준조항이 있더라도 충분한 대응으로 보기 어려워 추가 확인이 필요한 후보입니다.",
+    "NO_MATCH": "해당 사용자 조항의 표준조항 검색 후보를 찾지 못했다는 신호입니다.",
+    "MISSING": "계약서 전체에서 대응 내용을 찾지 못한 표준조항 후보로, 사용자 조항 결과와 구분됩니다.",
+}
+CHAT_PROGRESS_STAGE_LABELS = {
+    "UNDERSTANDING_REQUEST": "질문 범위 확인",
+    "PREPARING_EVIDENCE": "검토 근거 준비",
+    "COMPOSING_RESPONSE": "답변 작성",
+    "DELIVERING_RESPONSE": "답변과 출처 정리",
+}
+CHAT_QUESTION_CATEGORY_LABELS = {
+    "CONTRACT_CONTENT": "계약 내용과 표준조항 확인",
+    "REVIEW_ANALYSIS": "검토 결과와 기준 확인",
+    "REVIEW_STATUS_DEFINITION": "검토 상태 의미 설명",
+    "REVIEW_RESULT_LIST": "검토 대상 조항 목록",
+    "REVIEW_CLAUSE_COMPARISON": "조항별 표준조항 비교",
+    "REVIEW_PRIORITY": "수정 우선순위 확인",
+    "SIGNAL_SEARCH": "주의 문구 유사 조항 찾기",
+    "LEGAL_REFERENCE": "법령 참고자료 확인",
+    "SERVICE_POLICY": "서비스 운영 정책 안내",
+    "OUT_OF_SCOPE": "검토 자료 범위 밖 질문",
+}
+CHAT_REFUSAL_REASON_DETAILS = {
+    "OUT_OF_SCOPE": {
+        "label": "검토 자료 범위 밖 질문",
+        "description": "현재 질문은 계약 검토 결과·표준조항·법령 참고자료 범위를 벗어났습니다.",
+    },
+    "INSUFFICIENT_GROUNDING": {
+        "label": "검토 근거 부족",
+        "description": "현재 검토 결과에서 답변 근거를 찾지 못했습니다.",
+    },
+}
 
 
 def _items(payload: dict[str, Any], *keys: str) -> list[Any]:
@@ -180,6 +214,7 @@ def _toxic_patterns(values: list[Any]) -> list[ToxicPatternMetadata]:
                 continue
             label = code
             category = None
+            description = None
             example_count = 0
         elif isinstance(value, dict):
             code = _optional_text(
@@ -197,6 +232,7 @@ def _toxic_patterns(values: list[Any]) -> list[ToxicPatternMetadata]:
                 or code
             )
             category = _optional_text(value.get("category"))
+            description = _optional_text(value.get("description"))
             raw_example_count = value.get("example_count", 0)
             if (
                 not isinstance(raw_example_count, int)
@@ -214,6 +250,7 @@ def _toxic_patterns(values: list[Any]) -> list[ToxicPatternMetadata]:
             ToxicPatternMetadata(
                 code=code,
                 label=label,
+                description=description,
                 category=category,
                 example_count=example_count,
             )
@@ -298,14 +335,34 @@ async def get_metadata(
                 )
             ),
             result_codes=list(RESULT_CODE_LABELS),
-            result_code_details=[
-                ResultCodeMetadata(code=code, label=label)
-                for code, label in RESULT_CODE_LABELS.items()
-            ],
+        result_code_details=[
+            ResultCodeMetadata(
+                code=code,
+                label=label,
+                description=RESULT_CODE_DESCRIPTIONS[code],
+            )
+            for code, label in RESULT_CODE_LABELS.items()
+        ],
             progress_stages=PROGRESS_STAGES,
             progress_stage_details=[
                 ProgressStageMetadata(code=code, label=label)
                 for code, label in PROGRESS_STAGE_LABELS.items()
+            ],
+            chat_progress_stage_details=[
+                ProgressStageMetadata(code=code, label=label)
+                for code, label in CHAT_PROGRESS_STAGE_LABELS.items()
+            ],
+            chat_question_category_details=[
+                MetadataCode(code=code, label=label)
+                for code, label in CHAT_QUESTION_CATEGORY_LABELS.items()
+            ],
+            chat_refusal_reason_details=[
+                MetadataCode(
+                    code=code,
+                    label=detail["label"],
+                    description=detail["description"],
+                )
+                for code, detail in CHAT_REFUSAL_REASON_DETAILS.items()
             ],
             grounding_statuses=[
                 "OK",

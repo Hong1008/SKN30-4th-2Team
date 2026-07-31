@@ -78,15 +78,19 @@ def _register_openapi_schema(app: FastAPI) -> None:
                         )
                         parameter.setdefault("schema", {}).setdefault("maxLength", 128)
         # FastAPI는 ``responses.model``을 JSON 응답으로도 자동 문서화하지만,
-        # 이 엔드포인트의 실제 200 응답은 SSE뿐이다.
-        event_response = (
-            schema.get("paths", {})
-            .get("/api/v1/reviews/{review_id}/events", {})
-            .get("get", {})
-            .get("responses", {})
-            .get("200", {})
-        )
-        event_response.get("content", {}).pop("application/json", None)
+        # 아래 엔드포인트의 실제 200 응답은 SSE뿐이다.
+        for path, method in (
+            ("/api/v1/reviews/{review_id}/events", "get"),
+            ("/api/v1/reviews/{review_id}/chat/messages/stream", "post"),
+        ):
+            event_response = (
+                schema.get("paths", {})
+                .get(path, {})
+                .get(method, {})
+                .get("responses", {})
+                .get("200", {})
+            )
+            event_response.get("content", {}).pop("application/json", None)
         app.openapi_schema = schema
         return app.openapi_schema
 

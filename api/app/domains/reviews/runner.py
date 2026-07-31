@@ -60,6 +60,7 @@ def normalize_review_result(
     payload: dict[str, Any],
     *,
     review_id: str,
+    toxic_pattern_labels: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """실제 MCP 공개 DTO를 검증하고 API 소유 조항 ID를 결합한다."""
     try:
@@ -77,9 +78,46 @@ def normalize_review_result(
             for index, clause in enumerate(mcp_result.clause_results, start=1)
         ],
         missing_standard_clauses=mcp_result.missing_standard_clauses,
+        toxic_pattern_labels=toxic_pattern_labels or {},
         message=mcp_result.message,
     )
     return normalized.model_dump(mode="json")
+
+
+async def _toxic_pattern_label_snapshot(
+    runtime: WorkShieldMCPRuntime,
+    *,
+    timeout_seconds: float,
+) -> dict[str, str]:
+    """MCP가 이미 정의한 주의 신호 title만 검토 스냅샷에 보관한다."""
+    tool = next(
+        (
+            candidate
+            for candidate in runtime.tools
+            if candidate.name == "list_toxic_pattern_details"
+        ),
+        None,
+    )
+    if tool is None:
+        return {}
+    try:
+        payload = _tool_payload(
+            await asyncio.wait_for(tool.ainvoke({}), timeout=timeout_seconds)
+        )
+    except Exception:
+        return {}
+    patterns = payload.get("patterns")
+    if not isinstance(patterns, list):
+        return {}
+    return {
+        code: title
+        for item in patterns
+        if isinstance(item, dict)
+        and isinstance((code := item.get("pattern")), str)
+        and isinstance((title := item.get("title")), str)
+        and code
+        and title
+    }
 
 
 def _progress_message(
@@ -299,6 +337,10 @@ async def execute_review(
                     review_id=review_id,
                     database=database,
                 )
+                toxic_pattern_labels = await _toxic_pattern_label_snapshot(
+                    execution_runtime,
+                    timeout_seconds=settings.workshield_mcp_timeout,
+                )
         else:
             raw_result = await _invoke_review_tool(
                 runtime=runtime,
@@ -310,7 +352,15 @@ async def execute_review(
                 settings=settings,
                 review_id=review_id,
             )
-        result_payload = normalize_review_result(raw_result, review_id=review_id)
+            toxic_pattern_labels = await _toxic_pattern_label_snapshot(
+                runtime,
+                timeout_seconds=settings.workshield_mcp_timeout,
+            )
+        result_payload = normalize_review_result(
+            raw_result,
+            review_id=review_id,
+            toxic_pattern_labels=toxic_pattern_labels,
+        )
         status = _mcp_status(result_payload)
         error = None
         if status is not MCPReviewStatus.OK:

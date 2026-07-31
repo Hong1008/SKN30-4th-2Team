@@ -9,7 +9,11 @@ import pytest
 from fastapi import Body, FastAPI, Request
 from pydantic import BaseModel
 
-from app.core.common.errors import NotFoundError, OverCapacityError
+from app.core.common.errors import (
+    ExternalServiceConfigurationError,
+    NotFoundError,
+    OverCapacityError,
+)
 from app.core.common.exception_handlers import register_exception_handlers
 from app.core.common.request_id import register_request_id_middleware
 from app.core.common.responses import success_response
@@ -48,6 +52,14 @@ def create_contract_test_app() -> FastAPI:
             code="REVIEW_QUEUE_FULL",
             message="현재 검토 요청이 많습니다.",
             retry_after_seconds=30,
+        )
+
+    @test_app.get("/llm-configuration")
+    async def llm_configuration() -> None:
+        raise ExternalServiceConfigurationError(
+            code="LLM_AUTH_FAILED",
+            message="질문 분류 모델 설정을 확인해 주세요.",
+            details={"upstream_status": 401},
         )
 
     @test_app.post("/validation")
@@ -138,6 +150,25 @@ async def test_over_capacity_error_has_retry_headers() -> None:
     assert response.headers["Cache-Control"] == "no-store"
     assert response.json()["error"]["retryable"] is True
     assert response.json()["error"]["next_action"] == "RETRY_LATER"
+
+
+async def test_llm_configuration_error_is_not_reported_as_service_unavailable() -> None:
+    transport = httpx.ASGITransport(app=create_contract_test_app())
+    async with httpx.AsyncClient(
+        transport=transport,
+        base_url="http://test",
+    ) as client:
+        response = await client.get("/llm-configuration")
+
+    assert response.status_code == 500
+    assert response.json()["error"] == {
+        "code": "LLM_AUTH_FAILED",
+        "message": "질문 분류 모델 설정을 확인해 주세요.",
+        "field": None,
+        "retryable": False,
+        "next_action": None,
+        "details": {"upstream_status": 401},
+    }
 
 
 async def test_validation_error_does_not_echo_request_body() -> None:

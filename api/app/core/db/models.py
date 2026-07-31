@@ -128,3 +128,20 @@ class IdempotencyRecordRow(Base):
         DateTime(timezone=True),
         index=True,
     )
+
+
+class ChatContextRow(Base):
+    """대화 원문 없이 후속 질문 범위만 임시 보관한다."""
+
+    __tablename__ = "chat_contexts"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    session_id: Mapped[str] = mapped_column(
+        ForeignKey("review_sessions.id", ondelete="CASCADE"), index=True
+    )
+    review_id: Mapped[str] = mapped_column(
+        ForeignKey("reviews.id", ondelete="CASCADE"), index=True
+    )
+    state: Mapped[dict[str, Any]] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)

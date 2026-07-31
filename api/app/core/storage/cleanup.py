@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 
 from app.core.db.database import Database
 from app.core.idempotency.service import delete_expired_records
+from app.domains.chat.context_service import delete_expired_chat_contexts
 from app.domains.review_sessions.domain import ReviewSessionState
 from app.domains.review_sessions.repository import SqlAlchemyReviewSessionRepository
 from app.domains.reviews.domain import ReviewState
@@ -20,6 +21,7 @@ class CleanupResult:
     orphan_files: int
     deleted_tombstones: int = 0
     deleted_idempotency_records: int = 0
+    deleted_chat_contexts: int = 0
 
 
 class SessionFileLifecycle:
@@ -69,6 +71,7 @@ class SessionFileLifecycle:
         expired_count = 0
         tombstone_count = 0
         idempotency_count = 0
+        chat_context_count = 0
         storage_keys_to_delete: list[str] = []
 
         with self._database.session() as db_session:
@@ -93,6 +96,7 @@ class SessionFileLifecycle:
                     review_repository.save(review)
                 expired_count += 1
             idempotency_count = delete_expired_records(db_session, cleanup_time)
+            chat_context_count = delete_expired_chat_contexts(db_session, cleanup_time)
             tombstone_cutoff = cleanup_time - timedelta(
                 seconds=self._tombstone_ttl_seconds
             )
@@ -122,4 +126,5 @@ class SessionFileLifecycle:
             orphan_files=orphan_count,
             deleted_tombstones=tombstone_count,
             deleted_idempotency_records=idempotency_count,
+            deleted_chat_contexts=chat_context_count,
         )
