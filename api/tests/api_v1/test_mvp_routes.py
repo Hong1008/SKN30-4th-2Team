@@ -49,8 +49,8 @@ class FakeStructuredRunnable:
                 self._calls.get("router_completion", 0) + 1
             )
             return {
-                "raw": AIMessage(content="조항 질문"),
-                "parsed": self._schema(category="조항 질문"),
+                "raw": AIMessage(content="CONTRACT_CONTENT"),
+                "parsed": self._schema(category="CONTRACT_CONTENT"),
                 "parsing_error": None,
             }
         self._calls["suggestion_completion"] = (
@@ -79,7 +79,7 @@ class FakeChatModel:
         await asyncio.sleep(0.02)
         assert isinstance(prompt[-1], HumanMessage)
         if "질문 분류기" in str(prompt[-1].content):
-            return AIMessage(content="조항 질문")
+            return AIMessage(content="CONTRACT_CONTENT")
         return AIMessage(
             content="현재 검토 결과에서는 책임 범위를 추가로 확인할 수 있습니다."
         )
@@ -584,15 +584,30 @@ async def test_metadata_cache_and_etag(tmp_path: Path) -> None:
         {
             "code": "UNILATERAL_CHANGE",
             "label": "일방 변경",
+            "description": None,
             "category": "CHANGE",
             "example_count": 3,
         }
     ]
     assert first.json()["data"]["result_code_details"] == [
-        {"code": "NONE", "label": "표준 대응 후보 있음"},
-        {"code": "EXTRA", "label": "별도 확인 필요"},
-        {"code": "NO_MATCH", "label": "표준조항 검색 후보 없음"},
-        {"code": "MISSING", "label": "표준조항 누락 가능성"},
+        {"code": "NONE", "label": "표준 대응 후보 있음", "description": "표준조항 후보가 있다는 신호이며 안전성이나 적법성을 뜻하지 않습니다."},
+        {"code": "EXTRA", "label": "별도 확인 필요", "description": "비슷한 표준조항이 있더라도 충분한 대응으로 보기 어려워 추가 확인이 필요한 후보입니다."},
+        {"code": "NO_MATCH", "label": "표준조항 검색 후보 없음", "description": "해당 사용자 조항의 표준조항 검색 후보를 찾지 못했다는 신호입니다."},
+        {"code": "MISSING", "label": "표준조항 누락 가능성", "description": "계약서 전체에서 대응 내용을 찾지 못한 표준조항 후보로, 사용자 조항 결과와 구분됩니다."},
+    ]
+    assert first.json()["data"]["chat_refusal_reason_details"] == [
+        {
+            "code": "OUT_OF_SCOPE",
+            "label": "검토 자료 범위 밖 질문",
+            "description": "현재 질문은 계약 검토 결과·표준조항·법령 참고자료 범위를 벗어났습니다.",
+            "enabled_for_mvp": None,
+        },
+        {
+            "code": "INSUFFICIENT_GROUNDING",
+            "label": "검토 근거 부족",
+            "description": "현재 검토 결과에서 답변 근거를 찾지 못했습니다.",
+            "enabled_for_mvp": None,
+        },
     ]
     assert first.json()["data"]["progress_stage_details"] == [
         {"code": "PREPARE", "label": "검토 준비"},

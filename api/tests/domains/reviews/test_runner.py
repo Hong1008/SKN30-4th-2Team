@@ -260,7 +260,11 @@ async def test_progress_retries_once_after_ordinary_touch_cas_conflict(
 
 
 def test_normalize_review_result_validates_real_mcp_dto_and_assigns_ids() -> None:
-    result = normalize_review_result(_valid_result(), review_id="rev_01")
+    result = normalize_review_result(
+        _valid_result(),
+        review_id="rev_01",
+        toxic_pattern_labels={"UNFAIR_DAMAGE_CLAIM": "과도한 손해배상 표현"},
+    )
 
     assert result["clause_results"][0] == {
         "user_clause_id": "uc_rev_01_1",
@@ -285,6 +289,9 @@ def test_normalize_review_result_validates_real_mcp_dto_and_assigns_ids() -> Non
         {"standard": {**_standard_clause(), "clause_id": "std_2"}}
     ]
     assert "toxic_patterns" not in result
+    assert result["toxic_pattern_labels"] == {
+        "UNFAIR_DAMAGE_CLAIM": "과도한 손해배상 표현"
+    }
 
 
 @pytest.mark.parametrize(

@@ -1,9 +1,15 @@
 ﻿import { API_BASE_URL } from '../config'
-import { client } from './client'
+import { ApiError, ApiResponseFormatError, client } from './client'
 import type {
   ApiResponse,
   ChatHistoryMessage,
   ChatResponse,
+  ChatStreamCompletedEvent,
+  ChatStreamDeltaEvent,
+  ChatStreamFailedEvent,
+  ChatStreamHandlers,
+  ChatStreamProgressEvent,
+  ChatStreamSegmentCompleteEvent,
   GroundingData,
   MetadataData,
   ResultsData,
@@ -22,6 +28,67 @@ const idempotencyHeaders = (idempotencyKey: string): HeadersInit => ({
 
 const UPLOAD_TIMEOUT_MS = 60_000
 const SESSION_DELETE_TIMEOUT_MS = 15_000
+
+class ChatStreamError extends Error {
+  readonly retryable: boolean
+  readonly nextAction?: string | null
+  readonly userMessage?: string
+  readonly continuation?: ChatStreamFailedEvent['continuation']
+  readonly conversationToken?: string | null
+
+  constructor(event: ChatStreamFailedEvent) {
+    super('답변 스트림이 중단되었습니다.')
+    this.name = 'ChatStreamError'
+    this.retryable = event.error.retryable === true
+    this.nextAction = event.error.next_action
+    const message = event.error.message?.trim()
+    this.userMessage = message && /[가-힣]/.test(message) ? message : undefined
+    this.continuation = event.continuation
+    this.conversationToken = event.conversation_token
+  }
+}
+
+function readSseEvent(eventName: string, data: string, handlers: ChatStreamHandlers): ChatResponse | undefined {
+  let payload: unknown
+  try {
+    payload = JSON.parse(data)
+  } catch {
+    throw new ApiResponseFormatError()
+  }
+  if (!payload || typeof payload !== 'object') throw new ApiResponseFormatError()
+
+  switch (eventName) {
+    case 'progress':
+      handlers.onProgress?.(payload as ChatStreamProgressEvent)
+      return undefined
+    case 'delta':
+      handlers.onDelta?.(payload as ChatStreamDeltaEvent)
+      return undefined
+    case 'segment_complete':
+      handlers.onSegmentComplete?.(payload as ChatStreamSegmentCompleteEvent)
+      return undefined
+    case 'completed': {
+      const completed = payload as ChatStreamCompletedEvent
+      const response = completed.response
+      if (!response || typeof response !== 'object') throw new ApiResponseFormatError()
+      handlers.onCompleted?.(completed)
+      return response
+    }
+    case 'failed':
+      handlers.onFailed?.(payload as ChatStreamFailedEvent)
+      throw new ChatStreamError(payload as ChatStreamFailedEvent)
+    default:
+      return undefined
+  }
+}
+
+async function readStreamError(response: Response): Promise<ApiError> {
+  const contentType = response.headers.get('content-type') ?? ''
+  const payload: unknown = contentType.includes('application/json')
+    ? await response.json().catch(() => ({}))
+    : await response.text().catch(() => '')
+  return new ApiError(response.status, payload, response.headers)
+}
 
 async function clientWithTimeout<T>(
   endpoint: string,
@@ -141,6 +208,7 @@ export const api = {
     idempotencyKey: string,
     focusClauseId?: string,
     history: ChatHistoryMessage[] = [],
+    conversationToken?: string,
   ): Promise<ApiResponse<ChatResponse>> {
     return client(`/reviews/${encodeURIComponent(reviewId)}/chat/messages`, {
       method: 'POST',
@@ -149,8 +217,79 @@ export const api = {
         message,
         focus_clause_id: focusClauseId ?? null,
         history: history.slice(-2),
+        conversation_token: conversationToken ?? null,
       }),
     })
+  },
+
+  async chatStream(
+    reviewId: string,
+    message: string,
+    idempotencyKey: string,
+    handlers: ChatStreamHandlers,
+    focusClauseId?: string,
+    history: ChatHistoryMessage[] = [],
+    conversationToken?: string,
+  ): Promise<ChatResponse> {
+    const body = JSON.stringify({
+      message,
+      focus_clause_id: focusClauseId ?? null,
+      history: history.slice(-2),
+      conversation_token: conversationToken ?? null,
+    })
+    let response: Response
+    try {
+      response = await fetch(`${API_BASE_URL}/reviews/${encodeURIComponent(reviewId)}/chat/messages/stream`, {
+        method: 'POST',
+        headers: {
+          ...idempotencyHeaders(idempotencyKey),
+          'Content-Type': 'application/json',
+        },
+        body,
+        credentials: 'include',
+      })
+    } catch {
+      // SSE 연결 자체가 시작되지 않은 경우에만 기존 JSON 경로로 안전하게 대체한다.
+      const fallback = await api.chat(reviewId, message, idempotencyKey, focusClauseId, history, conversationToken)
+      return fallback.data
+    }
+
+    if (!response.ok) throw await readStreamError(response)
+    if (!response.headers.get('content-type')?.includes('text/event-stream') || !response.body) {
+      throw new ApiResponseFormatError()
+    }
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    let completedResponse: ChatResponse | undefined
+
+    const consumeFrame = (frame: string) => {
+      const lines = frame.split('\n')
+      const eventName = lines.find(line => line.startsWith('event:'))?.slice('event:'.length).trim()
+      const data = lines
+        .filter(line => line.startsWith('data:'))
+        .map(line => line.slice('data:'.length).trimStart())
+        .join('\n')
+      if (!eventName || !data) return
+      const responseFromEvent = readSseEvent(eventName, data, handlers)
+      if (responseFromEvent) completedResponse = responseFromEvent
+    }
+
+    while (true) {
+      const { done, value } = await reader.read()
+      buffer += decoder.decode(value, { stream: !done }).replace(/\r\n?/g, '\n')
+      let boundary = buffer.indexOf('\n\n')
+      while (boundary >= 0) {
+        consumeFrame(buffer.slice(0, boundary))
+        buffer = buffer.slice(boundary + 2)
+        boundary = buffer.indexOf('\n\n')
+      }
+      if (done) break
+    }
+    if (buffer.trim()) consumeFrame(buffer)
+    if (!completedResponse) throw new ApiResponseFormatError()
+    return completedResponse
   },
 
   suggestions(

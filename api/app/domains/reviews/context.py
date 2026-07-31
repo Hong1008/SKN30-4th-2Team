@@ -8,6 +8,9 @@ from typing import Any
 ARTICLE_HEADING_PATTERN = re.compile(
     r"제\s*(\d+)\s*조(?:\s*[（(]\s*([^）)\n]+)\s*[）)])?"
 )
+# 사용자는 `제1조`뿐 아니라 `1조`, `조항 1`처럼 조문을 가리킨다.
+# 두 캡처 그룹 중 채워진 번호를 referenced_article_numbers에서 사용한다.
+ARTICLE_REFERENCE_PATTERN = re.compile(r"(?:제\s*)?(\d+)\s*조|조항\s*(\d+)")
 STANDARD_CONTRACT_LABELS = {
     "SW_FREELANCE": "SW 프리랜서 용역 표준계약서",
     "SI_SUBCONTRACT": "SI 하도급 표준계약서",
@@ -35,6 +38,21 @@ def clause_display_label(text: object, title: object = None) -> str | None:
     if isinstance(title, str) and title.strip():
         return title.strip()
     return None
+
+
+def clause_article_number(item: dict[str, Any]) -> str | None:
+    """사용자 조항에서 조문 번호를 추출한다."""
+    text = item.get("user_clause")
+    match = ARTICLE_HEADING_PATTERN.search(text) if isinstance(text, str) else None
+    return match.group(1) if match else None
+
+
+def referenced_article_numbers(message: str) -> set[str]:
+    """질문에 명시된 조문 번호를 근거 선택에만 사용한다."""
+    return {
+        next(group for group in match.groups() if group is not None)
+        for match in ARTICLE_REFERENCE_PATTERN.finditer(message)
+    }
 
 
 def clause_results(result: dict[str, Any] | None) -> list[dict[str, Any]]:

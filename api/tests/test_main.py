@@ -53,6 +53,11 @@ def test_openapi_describes_common_idempotency_and_review_progress_contracts() ->
     ]["responses"]["200"]
     assert set(event_response["content"]) == {"text/event-stream"}
 
+    chat_stream_response = schema["paths"][
+        "/api/v1/reviews/{review_id}/chat/messages/stream"
+    ]["post"]["responses"]["200"]
+    assert set(chat_stream_response["content"]) == {"text/event-stream"}
+
 
 def test_production_can_disable_debug_and_openapi(
     monkeypatch: pytest.MonkeyPatch,
