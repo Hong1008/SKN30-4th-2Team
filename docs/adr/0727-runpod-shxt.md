@@ -3,6 +3,8 @@
 - 상태: Accepted
 - 결정일: 2026-07-27
 - 관련 문서: [0724 LLM 리스크 관리](0724-llm-risk.md), [0725 Ollama Qwen3.5 4B 검증](0725-ollama-qwen35-4b-validation.md)
+- 현행 상태: Superseded. 운영 답변 모델은 [0728 vLLM provider](0728-vllm-production-provider.md),
+  질문 분류 역할은 [0730 질문 분류](0730-langgraph-chat-prompt-routing.md)를 따른다.
 
 ## 1. 배경
 

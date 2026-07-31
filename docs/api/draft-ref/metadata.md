@@ -29,12 +29,6 @@
         "label": "SM 하도급",
         "description": "SM 운영·유지보수 하도급 계약 비교 기준입니다.",
         "enabled_for_mvp": true
-      },
-      {
-        "code": "SW_EMPLOYMENT",
-        "label": "SW 근로계약",
-        "description": "MCP가 지원하지만 현재 제품 MVP 선택 목록에서는 비활성화합니다.",
-        "enabled_for_mvp": false
       }
     ],
     "categories": [],
@@ -183,4 +177,3 @@ CONTACT_SUPPORT
 ```
 
 ---
-

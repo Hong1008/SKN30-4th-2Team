@@ -138,8 +138,8 @@
 <text x="1374" y="1540" font-family="Apple SD Gothic Neo, sans-serif" font-size="19" fill="#1f2937">외부 LLM 자동 폴백 금지</text>
 <line x1="100" y1="1556" x2="1900" y2="1556" stroke="#c4c9d0" stroke-width="1.2"/>
 <text x="275" y="1588" text-anchor="middle" font-family="Apple SD Gothic Neo, sans-serif" font-size="20" font-weight="700" fill="#111827">외부 LLM</text>
-<text x="474" y="1588" font-family="Apple SD Gothic Neo, sans-serif" font-size="19" fill="#1f2937">MVP 미사용, 향후 고지·동의 후에만 전송</text>
-<text x="1374" y="1588" font-family="Apple SD Gothic Neo, sans-serif" font-size="19" fill="#1f2937">동의 거부 시 전송 금지</text>
+<text x="474" y="1588" font-family="Apple SD Gothic Neo, sans-serif" font-size="19" fill="#1f2937">OpenAI 질문 분류만 사용, 답변은 로컬 모델 생성</text>
+<text x="1374" y="1588" font-family="Apple SD Gothic Neo, sans-serif" font-size="19" fill="#1f2937">계약서·조항·대화 이력 전송 금지</text>
 <line x1="100" y1="1604" x2="1900" y2="1604" stroke="#c4c9d0" stroke-width="1.2"/>
 <text x="275" y="1636" text-anchor="middle" font-family="Apple SD Gothic Neo, sans-serif" font-size="20" font-weight="700" fill="#111827">자원·취소</text>
 <text x="474" y="1636" font-family="Apple SD Gothic Neo, sans-serif" font-size="19" fill="#1f2937">10MB·업로드 2·단일 worker·대기열 5 제한</text>

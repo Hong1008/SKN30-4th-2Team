@@ -5,6 +5,8 @@
 - 대상 브랜치: `feat/mvp-api`
 - provider: `gemini`
 - 검증 모델: `gemma-4-31b-it`
+- 현행 상태: Historical evaluation only. Gemini는 현행 질문 분류 또는 답변 생성
+  provider가 아니며, 현행 역할은 `0730-langgraph-chat-prompt-routing.md`를 따른다.
 - 관련 ADR:
   - `0724-llm-risk.md`
   - `0724-mvp-api-completion.md`
