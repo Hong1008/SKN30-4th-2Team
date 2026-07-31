@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ResultsScreen from './ResultsScreen'
 import { api } from '../api/api'
 
-vi.mock('../api/api', () => ({ api: { getResults: vi.fn(), deleteReview: vi.fn() } }))
+vi.mock('../api/api', () => ({ api: { getResults: vi.fn() } }))
 vi.mock('../contexts/MetadataContext', () => ({ useMetadata: () => ({ metadata: { categories: [], result_code_details: [], features: {} } }) }))
 
 describe('결과 화면 상태 이동', () => {
