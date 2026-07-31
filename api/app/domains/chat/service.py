@@ -74,17 +74,18 @@ ROUTER_PROMPT = """계약 검토 질문 분류기입니다. 아래 라벨 하나
 "과업범위 카테고리를 설명해줘" → 조항 카테고리 질문
 "관련 법령과 조문은?" → 조항 법령 근거 질문
 "오늘 날씨는?" → 선정 불가
-이전 대화: {history}
 질문: {question}"""
 BASE_PROMPT = """제공된 문서만 사용하는 계약 검토 답변 어시스턴트입니다.
-규칙: 문서 밖의 사실을 추측하지 마세요. 답이 없으면 \"문서에서 관련 정보를 찾을 수 없습니다.\"만 출력하세요. 상태·카테고리는 라벨로 표시하세요. 위법·적법 등 법률 판단을 하지 마세요. 문서명·조문이 있으면 표시하세요. 한국어로 간결하게 답하세요.
+규칙: 문서 밖의 사실을 추측하지 마세요. 답이 없으면 \"문서에서 관련 정보를 찾을 수 없습니다.\"만 출력하세요. 상태·카테고리는 라벨로 표시하세요. 위법·적법 등 법률 판단을 하지 마세요. 조문이 있으면 표시하세요. 한국어로 간결하게 답하세요.
 질문 유형: {category}
 유형 지침: {instruction}
 <검색된 문서>:
 {context}
 
 사용자 질문:
-{question}"""
+{question}
+이전 대화: {history}
+"""
 CATEGORY_PROMPTS = {
     QuestionCategory.CLAUSE: "질문과 선택 조항만 설명하고 다른 조항을 임의로 고르지 마세요.",
     QuestionCategory.REVIEW_RESULT: "개별 조항 하나로 결론 내리지 말고 조항 검토와 누락 후보를 구분해 요약하세요.",
@@ -171,6 +172,8 @@ async def _classify_question(
             next_action="RETRY",
         ) from error
     except Exception as error:
+        import traceback
+        traceback.print_exc()
         raise ExternalServiceError(
             code="LLM_OUTPUT_INVALID",
             message="질문 유형을 분류하지 못했습니다.",
@@ -275,11 +278,7 @@ async def _context(
                 "title",
             )
         )
-    history = " / ".join(
-        f"{item.get('role', '')}: {' '.join(item.get('content', '').split())[:40]}"
-        for item in payload.history
-    )
-    sections = [f"대화 기록: {history}"] if history else []
+    sections: list[str] = []
     sections.append(
         "조항 검토: "
         + "; ".join(
@@ -374,16 +373,13 @@ async def answer_review_question(
         )
 
     async def classify(_state: GraphState) -> GraphState:
-        history = " / ".join(
-            str(item.get("content", ""))[:40] for item in payload.history
-        )
         started_at = perf_counter()
         category = None
         state = "failed"
         try:
             category = await _classify_question(
                 router_model,
-                ROUTER_PROMPT.format(history=history, question=payload.message[:80]),
+                ROUTER_PROMPT.format(question=payload.message[:80]),
                 min(settings.router_llm_timeout_seconds, llm_policy.timeout_seconds),
             )
             state = "parsed" if category else "invalid"
@@ -413,11 +409,16 @@ async def answer_review_question(
     async def answer(state: GraphState) -> GraphState:
         category = state["category"]
         assert category is not None
+        history = " / ".join(
+            f"{item.get('role', '')}: {' '.join(item.get('content', '').split())[:40]}"
+            for item in payload.history
+        )
         prompt = BASE_PROMPT.format(
             category=category,
             instruction=CATEGORY_PROMPTS[category],
             context=state["context"],
             question=payload.message[:80],
+            history=history,
         )
         text = (await _invoke(model, prompt, llm_policy.timeout_seconds))[:400]
         for code, label in {**RESULT_CODE_LABELS, **state["labels"]}.items():
