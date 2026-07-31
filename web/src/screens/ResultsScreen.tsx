@@ -1,6 +1,5 @@
-import { createClientId } from '../utils/clientId'
-import { useState, useEffect, useRef } from 'react'
-import { Search, SlidersHorizontal, MessageSquare, ChevronRight, RotateCcw, ChevronDown, ChevronUp, AlertTriangle, CheckSquare, Trash2, Loader2 } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Search, SlidersHorizontal, MessageSquare, ChevronRight, RotateCcw, ChevronDown, ChevronUp, AlertTriangle, CheckSquare } from 'lucide-react'
 import Badge from '../components/Badge'
 import type { ResultCode, ClauseResult, ResultsData } from '../types'
 import { api } from '../api/api'
@@ -65,11 +64,6 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot, onRe
   const [errorMessage, setErrorMessage] = useState('')
   const [resultsData, setResultsData] = useState<ResultsData | null>(null)
   const [clauses, setClauses] = useState<ClauseResult[]>([])
-  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false)
-  const [isDiscarding, setIsDiscarding] = useState(false)
-  const [discardError, setDiscardError] = useState('')
-  const discardRequestKey = useRef<string | null>(null)
-
   useEffect(() => {
     let isSubscribed = true
     const controller = new AbortController()
@@ -123,33 +117,6 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot, onRe
 
   const resetFilters = () => { setFilterStatus('all'); setFilterCategory('전체'); setSearch('') }
   const hasFilter = filterStatus !== 'all' || filterCategory !== '전체' || search !== ''
-
-  const discardReview = async () => {
-    if (!reviewId || isDiscarding) return
-    setIsDiscarding(true)
-    setDiscardError('')
-    try {
-      const key = discardRequestKey.current ?? createClientId()
-      discardRequestKey.current = key
-      await api.deleteReview(reviewId, key)
-      discardRequestKey.current = null
-      localStorage.removeItem(SESSION_ID_KEY)
-      localStorage.removeItem(REVIEW_ID_KEY)
-      sessionStorage.removeItem(getChatHistoryStorageKey(reviewId))
-      window.location.assign('/review')
-    } catch (error: any) {
-      if (error?.status === 404 || error?.status === 410) {
-        localStorage.removeItem(SESSION_ID_KEY)
-        localStorage.removeItem(REVIEW_ID_KEY)
-        sessionStorage.removeItem(getChatHistoryStorageKey(reviewId))
-        window.location.assign('/review')
-        return
-      }
-      setDiscardError(getErrorMessage(error, '검토 결과를 폐기하지 못했습니다. 다시 시도해 주세요.'))
-    } finally {
-      setIsDiscarding(false)
-    }
-  }
 
   if (isLoading) {
     return (
@@ -263,19 +230,6 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot, onRe
             <MessageSquare className="size-4" aria-hidden="true" />
             결과 기반 질의응답
           </button>}
-          {metadata?.features.server_side_cancel && (
-            <button
-              type="button"
-              onClick={() => {
-                setDiscardError('')
-                setShowDiscardConfirm(true)
-              }}
-              className="inline-flex h-10 items-center gap-2 rounded-full border border-rose-200 px-4 text-sm font-medium text-rose-700 hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-rose-500/15"
-            >
-              <Trash2 className="size-4" />
-              검토 결과 폐기
-            </button>
-          )}
         </div>
       </div>
 
@@ -576,35 +530,6 @@ export default function ResultsScreen({ reviewId, onClauseClick, onChatbot, onRe
           </div>
         </div>}
       </section>
-      {showDiscardConfirm && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-4" role="dialog" aria-modal="true" aria-labelledby="discard-title">
-          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
-            <h2 id="discard-title" className="text-lg font-bold text-slate-950">검토 결과를 폐기할까요?</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-600">
-              검토 결과와 임시 계약서 파일이 삭제되며 되돌릴 수 없습니다.
-            </p>
-            {discardError && <p className="mt-3 text-sm text-rose-600" role="alert">{discardError}</p>}
-            <div className="mt-6 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setShowDiscardConfirm(false)}
-                disabled={isDiscarding}
-                className="min-h-10 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/15 disabled:opacity-50"
-              >
-                취소
-              </button>
-              <button
-                type="button"
-                onClick={discardReview}
-                disabled={isDiscarding}
-                className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-rose-500/20 disabled:opacity-50"
-              >
-                {isDiscarding && <Loader2 className="size-4 animate-spin" />}
-                {isDiscarding ? '폐기 중' : '폐기'}
-              </button>
-            </div>
-          </div>
-        </div>)}
     </div>
   )
 }

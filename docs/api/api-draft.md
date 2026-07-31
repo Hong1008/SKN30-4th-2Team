@@ -56,6 +56,7 @@
 | 메타데이터 | GET | `/api/v1/metadata` | 공통 코드·표시명·파일 정책 | MVP |
 | 검토 세션 | POST | `/api/v1/review-sessions` | 파일 업로드·범위 판별 | MVP |
 | 검토 세션 | GET | `/api/v1/review-sessions/{session_id}` | 세션 상태 복구 | MVP |
+| 검토 세션 | DELETE | `/api/v1/review-sessions/{session_id}` | 업로드 세션·원본 파일 폐기 | MVP |
 | 검토 세션 | POST | `/api/v1/review-sessions/{session_id}/extend` | 세션·현재 review·Cookie 만료를 현재부터 30분으로 재설정 | MVP |
 | 검토 세션 | PATCH | `/api/v1/review-sessions/{session_id}/contract-type` | 계약 유형 확정 | MVP |
 | 검토 세션 | POST | `/api/v1/review-sessions/{session_id}/out-of-scope-confirmation` | 범위 외 계속 진행 확인 | MVP |

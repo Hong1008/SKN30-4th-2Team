@@ -9,6 +9,7 @@ WorkShield의 익명 세션 접근 토큰은 세션 생성 응답의 본문이 �
 
 - `POST /api/v1/review-sessions`
 - `GET /api/v1/review-sessions/{session_id}`
+- `DELETE /api/v1/review-sessions/{session_id}`
 - `PATCH /api/v1/review-sessions/{session_id}/contract-type`
 - `POST /api/v1/review-sessions/{session_id}/out-of-scope-confirmation`
 - `POST /api/v1/reviews`
@@ -82,6 +83,10 @@ SSE의 `data`에는 `review_id`, `sequence`, `review_state`, `stage`,
 `EMPTY_DOCUMENT`는 업로드 파일 손상과 다르다. 파일 구조 검증은
 통과했지만 MCP가 검토 가능한 조항을 추출하지 못한 상태이므로
 `allowed_actions=["REUPLOAD"]`, `can_start_review=false`로 처리한다.
+프론트는 이 응답의 세션을 `DELETE /api/v1/review-sessions/{session_id}`로
+즉시 정리한다. 정리 실패 시 세션과 파일 표시를 보존해 사용자가 다시 제거할
+수 있게 한다. 업로드 요청은 60초, 세션 삭제 요청은 15초 안에 응답하지 않으면
+취소하고 재시도 안내를 표시한다.
 
 ```ts
 await fetch(`${API_BASE_URL}/api/v1/review-sessions/${sessionId}`, {

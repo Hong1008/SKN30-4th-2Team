@@ -157,6 +157,49 @@ just --version
 - [just 설치](https://just.systems/man/en/packages.html)
 - [RunPod CLI 설치](https://docs.runpod.io/runpodctl/overview)
 
+### 2.4. Native Windows Git Bash 인코딩 및 가상환경 충돌 해결
+
+Native Windows의 Git Bash에서 `infra-github-configure`를 실행할 때 Python이
+GitHub CLI 출력을 Windows 기본 인코딩인 `cp949`로 읽으면 다음과 같은 오류가
+발생할 수 있습니다.
+
+```text
+UnicodeDecodeError: 'cp949' codec can't decode byte 0xe2
+```
+
+이 오류는 GitHub 인증 실패가 아니라 Python과 GitHub CLI 출력 간의 인코딩
+불일치입니다. Git Bash에서 UTF-8 모드를 활성화한 후 명령을 다시 실행합니다.
+
+```bash
+export PYTHONUTF8=1
+export PYTHONIOENCODING=utf-8
+
+just infra-github-configure workshield-session production prod
+```
+
+다음 경고가 함께 표시된다면 MCP 가상환경이 활성화된 상태에서 인프라 프로젝트를
+실행한 것입니다.
+
+```text
+VIRTUAL_ENV=mcp/.venv does not match the project environment path infra/.venv
+```
+
+현재 가상환경을 비활성화하고 남아 있는 `VIRTUAL_ENV`를 제거한 뒤 UTF-8 설정과
+명령을 다시 적용합니다.
+
+```bash
+deactivate 2>/dev/null || true
+unset VIRTUAL_ENV
+
+export PYTHONUTF8=1
+export PYTHONIOENCODING=utf-8
+
+just infra-github-configure workshield-session production prod
+```
+
+`infra-github-configure`는 GitHub Environment 설정을 현재 인프라 출력에 맞추는
+작업이므로 인코딩 문제를 해결한 후 동일 명령을 다시 실행할 수 있습니다.
+
 ## 3. AWS 인증
 
 ### IAM Identity Center SSO

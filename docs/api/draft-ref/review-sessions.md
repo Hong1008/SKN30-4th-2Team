@@ -82,7 +82,24 @@ file_content + file_name
 
 이 상태에서는 `POST /reviews`를 허용하지 않는다.
 
-## 5.4 업로드 오류
+## 5.4 `DELETE /api/v1/review-sessions/{session_id}`
+
+Cookie 소유자의 업로드 세션과 원본 파일을 함께 폐기한다. 원본 파일 삭제가
+실패하면 세션 레코드를 유지해 재시도할 수 있게 한다. 성공 시 접근 Cookie를
+제거한다.
+
+성공 `200`:
+
+```json
+{
+  "data": {
+    "session_id": "ses_01J...",
+    "deleted": true
+  }
+}
+```
+
+## 5.5 업로드 오류
 
 | 오류 코드 | HTTP |
 |---|---:|
@@ -155,4 +172,3 @@ file_content + file_name
 `selected_contract_type`이 없으면 확인 후에도 `can_start_review=false`이다.
 
 ---
-

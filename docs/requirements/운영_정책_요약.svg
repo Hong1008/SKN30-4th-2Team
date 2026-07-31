@@ -22,8 +22,8 @@
 <text x="1374" y="300" font-family="Apple SD Gothic Neo, sans-serif" font-size="19" fill="#1f2937">자동 진행 금지</text>
 <line x1="100" y1="316" x2="1900" y2="316" stroke="#c4c9d0" stroke-width="1.2"/>
 <text x="275" y="348" text-anchor="middle" font-family="Apple SD Gothic Neo, sans-serif" font-size="20" font-weight="700" fill="#111827">빈 문서</text>
-<text x="474" y="348" font-family="Apple SD Gothic Neo, sans-serif" font-size="19" fill="#1f2937">원인·재업로드 방법 안내, 결과 화면 미표시</text>
-<text x="1374" y="348" font-family="Apple SD Gothic Neo, sans-serif" font-size="19" fill="#1f2937">빈 결과를 문제 없음으로 표시 금지</text>
+<text x="474" y="348" font-family="Apple SD Gothic Neo, sans-serif" font-size="19" fill="#1f2937">REUPLOAD_REQUIRED 전환, 원인·재업로드 안내, 결과 미표시</text>
+<text x="1374" y="348" font-family="Apple SD Gothic Neo, sans-serif" font-size="19" fill="#1f2937">세션·원본 즉시 폐기, 실패 시 정리 재시도</text>
 <line x1="100" y1="364" x2="1900" y2="364" stroke="#c4c9d0" stroke-width="1.2"/>
 <text x="275" y="396" text-anchor="middle" font-family="Apple SD Gothic Neo, sans-serif" font-size="20" font-weight="700" fill="#111827">오류·재시도</text>
 <text x="474" y="396" font-family="Apple SD Gothic Neo, sans-serif" font-size="19" fill="#1f2937">최상위 status 우선, 연결·타임아웃 등만 재실행</text>
@@ -41,8 +41,8 @@
 <text x="1625" y="494" text-anchor="middle" font-family="Apple SD Gothic Neo, sans-serif" font-size="21" font-weight="700">비고</text>
 <line x1="100" y1="506" x2="1900" y2="506" stroke="#c4c9d0" stroke-width="1.2"/>
 <text x="275" y="538" text-anchor="middle" font-family="Apple SD Gothic Neo, sans-serif" font-size="20" font-weight="700" fill="#111827">업로드 검증</text>
-<text x="474" y="538" font-family="Apple SD Gothic Neo, sans-serif" font-size="19" fill="#1f2937">확장자·실제 형식·크기·손상·암호화 검사</text>
-<text x="1374" y="538" font-family="Apple SD Gothic Neo, sans-serif" font-size="19" fill="#1f2937">MCP 호출 전 차단</text>
+<text x="474" y="538" font-family="Apple SD Gothic Neo, sans-serif" font-size="19" fill="#1f2937">검증 및 업로드 60초·세션 삭제 15초 타임아웃</text>
+<text x="1374" y="538" font-family="Apple SD Gothic Neo, sans-serif" font-size="19" fill="#1f2937">시간 초과 시 취소·재시도 안내</text>
 <line x1="100" y1="554" x2="1900" y2="554" stroke="#c4c9d0" stroke-width="1.2"/>
 <text x="275" y="586" text-anchor="middle" font-family="Apple SD Gothic Neo, sans-serif" font-size="20" font-weight="700" fill="#111827">응답 호환</text>
 <text x="474" y="586" font-family="Apple SD Gothic Neo, sans-serif" font-size="19" fill="#1f2937">누락·null·빈 배열을 DTO에서 정규화</text>
@@ -103,7 +103,7 @@
 <text x="1374" y="1158" font-family="Apple SD Gothic Neo, sans-serif" font-size="19" fill="#1f2937">HTTPS 또는 보안 채널</text>
 <line x1="100" y1="1174" x2="1900" y2="1174" stroke="#c4c9d0" stroke-width="1.2"/>
 <text x="275" y="1206" text-anchor="middle" font-family="Apple SD Gothic Neo, sans-serif" font-size="20" font-weight="700" fill="#111827">임시 저장</text>
-<text x="474" y="1206" font-family="Apple SD Gothic Neo, sans-serif" font-size="19" fill="#1f2937">완료 후 이용 중 유지, 이탈·종료·TTL 시 삭제</text>
+<text x="474" y="1206" font-family="Apple SD Gothic Neo, sans-serif" font-size="19" fill="#1f2937">파일 제거·새 검토·명시적 종료만 삭제 요청, 이탈은 TTL 정리</text>
 <text x="1374" y="1206" font-family="Apple SD Gothic Neo, sans-serif" font-size="19" fill="#1f2937">영구 저장·백업 제외</text>
 <line x1="100" y1="1222" x2="1900" y2="1222" stroke="#c4c9d0" stroke-width="1.2"/>
 <text x="275" y="1254" text-anchor="middle" font-family="Apple SD Gothic Neo, sans-serif" font-size="20" font-weight="700" fill="#111827">챗봇 대화</text>

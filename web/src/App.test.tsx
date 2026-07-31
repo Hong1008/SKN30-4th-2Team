@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useNavigate } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { MainApp } from './App'
 import { api } from './api/api'
@@ -8,7 +8,8 @@ import { SESSION_ID_KEY, getChatHistoryStorageKey } from './config'
 
 const showToast = vi.fn()
 
-vi.mock('./api/api', () => ({ api: { deleteReview: vi.fn(), getSession: vi.fn(), extendSession: vi.fn(), pollReviewStatus: vi.fn() } }))
+vi.mock('./api/api', () => ({ api: { deleteReview: vi.fn(), getResults: vi.fn(), getSession: vi.fn(), extendSession: vi.fn(), pollReviewStatus: vi.fn() } }))
+vi.mock('./utils/reviewResults', () => ({ mapClauseResult: (clause: unknown) => clause }))
 vi.mock('./contexts/MetadataContext', () => ({
   useMetadata: () => ({ metadata: { features: { server_side_cancel: true } } }),
   MetadataProvider: ({ children }: { children: React.ReactNode }) => children,
@@ -19,8 +20,8 @@ vi.mock('./components/HorizontalStepper', () => ({ default: () => null }))
 vi.mock('./screens/ProcessingScreen', () => ({ default: () => <p>진행 화면</p> }))
 vi.mock('./screens/UploadAndTypeScreen', () => ({ default: () => <p>업로드 화면</p> }))
 vi.mock('./screens/OutOfScopeScreen', () => ({ default: () => null }))
-vi.mock('./screens/ResultsScreen', () => ({ default: () => null }))
-vi.mock('./screens/ClauseDetailScreen', () => ({ default: () => null }))
+vi.mock('./screens/ResultsScreen', () => ({ default: ({ onClauseClick }: any) => <button onClick={() => onClauseClick({ id: 'clause-first' })}>첫 조항</button> }))
+vi.mock('./screens/ClauseDetailScreen', () => ({ default: ({ clause }: any) => <p>조항: {clause.id}</p> }))
 vi.mock('./screens/ChatbotScreen', () => ({ default: () => null }))
 
 beforeEach(() => {
@@ -105,5 +106,33 @@ describe('세션 연장', () => {
 
     expect(localStorage.getItem(SESSION_ID_KEY)).toBeNull()
     expect(showToast).toHaveBeenCalledWith(expect.stringContaining('세션이 만료'), 'error')
+  })
+})
+
+function MoveToSecondClause() {
+  const navigate = useNavigate()
+  return <button onClick={() => navigate('/review/rev_clause/results/clause/clause-second')}>두 번째 조항으로 이동</button>
+}
+
+describe('조항 상세 URL 전환', () => {
+  it('다른 조항 URL로 이동하면 이전 조항 대신 새 조항을 조회해 표시한다', async () => {
+    vi.mocked(api.getResults).mockResolvedValue({
+      data: {
+        clause_results: [{ id: 'clause-second', user_clause_id: 'clause-second' }],
+      },
+    } as never)
+    render(
+      <MemoryRouter initialEntries={['/review/rev_clause/results']}>
+        <MoveToSecondClause />
+        <MainApp />
+      </MemoryRouter>,
+    )
+
+    await userEvent.click(screen.getByRole('button', { name: '첫 조항' }))
+    expect(await screen.findByText('조항: clause-first')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: '두 번째 조항으로 이동' }))
+    expect(await screen.findByText('조항: clause-second')).toBeInTheDocument()
+    expect(api.getResults).toHaveBeenCalledWith('rev_clause', expect.any(AbortSignal))
   })
 })

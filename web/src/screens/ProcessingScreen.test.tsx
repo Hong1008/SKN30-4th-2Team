@@ -1,4 +1,5 @@
 import { act, render, screen } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import ProcessingScreen from "./ProcessingScreen"
 import { api } from "../api/api"
@@ -74,7 +75,7 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers())
 
 describe("검토 진행 SSE", () => {
-  it("정상 SSE 연결 중에는 watchdog 폴링을 시작하지 않는다", async () => {
+  it("정상 SSE 이벤트가 이어지면 watchdog 폴링을 시작하지 않는다", async () => {
     vi.useFakeTimers()
     vi.mocked(api.pollReviewStatus).mockResolvedValue(response(0, 0) as never)
     render(<ProcessingScreen {...props} />)
@@ -85,10 +86,32 @@ describe("검토 진행 SSE", () => {
       FakeEventSource.instances[0].onopen?.()
     })
     await act(async () => {
-      vi.advanceTimersByTime(20_000)
+      vi.advanceTimersByTime(9_000)
+      FakeEventSource.instances[0].emit("progress", {
+        sequence: 1,
+        review_state: "REVIEWING",
+        stage: "ANALYZING",
+        percent: 50,
+        message: "진행 중",
+      })
+      vi.advanceTimersByTime(9_000)
       await Promise.resolve()
     })
     expect(api.pollReviewStatus).toHaveBeenCalledTimes(1)
+    vi.useRealTimers()
+  })
+
+  it("SSE 활동이 멈추면 watchdog이 상태 폴링을 시작한다", async () => {
+    vi.useFakeTimers()
+    vi.mocked(api.pollReviewStatus).mockReturnValue(new Promise(() => {}))
+    render(<ProcessingScreen {...props} />)
+
+    await act(async () => {
+      vi.advanceTimersByTime(10_000)
+      await Promise.resolve()
+    })
+
+    expect(api.pollReviewStatus).toHaveBeenCalledTimes(2)
     vi.useRealTimers()
   })
 
@@ -132,6 +155,100 @@ describe("검토 진행 SSE", () => {
     })
     expect(screen.getAllByText("70%")).toHaveLength(2)
     expect(screen.queryByText("20%")).not.toBeInTheDocument()
+  })
+
+  it("같은 sequence의 실패 이벤트도 종료 상태로 처리한다", async () => {
+    vi.mocked(api.pollReviewStatus).mockReturnValue(new Promise(() => {}))
+    render(<ProcessingScreen {...props} />)
+    const source = FakeEventSource.instances[0]
+
+    act(() => {
+      source.emit("progress", {
+        sequence: 2,
+        review_state: "REVIEWING",
+        stage: "ANALYZING",
+        percent: 70,
+        message: "분석 중",
+      })
+      source.emit("failed", {
+        sequence: 2,
+        review_state: "FAILED",
+        stage: "ANALYZING",
+        percent: 70,
+        message: "분석 중",
+        error: { code: "PIPELINE_ERROR", retryable: true },
+      })
+    })
+
+    expect(await screen.findByRole("button", { name: "다시 시도" })).toBeInTheDocument()
+    expect(source.close).toHaveBeenCalled()
+  })
+
+  it("폴링의 같은 sequence 실패 상태도 종료 상태로 처리한다", async () => {
+    vi.mocked(api.pollReviewStatus)
+      .mockResolvedValueOnce(response(2, 70) as never)
+      .mockResolvedValueOnce({
+        data: {
+          ...response(2, 70).data,
+          review_state: "FAILED",
+          error: { code: "PIPELINE_ERROR", retryable: true },
+        },
+      } as never)
+    render(<ProcessingScreen {...props} />)
+
+    expect(await screen.findAllByText("70%")).toHaveLength(2)
+    act(() => FakeEventSource.instances[0].onerror?.())
+
+    expect(await screen.findByRole("button", { name: "다시 시도" })).toBeInTheDocument()
+  })
+
+  it("재시도 접수 성공 시 새 검토의 진행 상태로 초기화한다", async () => {
+    vi.mocked(api.pollReviewStatus).mockReturnValue(new Promise(() => {}))
+    vi.mocked(api.retryReview).mockResolvedValue({
+      data: { review_id: "review-2", review_state: "QUEUED", session_id: "session-1" },
+    } as never)
+    const onRetry = vi.fn()
+    const { rerender } = render(<ProcessingScreen {...props} onRetry={onRetry} />)
+    const source = FakeEventSource.instances[0]
+
+    act(() => source.emit("failed", {
+      sequence: 2,
+      review_state: "FAILED",
+      stage: "ANALYZING",
+      percent: 70,
+      message: "실패",
+      error: { code: "PIPELINE_ERROR", retryable: true },
+    }))
+    await userEvent.click(await screen.findByRole("button", { name: "다시 시도" }))
+    rerender(<ProcessingScreen {...props} reviewId="review-2" onRetry={onRetry} />)
+
+    expect(onRetry).toHaveBeenCalledWith("review-2")
+    expect(screen.queryByRole("button", { name: "다시 시도" })).not.toBeInTheDocument()
+    expect(screen.getByText("검토 요청이 접수되었습니다")).toBeInTheDocument()
+    expect(FakeEventSource.instances.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it("재시도 충돌 시 서버의 진행 중 검토 화면으로 복구한다", async () => {
+    vi.mocked(api.pollReviewStatus)
+      .mockReturnValueOnce(new Promise(() => {}))
+      .mockResolvedValueOnce(response(3, 80) as never)
+    vi.mocked(api.retryReview).mockRejectedValue({ code: "REVIEW_NOT_COMPLETED" })
+    render(<ProcessingScreen {...props} />)
+    const source = FakeEventSource.instances[0]
+
+    act(() => source.emit("failed", {
+      sequence: 2,
+      review_state: "FAILED",
+      stage: "ANALYZING",
+      percent: 70,
+      message: "실패",
+      error: { code: "PIPELINE_ERROR", retryable: true },
+    }))
+    await userEvent.click(await screen.findByRole("button", { name: "다시 시도" }))
+
+    expect(await screen.findAllByText("80%")).toHaveLength(2)
+    expect(screen.queryByRole("button", { name: "새 검토 시작" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "다시 시도" })).not.toBeInTheDocument()
   })
 
   it("terminal 이벤트 이후의 nonterminal 이벤트를 무시하고 연결을 닫는다", async () => {

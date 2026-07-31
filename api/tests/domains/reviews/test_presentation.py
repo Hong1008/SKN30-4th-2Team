@@ -59,7 +59,16 @@ def test_result_presentation_uses_metadata_labels_and_separates_missing() -> Non
                         "score": 0.9,
                     },
                     "toxic_patterns": ["UNFAIR_DAMAGE_CLAIM"],
-                }
+                },
+                {
+                    "user_clause_id": "uc_rev_result_2",
+                    "user_clause": "제2조 용어의 정의",
+                    "deviation": "NO_MATCH",
+                    "match": {
+                        "status": "NO_CANDIDATE",
+                    },
+                    "toxic_patterns": [],
+                },
             ],
             "missing_standard_clauses": [
                 {
@@ -98,10 +107,10 @@ def test_result_presentation_uses_metadata_labels_and_separates_missing() -> Non
 
     assert result.summary.model_dump() == {
         "clause_results": {
-            "total": 1,
+            "total": 2,
             "NONE": 0,
             "EXTRA": 1,
-            "NO_MATCH": 0,
+            "NO_MATCH": 1,
         },
         "missing_standard_clauses": 1,
         "toxic_pattern_candidates": 1,
@@ -120,6 +129,14 @@ def test_result_presentation_uses_metadata_labels_and_separates_missing() -> Non
         "text",
     }
     assert result.clause_results[0].toxic_patterns[0].label == "과도한 손해배상 표현"
+    assert [
+        (item.user_clause_id, item.user_clause, item.deviation.code)
+        for item in result.clause_results
+    ] == [
+        ("uc_rev_result_1", "손해배상 조항", "EXTRA"),
+        ("uc_rev_result_2", "제2조 용어의 정의", "NO_MATCH"),
+    ]
+    assert result.clause_results[1].match.standard is None
     missing_standard = result.missing_standard_clauses[0].standard
     assert missing_standard.category.label == "대금 지급"
     assert (

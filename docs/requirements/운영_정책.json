@@ -27,9 +27,16 @@
         {
           "id": "review_state.empty_document",
           "trigger": "EMPTY_DOCUMENT",
-          "behavior": "원인과 재업로드 방법을 안내하고 검토 결과 화면은 표시하지 않는다.",
+          "behavior": "REUPLOAD_REQUIRED 상태로 전환해 업로드 화면에서 원인과 재업로드 방법을 안내하고 검토 결과 화면은 표시하지 않는다.",
           "user_action": "텍스트를 읽을 수 있는 다른 파일을 업로드한다.",
           "notes": "results가 비어 있어도 ‘문제 없음’으로 표시 금지"
+        },
+        {
+          "id": "review_state.empty_document_cleanup",
+          "trigger": "EMPTY_DOCUMENT with REUPLOAD action",
+          "behavior": "생성된 업로드 세션과 원본 파일을 즉시 폐기한다. 폐기에 실패하면 세션 레코드를 보존하고 정리 재시도를 안내한다.",
+          "user_action": "정리 성공 후 다른 파일을 업로드하고, 실패 시 파일 제거를 다시 시도한다.",
+          "notes": "DELETE /api/v1/review-sessions/{session_id}를 사용하며 삭제 중 유형 선택과 검토 시작을 막음"
         },
         {
           "id": "review_state.error_retry",
@@ -48,6 +55,11 @@
           "id": "file_mcp.upload_validation",
           "behavior": "확장자, 실제 형식, 크기, 손상, 암호화 여부를 검증한다.",
           "enforcement": "MCP 호출 전에 차단"
+        },
+        {
+          "id": "file_mcp.request_timeout",
+          "behavior": "업로드 요청은 60초, 업로드 세션 삭제 요청은 15초 안에 응답이 없으면 취소하고 재시도 안내를 표시한다.",
+          "enforcement": "프론트 API 클라이언트"
         },
         {
           "id": "file_mcp.response_compatibility",
@@ -118,7 +130,7 @@
         },
         {
           "id": "security.temporary_storage",
-          "behavior": "재시도할 수 없는 실패는 즉시 삭제한다. 검토 완료 후에는 결과 페이지 이용 중 유지하고, 페이지 이탈·새 검토 시작·명시적 종료 시 삭제 요청한다. 브라우저 종료 등 요청 누락은 세션 생성·검토 완료 또는 마지막 수동 연장 후 30분 TTL로 보완한다. 일반 조회·질문·화면 이동은 TTL을 자동 연장하지 않는다. 검토 진행 중에는 완료 전까지 세션을 만료시키지 않으며, 세션 만료 시 EXPIRED 처리 후 파일과 결과를 삭제한다.",
+          "behavior": "재시도할 수 없는 실패는 즉시 삭제한다. 검토 완료 후에는 결과 페이지 이용 중 유지하고, 사용자의 파일 제거·새 검토 시작·명시적 종료 시에만 삭제 요청한다. 페이지 이탈·브라우저 종료처럼 요청이 보장되지 않는 경우에는 세션 생성·검토 완료 또는 마지막 수동 연장 후 30분 TTL로 서버에서 정리한다. 일반 조회·질문·화면 이동은 TTL을 자동 연장하지 않는다. 검토 진행 중에는 완료 전까지 세션을 만료시키지 않으며, 세션 만료 시 EXPIRED 처리 후 파일과 결과를 삭제한다.",
           "notes": "영구 저장·백업 제외"
         },
         {
