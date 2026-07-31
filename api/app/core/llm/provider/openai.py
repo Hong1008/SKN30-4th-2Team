@@ -36,7 +36,6 @@ def build_openai_model(
     policy: LLMPolicy = DEFAULT_LLM_POLICY,
 ) -> BaseChatModel:
     """OpenAI chat model을 capability에 맞는 reasoning 설정으로 생성한다."""
-    del policy
     if settings.openai_api_key is None:
         raise LLMConfigurationError("OPENAI_API_KEY가 필요합니다.")
     if not settings.llm_model:
@@ -45,6 +44,11 @@ def build_openai_model(
     common = {
         "model": settings.llm_model,
         "api_key": settings.openai_api_key,
+        "temperature": policy.temperature,
+        "top_p": policy.top_p,
+        "seed": policy.seed,
+        "max_completion_tokens": policy.max_completion_tokens,
+        "timeout": policy.timeout_seconds,
     }
     probe = ChatOpenAI(**common)
     profile = _profile(probe)

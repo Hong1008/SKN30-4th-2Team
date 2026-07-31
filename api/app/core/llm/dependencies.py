@@ -1,5 +1,6 @@
 """FastAPI에서 재사용할 LLM·MCP 의존성을 정의한다."""
 
+from dataclasses import replace
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, status
@@ -13,7 +14,7 @@ from app.core.llm.policy import LLMPolicy
 from app.core.llm.types import ReasoningMode
 
 
-ROUTER_LLM_POLICY = LLMPolicy(timeout_seconds=20, max_completion_tokens=16)
+ROUTER_LLM_POLICY = LLMPolicy(timeout_seconds=3, max_completion_tokens=8)
 
 
 def get_chat_model(settings: SettingsDep) -> BaseChatModel:
@@ -23,7 +24,17 @@ def get_chat_model(settings: SettingsDep) -> BaseChatModel:
 
 def get_router_model(settings: SettingsDep) -> BaseChatModel:
     """질문 라벨 하나만 생성하는 짧은 분류 모델을 반환한다."""
-    return create_chat_model(settings, ReasoningMode.OFF, ROUTER_LLM_POLICY)
+    router_settings = settings.model_copy(
+        update={
+            "llm_provider": settings.router_llm_provider or settings.llm_provider,
+            "llm_model": settings.router_llm_model or settings.llm_model,
+        }
+    )
+    policy = replace(
+        ROUTER_LLM_POLICY,
+        timeout_seconds=settings.router_llm_timeout_seconds,
+    )
+    return create_chat_model(router_settings, ReasoningMode.OFF, policy)
 
 
 async def get_mcp_runtime(request: Request) -> WorkShieldMCPRuntime:

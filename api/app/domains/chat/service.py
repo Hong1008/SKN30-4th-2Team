@@ -2,11 +2,13 @@
 
 import asyncio
 from enum import StrEnum
+from time import perf_counter
 from typing import Any, TypedDict
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage
 from langgraph.graph import END, START, StateGraph
+from pydantic import BaseModel, ValidationError
 
 from app.config import Settings
 from app.core.common.errors import (
@@ -15,6 +17,7 @@ from app.core.common.errors import (
     ExternalServiceError,
     ExternalServiceTimeoutError,
 )
+from app.core.common.logging import log_event
 from app.core.llm.mcp.types import WorkShieldMCPRuntime
 from app.core.llm.policy import DEFAULT_LLM_POLICY, LLMPolicy
 from app.domains.chat.schemas import ChatRequest, ChatResponse, ChatSource
@@ -40,6 +43,12 @@ class QuestionCategory(StrEnum):
     CLAUSE_CATEGORY = "조항 카테고리 질문"
     LEGAL_GROUNDING = "조항 법령 근거 질문"
     OUT_OF_SCOPE = "선정 불가"
+
+
+class RouterDecision(BaseModel):
+    """외부 분류기가 반환해야 하는 단일 질문 유형."""
+
+    category: QuestionCategory
 
 
 class GraphState(TypedDict, total=False):
@@ -68,7 +77,7 @@ ROUTER_PROMPT = """계약 검토 질문 분류기입니다. 아래 라벨 하나
 이전 대화: {history}
 질문: {question}"""
 BASE_PROMPT = """제공된 문서만 사용하는 계약 검토 답변 어시스턴트입니다.
-규칙: 문서 밖의 사실을 추측하지 마세요. 답이 없으면 \"제공된 문서에서 관련 정보를 찾을 수 없습니다.\"만 출력하세요. 상태·카테고리는 라벨로 표시하세요. 위법·적법 등 법률 판단을 하지 마세요. 문서명·조문이 있으면 표시하세요. 한국어로 간결하게 답하세요.
+규칙: 문서 밖의 사실을 추측하지 마세요. 답이 없으면 \"문서에서 관련 정보를 찾을 수 없습니다.\"만 출력하세요. 상태·카테고리는 라벨로 표시하세요. 위법·적법 등 법률 판단을 하지 마세요. 문서명·조문이 있으면 표시하세요. 한국어로 간결하게 답하세요.
 질문 유형: {category}
 유형 지침: {instruction}
 <검색된 문서>:
@@ -129,6 +138,54 @@ async def _invoke(model: BaseChatModel, prompt: str, timeout: float) -> str:
             retryable=False,
         ) from error
     return str(getattr(result, "content", "")).strip()
+
+
+async def _classify_question(
+    model: BaseChatModel,
+    prompt: str,
+    timeout: float,
+) -> QuestionCategory | None:
+    """JSON Schema 분류 결과를 검증하며 파싱 실패는 안전하게 거부한다."""
+    try:
+        structured_model = model.with_structured_output(
+            RouterDecision,
+            method="json_schema",
+            include_raw=True,
+        )
+        result = await asyncio.wait_for(
+            structured_model.ainvoke([HumanMessage(content=prompt)]),
+            timeout=timeout,
+        )
+    except (TimeoutError, asyncio.TimeoutError) as error:
+        raise ExternalServiceTimeoutError(
+            code="LLM_TIMEOUT",
+            message="질문 분류 시간이 초과되었습니다.",
+            retryable=True,
+            next_action="RETRY",
+        ) from error
+    except ConnectionError as error:
+        raise ExternalServiceError(
+            code="LLM_CONNECTION_FAILED",
+            message="질문 분류 서비스에 연결하지 못했습니다.",
+            retryable=True,
+            next_action="RETRY",
+        ) from error
+    except Exception as error:
+        raise ExternalServiceError(
+            code="LLM_OUTPUT_INVALID",
+            message="질문 유형을 분류하지 못했습니다.",
+            retryable=False,
+        ) from error
+
+    if not isinstance(result, dict) or result.get("parsing_error") is not None:
+        return None
+    parsed = result.get("parsed")
+    if isinstance(parsed, RouterDecision):
+        return parsed.category
+    try:
+        return RouterDecision.model_validate(parsed).category
+    except ValidationError:
+        return None
 
 
 async def _tool(runtime: WorkShieldMCPRuntime, name: str) -> dict[str, Any]:
@@ -287,12 +344,6 @@ async def _context(
     return "\n".join(sections)[:MAX_CONTEXT_CHARS], grounded, labels, sources
 
 
-def _category(value: str) -> QuestionCategory | None:
-    return next(
-        (category for category in QuestionCategory if value == category.value), None
-    )
-
-
 async def answer_review_question(
     review: Review,
     payload: ChatRequest,
@@ -326,12 +377,25 @@ async def answer_review_question(
         history = " / ".join(
             str(item.get("content", ""))[:40] for item in payload.history
         )
-        value = await _invoke(
-            router_model,
-            ROUTER_PROMPT.format(history=history, question=payload.message[:80]),
-            min(20, llm_policy.timeout_seconds),
-        )
-        return {"category": _category(value)}
+        started_at = perf_counter()
+        category = None
+        state = "failed"
+        try:
+            category = await _classify_question(
+                router_model,
+                ROUTER_PROMPT.format(history=history, question=payload.message[:80]),
+                min(settings.router_llm_timeout_seconds, llm_policy.timeout_seconds),
+            )
+            state = "parsed" if category else "invalid"
+            return {"category": category}
+        finally:
+            log_event(
+                event="chat.router.completed",
+                review_id=review.id,
+                category=category.value if category else None,
+                state=state,
+                duration_ms=round((perf_counter() - started_at) * 1000, 2),
+            )
 
     async def prepare(state: GraphState) -> GraphState:
         category = state["category"]
@@ -388,6 +452,16 @@ async def answer_review_question(
         )
         return {"response": response}
 
+    async def route_category(state: GraphState) -> str:
+        return (
+            "prepare"
+            if state["category"] not in {None, QuestionCategory.OUT_OF_SCOPE}
+            else "reject"
+        )
+
+    async def route_grounding(state: GraphState) -> str:
+        return "answer" if state["grounded"] else "reject"
+
     graph = StateGraph(GraphState)
     graph.add_node("classify", classify)
     graph.add_node("prepare", prepare)
@@ -396,15 +470,9 @@ async def answer_review_question(
     graph.add_edge(START, "classify")
     graph.add_conditional_edges(
         "classify",
-        lambda state: (
-            "prepare"
-            if state["category"] not in {None, QuestionCategory.OUT_OF_SCOPE}
-            else "reject"
-        ),
+        route_category,
     )
-    graph.add_conditional_edges(
-        "prepare", lambda state: "answer" if state["grounded"] else "reject"
-    )
+    graph.add_conditional_edges("prepare", route_grounding)
     graph.add_edge("answer", END)
     graph.add_edge("reject", END)
     result = await graph.compile().ainvoke({})

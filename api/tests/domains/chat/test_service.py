@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 from langchain_core.messages import AIMessage
+from pydantic import BaseModel
 
 from app.config import Settings
 from app.core.common.errors import (
@@ -36,13 +37,51 @@ class Tool:
 class Model:
     def __init__(self, *answers: str) -> None:
         self.answers, self.prompts = list(answers), []
+        self.structured_schema: type[BaseModel] | None = None
 
-    async def ainvoke(self, prompt: list[object]) -> AIMessage:
+    def with_structured_output(
+        self,
+        schema: type[BaseModel],
+        *,
+        method: str,
+        include_raw: bool,
+    ) -> "Model":
+        assert method == "json_schema"
+        assert include_raw is True
+        self.structured_schema = schema
+        return self
+
+    async def ainvoke(self, prompt: list[object]) -> AIMessage | dict[str, object]:
         self.prompts.append(prompt)
-        return AIMessage(content=self.answers.pop(0))
+        answer = self.answers.pop(0)
+        if self.structured_schema is not None:
+            schema, self.structured_schema = self.structured_schema, None
+            try:
+                parsed = schema(category=answer)
+                parsing_error = None
+            except Exception as error:
+                parsed = None
+                parsing_error = error
+            return {
+                "raw": AIMessage(content=str(answer)),
+                "parsed": parsed,
+                "parsing_error": parsing_error,
+            }
+        return AIMessage(content=answer)
 
 
 class SlowModel:
+    def with_structured_output(
+        self,
+        _schema: type[BaseModel],
+        *,
+        method: str,
+        include_raw: bool,
+    ) -> "SlowModel":
+        assert method == "json_schema"
+        assert include_raw is True
+        return self
+
     async def ainvoke(self, _prompt: list[object]) -> AIMessage:
         await asyncio.sleep(0.1)
         return AIMessage(content="늦은 답변")
@@ -280,6 +319,24 @@ async def test_out_of_scope_stops_before_context_and_answer() -> None:
     assert response.answer == "제공된 문서에서 관련 정보를 찾을 수 없습니다."
     assert len(model.prompts) == 1
     assert not any(tool.calls for tool in runtime.tools)
+
+
+@pytest.mark.asyncio
+async def test_invalid_structured_router_output_fails_closed() -> None:
+    model = Model("알 수 없는 라벨")
+
+    response = await answer_review_question(
+        _review(),
+        ChatRequest(message="무엇인가요?"),
+        runtime=_runtime(),
+        router_model=model,
+        model=Model("호출되면 안 됩니다."),
+        settings=_settings(),
+    )
+
+    assert response.outcome == "LLM_OUTPUT_INVALID"
+    assert response.answer is None
+    assert response.refused is True
 
 
 @pytest.mark.asyncio

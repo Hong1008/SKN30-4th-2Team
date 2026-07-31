@@ -44,6 +44,15 @@ class FakeStructuredRunnable:
         self._calls = calls
 
     async def ainvoke(self, _prompt: object):
+        if "category" in getattr(self._schema, "model_fields", {}):
+            self._calls["router_completion"] = (
+                self._calls.get("router_completion", 0) + 1
+            )
+            return {
+                "raw": AIMessage(content="조항 질문"),
+                "parsed": self._schema(category="조항 질문"),
+                "parsing_error": None,
+            }
         self._calls["suggestion_completion"] = (
             self._calls.get("suggestion_completion", 0) + 1
         )

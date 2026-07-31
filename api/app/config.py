@@ -58,6 +58,9 @@ class Settings(BaseSettings):
     app_env: Environment = _selected_environment()
     llm_provider: LLMProvider
     llm_model: str | None = None
+    router_llm_provider: LLMProvider | None = None
+    router_llm_model: str | None = None
+    router_llm_timeout_seconds: float = Field(default=3.0, gt=0, le=20)
     database_url: str = (
         f"sqlite+pysqlite:///{API_ROOT / 'data' / 'workshield.db'}"
     )
@@ -96,6 +99,10 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def validate_production_provider(self) -> "Settings":
         """운영 환경의 외부 전송과 민감한 디버그 출력을 막는다."""
+        if (self.router_llm_provider is None) != (self.router_llm_model is None):
+            raise ValueError(
+                "ROUTER_LLM_PROVIDER와 ROUTER_LLM_MODEL은 함께 설정해야 합니다."
+            )
         if self.app_env == "prod" and self.llm_provider is not LLMProvider.VLLM:
             raise ValueError(
                 "운영 환경에서는 LLM_PROVIDER=vllm만 사용할 수 있습니다."
