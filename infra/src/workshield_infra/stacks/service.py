@@ -143,7 +143,7 @@ class ServiceStack(Stack):
                             http_port=80,
                             https_port=443,
                             origin_protocol_policy="https-only",
-                            origin_read_timeout=60,
+                            origin_read_timeout=120,
                             origin_ssl_protocols=["TLSv1.2"],
                         ),
                     ),

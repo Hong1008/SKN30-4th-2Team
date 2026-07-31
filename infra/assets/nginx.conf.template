@@ -4,6 +4,10 @@ server {
     listen [::]:443 ssl;
     server_name ${ORIGIN_DOMAIN};
 
+    # multipart 요청 오버헤드를 고려해 API의 10MB 제한보다 여유 있게 둔다.
+    client_max_body_size 12m;
+    client_body_timeout 120s;
+
     ssl_certificate /opt/workshield/certificates/fullchain.pem;
     ssl_certificate_key /opt/workshield/certificates/privkey.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
