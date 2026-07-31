@@ -196,7 +196,11 @@ class AwsProvider:
                 if managed_by and managed_by != "workshield-infra":
                     raise RuntimeError("기존 GitHub deploy role의 소유권이 다릅니다.")
                 existing_trust = json.dumps(role.get("AssumeRolePolicyDocument", {}))
-                if subject not in existing_trust:
+                repo_prefix = (
+                    f"repo:{self.config.github_organization}@{self.config.github_owner_id}/"
+                    f"{self.config.github_repository}@{self.config.github_repository_id}:"
+                )
+                if subject not in existing_trust and repo_prefix not in existing_trust:
                     raise RuntimeError(
                         "기존 GitHub deploy role trust가 이 repository를 가리키지 않습니다."
                     )
