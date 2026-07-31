@@ -4,6 +4,9 @@
 - 결정일: 2026-07-25
 - 대상 브랜치: `feat/mvp-api`
 - 검증 모델: `hf.co/unsloth/Qwen3.5-4B-GGUF:Q4_K_M`
+- 현행 상태: Historical evaluation only. 이 4B Ollama 모델은 현행 답변 또는
+  질문 분류 모델이 아니며, 현행 역할은 `0728-vllm-production-provider.md`와
+  `0730-langgraph-chat-prompt-routing.md`를 따른다.
 - 관련 ADR:
   - `0724-llm-risk.md`
   - `0724-mvp-api-completion.md`

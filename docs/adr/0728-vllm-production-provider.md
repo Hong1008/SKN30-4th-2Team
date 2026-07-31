@@ -22,6 +22,10 @@ server로 전환하고 API의 Chat/Suggestions 구조화 출력 계약을 유지
   제어하며 OpenAI 전용 reasoning payload를 보내지 않는다.
 - Chat/Suggestions 구조화 출력은 Chat Completions의 JSON Schema
   response format을 사용한다.
+- 이 vLLM 모델은 최종 답변과 제안 문구 생성만 담당한다. 질문 유형 분류는
+  현행 구성에서 OpenAI가 현재 질문의 앞 80자만 받아 수행하며, 계약서 원문,
+  조항, 검토 결과와 대화 이력은 OpenAI에 보내지 않는다. 세부 결정은
+  `0730-langgraph-chat-prompt-routing.md`를 따른다.
 
 ## 3. 운영 설정
 
@@ -32,10 +36,19 @@ LLM_MODEL=<GET /v1/models가 반환하는 model ID>
 VLLM_BASE_URL=https://<pod-id>-8000.proxy.runpod.net
 VLLM_API_KEY=<vllm --api-key와 일치하는 비밀값>
 LLM_TIMEOUT_SECONDS=180
+
+# 질문 분류 전용: OpenAI, 답변 모델과 분리
+ROUTER_LLM_PROVIDER=openai
+ROUTER_LLM_MODEL=<승인된 OpenAI 분류 모델>
+ROUTER_LLM_TIMEOUT_SECONDS=3
 ```
 
 `VLLM_BASE_URL`은 origin과 `/v1` API root를 모두 허용하며 API 내부에서
 `/v1` root로 정규화한다.
+
+`OPENAI_API_KEY`는 router provider의 비밀값으로 별도 주입한다. 로컬 분류
+모델로 전환할 때는 `ROUTER_LLM_PROVIDER=vllm`과 해당 모델 ID를 함께
+설정하고, OpenAI 키를 제거할 수 있다.
 
 ## 4. 배포 게이트
 

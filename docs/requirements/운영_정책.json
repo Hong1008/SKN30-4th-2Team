@@ -53,7 +53,7 @@
       "rules": [
         {
           "id": "file_mcp.upload_validation",
-          "behavior": "확장자, 실제 형식, 크기, 손상, 암호화 여부를 검증한다.",
+          "behavior": "PDF, HWP, HWPX, DOCX의 확장자, 실제 형식, 크기, 손상, 암호화 여부를 검증한다.",
           "enforcement": "MCP 호출 전에 차단"
         },
         {
@@ -161,13 +161,13 @@
       "rules": [
         {
           "id": "llm.default_model",
-          "behavior": "RunPod Pod에서 자체 호스팅하는 vLLM과 RedHatAI/Qwen3.5-9B-FP8-dynamic 모델을 기본으로 사용한다.",
+          "behavior": "RunPod Pod에서 자체 호스팅하는 vLLM과 RedHatAI/Qwen3.5-9B-FP8-dynamic 모델을 최종 답변 생성에 사용한다.",
           "prohibitions": ["외부 LLM 자동 폴백 금지"]
         },
         {
           "id": "llm.external_transfer",
-          "behavior": "외부 관리형 LLM은 프로젝트 발표 MVP에서 사용하지 않는다. 향후 도입 시에만 범위·목적·공급자 고지와 사용자 동의 후 전송을 허용한다.",
-          "on_consent_denied": "전송 금지"
+          "behavior": "OpenAI는 현재 사용자 질문 분류에만 사용한다. 계약서 원문·조항·대화 이력은 전송하지 않고, 분류 결과에 따라 로컬 모델이 답변을 생성한다. RunPod를 활용하는 운영 구성에서 조항 검색·재정렬에 계약 조항과 후보 표준조항이 전송될 수 있는 경로는 OpenAI와 분리해 고지한다.",
+          "prohibitions": ["OpenAI에 계약서 원문 전송", "OpenAI에 조항·대화 이력 전송", "외부 LLM 답변 생성 자동 폴백"]
         },
         {
           "id": "service.resource_limit",
