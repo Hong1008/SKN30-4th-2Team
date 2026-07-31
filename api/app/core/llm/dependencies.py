@@ -14,7 +14,7 @@ from app.core.llm.policy import LLMPolicy
 from app.core.llm.types import ReasoningMode
 
 
-ROUTER_LLM_POLICY = LLMPolicy(timeout_seconds=3, max_completion_tokens=8)
+ROUTER_LLM_POLICY = LLMPolicy(timeout_seconds=3, max_completion_tokens=16)
 
 
 def get_chat_model(settings: SettingsDep) -> BaseChatModel:

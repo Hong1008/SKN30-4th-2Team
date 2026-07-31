@@ -46,7 +46,6 @@ def build_openai_model(
         "api_key": settings.openai_api_key,
         "temperature": policy.temperature,
         "top_p": policy.top_p,
-        "seed": policy.seed,
         "max_completion_tokens": policy.max_completion_tokens,
         "timeout": policy.timeout_seconds,
     }

@@ -90,7 +90,6 @@ def test_openai_applies_router_generation_policy(
     assert call["max_completion_tokens"] == 8
     assert call["temperature"] == 0
     assert call["top_p"] == 1
-    assert call["seed"] == 42
 
 
 def test_openai_rejects_off_for_always_on_model(

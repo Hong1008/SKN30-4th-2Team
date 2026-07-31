@@ -76,7 +76,7 @@ def test_get_router_model_uses_short_zero_temperature_policy(monkeypatch) -> Non
     assert reasoning is ReasoningMode.OFF
     assert policy.temperature == 0
     assert policy.timeout_seconds == 2.5
-    assert policy.max_completion_tokens == 8
+    assert policy.max_completion_tokens == 16
 
 
 def test_get_router_model_defaults_to_answer_provider(
