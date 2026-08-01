@@ -1,111 +1,249 @@
-# WorkShield
+<div align="center">
 
-## Screenshots
+# 🛡️ WorkShield
 
-![WorkShield screen 1](assets/1_1.png)
-![WorkShield screen 2](assets/1_2.png)
-![WorkShield screen 3](assets/1_3.png)
-![WorkShield screen 4](assets/1_4.png)
-![WorkShield screen 5](assets/1_5.png)
+**표준계약서 대비 검토 후보를 찾고, 근거 기반 설명과 협의 문구를 제공하는 IT·SW 계약서 검토 보조 플랫폼**
 
-WorkShield는 IT·SW 분야(SW 프리랜서, SI·SM 하도급) 계약서를 표준계약서와 조항별로 자동 비교하고, 관련 법령 조회를 지원하는 AI 계약서 검토 및 LLM 오케스트레이션 플랫폼입니다.
+</div>
+
+> WorkShield는 법률 자문이나 위법·합법 판정을 제공하지 않습니다.  
+> 사용자 계약서와 공개 표준계약서를 비교해 **우선 확인할 조항과 근거 후보를 좁혀 주는 도구**입니다.
+
+<p align="center">
+  <img src="assets/workshield-review-result.webp" alt="WorkShield 계약서 검토 결과와 결과 기반 질의응답 화면" width="100%" />
+</p>
+<p align="center"><sub>계약서 조항별 검토 결과와 결과 기반 질의응답 화면</sub></p>
 
 ---
 
-## 프로젝트 구조
+## 프로젝트 소개
+
+### 팀 소개
+
+## 팀원
+
+<table>
+  <tr align="center">
+    <td><img src="./assets/1.png" width="60"></td>
+    <td><img src="./assets/2.png" width="60"></td>
+    <td><img src="./assets/3.png" width="60"></td>
+    <td><img src="./assets/4.png" width="60"></td>
+    <td><img src="./assets/5.jpg" width="60"></td>
+  </tr>
+  <tr align="center">
+    <td><b>박세빈</b></td>
+    <td><b>홍철민</b></td>
+    <td><b>김효선</b></td>
+    <td><b>장규원</b></td>
+    <td><b>박지유</b></td>
+  </tr>
+</table>
+
+### 문제 정의
+
+SW 프리랜서 용역과 SI·SM 하도급 계약은 업무 범위, 대금 지급, 지식재산권, 계약 변경처럼 중요한 조건이 계약마다 다르게 작성됩니다. 사용자가 계약서 전체를 표준계약서 및 관련 법령과 직접 대조하기에는 시간과 전문 지식의 부담이 크고, 일반적인 LLM 답변은 근거가 불분명하거나 법적 결론처럼 받아들여질 위험이 있습니다.
+
+WorkShield는 계약서를 조항 단위로 구조화한 뒤 계약 유형에 맞는 표준조항을 검색·재정렬하여, 다음 검토 대상을 명시적인 상태와 근거로 제공합니다. 이후 질의응답과 협의 문구 생성도 현재 계약서, 검토 결과, 연결된 법령 자료의 범위 안에서 수행합니다.
+
+### 지원 범위
+
+- **계약 유형**: SW 프리랜서 용역, SI 하도급, SM 하도급
+- **문서 형식**: PDF, HWP, HWPX, DOCX
+- **결과 성격**: 법률 판단이 아닌 표준 대비 검토 후보와 참고 설명
+
+### 주요 기능
+
+| 기능 | 설명 |
+| --- | --- |
+| 계약서 업로드·유형 확인 | 파일 형식과 문서 상태를 검증하고, 지원 범위 및 비교할 계약 유형을 분석합니다. 사용자가 유형을 직접 확인하거나 변경할 수 있습니다. |
+| 조항별 표준계약서 비교 | 사용자 조항과 표준조항을 비교해 `표준 대응 후보 있음`, `별도 확인 필요`, `검색 후보 없음` 상태로 구분합니다. |
+| 표준조항 누락 가능성 탐색 | 표준계약서에는 있으나 사용자 계약서에서 대응 조항을 찾지 못한 항목을 별도 체크리스트로 제공합니다. |
+| 주의 문구·법령 근거 연결 | 일방적 업무 변경, 지식재산권 귀속 등 알려진 주의 문구의 유사 신호를 표시하고, 필요한 결과에 관련 법령 원문을 연결합니다. |
+| 결과 기반 질의응답 | 현재 검토 결과와 출처에 한정해 답변하며, 사용자 조항·표준조항·법령 근거를 함께 제시합니다. |
+| 협의 문구 제안 | 사용자 조항과 대응 표준조항을 근거로 참고용 대안 문구를 생성합니다. 미확정 조건은 임의로 채우지 않고 확인 필요 항목으로 남깁니다. |
+| 임시 세션과 데이터 보호 | 익명 세션을 사용하고 계약서와 대화 이력을 영구 저장하지 않습니다. 계약서 원문, 프롬프트, 대화 본문은 운영 로그에 남기지 않습니다. |
+
+### 사용자 흐름
+
+```mermaid
+flowchart LR
+    A[계약서 업로드] --> B[지원 범위·계약 유형 확인]
+    B --> C[검토 진행]
+    C --> D[조항별 결과 탐색]
+    D --> E[조항 상세·법령 근거]
+    D --> F[결과 기반 질의응답]
+    D --> G[협의 문구 제안]
+```
+
+---
+
+## 아키텍처
+
+```mermaid
+flowchart LR
+    U[사용자 브라우저] --> CF[CloudFront]
+    CF -->|정적 Web| S3[Private S3]
+    CF -->|/api, /health| NG[Nginx · EC2]
+
+    NG --> API[FastAPI API<br/>세션·검토 상태·LLM 오케스트레이션]
+    API --> DB[(SQLite)]
+    API --> MCP[WorkShield MCP<br/>문서 파싱·검색·재정렬·법령 조회]
+    API --> LLM[RunPod vLLM]
+    MCP --> RR[RunPod Embed / Rerank]
+    MCP --> LAW[법령 조회 도구]
+```
+
+- **로컬 환경**에서는 API가 MCP 서버를 `stdio` 자식 프로세스로 실행하고 세션을 재사용합니다.
+- **운영 환경**에서는 API와 MCP를 EC2의 Docker Compose로 실행하며 `streamable HTTP`로 연결합니다.
+- 정적 웹은 S3와 CloudFront로 제공하고, 모델 추론 및 임베딩·재정렬 워크로드는 RunPod로 분리합니다.
+- 상세 구성과 운영 책임 경계는 [인프라 아키텍처 문서](docs/architecture/infra/README.md)를 참고하세요.
+
+### 기술 스택
+
+| 영역 | 기술 |
+| --- | --- |
+| Frontend | React 19, TypeScript, Vite 8, React Router, Tailwind CSS 4, React Markdown |
+| API | Python 3.13, FastAPI, Pydantic, SQLAlchemy 2, SQLite, SSE |
+| LLM orchestration | LangGraph, LangChain, MCP Adapter, OpenAI·Gemini·Ollama·vLLM provider abstraction |
+| MCP / Retrieval | FastMCP, 계약서 파싱, Chroma·SQLite 기반 인덱스, 표준조항 검색·재정렬, 법령 조회 연동 |
+| Infrastructure | AWS CDK, CloudFront, S3, EC2, EBS, Nginx, Docker Compose, SSM, Secrets Manager, CloudWatch, RunPod |
+| CI / Quality | GitHub Actions, GHCR, Pytest, Ruff, Vitest, Testing Library, TypeScript typecheck |
+
+### 저장소 구조
 
 ```text
 .
-├── api/      # WorkShield 웹 API & LLM 오케스트레이션 계층 (FastAPI)
-├── mcp/      # WorkShield MCP 서버 계층 (FastMCP, 계약서 검토·법령 조회 도구)
-├── web/      # WorkShield 프론트엔드 웹 애플리케이션
-├── infra/    # 로컬 AWS·RunPod 인프라 관리 구현
-└── docs/     # 프로젝트 문서 (인프라, 운영, ADR, API 스키마, 요구사항 등)
+├── api/      # FastAPI API와 LLM·MCP 오케스트레이션
+├── mcp/      # 계약서 검토 MCP 서버 Git submodule
+├── web/      # React 기반 사용자 웹 애플리케이션
+├── infra/    # 로컬 인프라 제어 계층과 AWS CDK
+├── docs/     # 요구사항, 아키텍처, API, ADR, 운영 문서
+└── assets/   # README 및 서비스 실행 화면
 ```
+
+> `mcp/`는 별도 저장소를 연결한 Git submodule입니다. 저장소를 받을 때 submodule을 함께 초기화해야 합니다.
 
 ---
 
-## 빠른 시작
-
-저장소를 새로 클론(clone)한 후 MCP 서버 및 API 서버 환경을 구축하고 통합 실행하는 가이드입니다.
+## 로컬 설치와 실행
 
 ### 사전 요구사항
 
-- Python ≥ 3.13
-- [uv](https://docs.astral.sh/uv/) (의존성 관리 및 실행)
-- [just](https://github.com/casey/just) (인프라와 각 subproject 작업 실행 도구)
-- Node.js (MCP 의존성 `kordoc` 및 `korean-law-mcp` CLI 실행용)
+- Git
+- Python **3.13 이상**
+- [uv](https://docs.astral.sh/uv/)
+- Node.js **24.18.0 이상** 및 npm
+- [just](https://github.com/casey/just)
 
----
+Docker와 AWS CLI는 운영 인프라를 구성할 때만 필요합니다.
 
-### 설치 및 서버 실행
+### 1. 저장소 받기
 
-#### 1. MCP 서버 환경 설정 (`mcp`)
+```bash
+git clone --recurse-submodules https://github.com/SKNETWORKS-FAMILY-AICAMP/SKN30-4th-2Team.git
+cd SKN30-4th-2Team
+```
 
-WorkShield MCP 서버는 계약서 파싱, 조항 매칭 및 법령 조회를 담당합니다. 자세한 설정은 [mcp/README.md](mcp/README.md)를 참고합니다.
+이미 저장소를 clone했다면 다음 명령으로 submodule을 초기화합니다.
+
+```bash
+git submodule update --init --recursive
+```
+
+### 2. MCP 준비
+
+MCP는 계약서 파싱, 지원 범위 판별, 표준조항 검색·재정렬, 법령 조회를 담당합니다.
 
 ```bash
 cd mcp
-
-# 1) 환경 파일 설정 (기존 파일 존재 시 복붙하세요.)
 cp .env.example .env
 
-# 2) 의존성 설치 및 DB 구축 (이미 되있다면 기존 프로젝트에서 sqlite파일과 Chroma인덱스를 복붙하세요.)
+# 의존성·외부 CLI·모델 등 개발 환경 준비
 just setup
+
+# SQLite와 Chroma 인덱스 생성
 just build-db
 ```
 
-- **로컬 자동 실행 안내**: 로컬 기본값인 `stdio` transport 환경에서는 API 서버가 `uv`를 활용해 MCP 서버 프로세스를 자식 프로세스로 자동 실행하므로([api/app/core/llm/mcp/connection.py](api/app/core/llm/mcp/connection.py)), 별도로 `just run-mcp`를 직접 실행하지 않아도 됩니다.
-- (MCP Inspector 독립 테스트(`just run-mcp-ui`) 또는 Streamable HTTP 모드 실행 시에만 수동으로 구동합니다.)
+환경 변수와 개별 실행 방법은 [MCP README](mcp/README.md)를 참고하세요.
 
-#### 2. API 서버 구동 (`api`)
+> 로컬 기본 구성에서는 API가 MCP를 자동으로 실행하므로 별도의 MCP 서버 프로세스를 띄울 필요가 없습니다.
 
-WorkShield API 서버는 FastAPI를 기반으로 MCP 세션을 연결하고 웹 API를 제공합니다. 자세한 설정은 [api/README.md](api/README.md)를 참고합니다.
+### 3. API 실행
 
 ```bash
 cd ../api
-
-# 1) 환경 파일 설정
 cp .env.example .env
-# .env를 열고 OPENAI_API_KEY 또는 GEMINI_API_KEY 등 필요한 비밀값을 입력합니다.
+```
 
-# 2) 의존성 동기화
+`api/.env`에 사용할 LLM provider의 키와 접속 정보를 입력합니다. 로컬 기본 설정을 사용하는 경우 `OPENAI_API_KEY`를 설정합니다.
+
+```bash
 uv sync
-
-# 3) 서버 실행 (로컬 stdio MCP 프로세스 자동 구동)
 uv run uvicorn main:app --reload
 ```
 
----
+- API: `http://localhost:8000`
+- 상태 확인: `http://localhost:8000/health/ready`
 
-## 테스트 및 스키마 검증
+상세 환경 변수와 provider 구성은 [API README](api/README.md)를 참고하세요.
 
-### MCP 서버 테스트
+### 4. Web 실행
+
+새 터미널에서 실행합니다.
 
 ```bash
+cd web
+cp .env.example .env.local  # 기본값을 사용할 경우 생략 가능
+npm install
+npm run dev
+```
+
+- Web: `http://localhost:5173`
+- 기본 API proxy: `http://localhost:8000`
+
+프론트엔드 환경 변수와 빌드 방법은 [Web README](web/README.md)를 참고하세요.
+
+---
+
+## 테스트
+
+```bash
+# MCP 단위 테스트
 cd mcp
 just test unit
-```
 
-### API 서버 테스트 및 OpenAPI 스키마 추출
-
-```bash
-cd api
-
-# 전체 단위 테스트 실행 (OpenAPI 스키마 최신 여부 검증 포함)
+# API 테스트와 린트
+cd ../api
 uv run pytest -q
+uv run ruff check app main.py tests
 
-# docs/api/openapi.json 추출 및 저장
-uv run python scripts/generate_openapi.py
+# Web 타입·테스트·빌드 검증
+cd ../web
+npm run typecheck
+npm test
+npm run build
 ```
 
 ---
 
-## 세부 모듈 참고 문서
+## 문서
 
-각 모듈의 세부 아키텍처, 환경 변수 설정 및 기술 스택은 아래 개별 문서를 참고합니다.
+README에는 프로젝트를 이해하고 실행하는 데 필요한 정보만 유지하고, 상세 설계와 운영 절차는 아래 문서에서 관리합니다.
 
-- **MCP 서버 세부 가이드**: [mcp/README.md](mcp/README.md) (FastMCP 도구 목록, 파이프라인 검토 규칙, 품질 기준)
-- **API 서버 세부 가이드**: [api/README.md](api/README.md) (FastAPI 구조, LLM Provider 설정, MCP Lifespan 연동)
-- **인프라 설치·운영 가이드**: [docs/infra/README.md](docs/infra/README.md) (로컬 프로비저닝, 배포·롤백, 비밀 관리)
-- **MCP 서버 단독 RunPod 운영**: [mcp/README.md](mcp/README.md) (MCP submodule의 Embed/Rerank Pod lifecycle)
+- [확정 사용자 요구사항](docs/requirements/요구사항.md)
+- [화면별 기능 정의서](docs/requirements/화면별_기능_정의서.md)
+- [API 개발·실행 가이드](api/README.md)
+- [OpenAPI 스키마](docs/api/openapi.json)
+- [MCP 서버 문서](mcp/README.md)
+- [인프라 아키텍처와 운영 경계](docs/architecture/infra/README.md)
+- [시스템 구성도](docs/architecture/시스템_구성도_초안.svg)
+- [Architecture Decision Records](docs/adr/)
+
+---
+
+## 유의사항
+
+- WorkShield의 결과는 표준계약서 대비 검토 후보이며 법률 자문, 위법성 판단, 승소 가능성 예측이 아닙니다.
+- 업로드 문서의 개인정보를 자동으로 마스킹하지 않으므로, 검토에 불필요한 개인정보는 업로드 전에 직접 제거하거나 가려야 합니다.
+- 지원하지 않는 계약 유형이나 근거가 부족한 질문에는 추측으로 답변하지 않도록 설계되어 있습니다.
