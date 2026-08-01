@@ -24,11 +24,11 @@
 
 <table>
   <tr align="center">
-    <td><img src="./assets/1.png" width="60"></td>
-    <td><img src="./assets/2.png" width="60"></td>
-    <td><img src="./assets/3.png" width="60"></td>
-    <td><img src="./assets/4.png" width="60"></td>
-    <td><img src="./assets/5.jpg" width="60"></td>
+    <td><img src="./assets/1_1.png" width="60"></td>
+    <td><img src="./assets/1_2.png" width="60"></td>
+    <td><img src="./assets/1_3.png" width="60"></td>
+    <td><img src="./assets/1_4.png" width="60"></td>
+    <td><img src="./assets/1_5.png" width="60"></td>
   </tr>
   <tr align="center">
     <td><b>박세빈</b></td>
@@ -118,7 +118,6 @@ flowchart LR
 ├── web/      # React 기반 사용자 웹 애플리케이션
 ├── infra/    # 로컬 인프라 제어 계층과 AWS CDK
 ├── docs/     # 요구사항, 아키텍처, API, ADR, 운영 문서
-└── assets/   # README 및 서비스 실행 화면
 ```
 
 > `mcp/`는 별도 저장소를 연결한 Git submodule입니다. 저장소를 받을 때 submodule을 함께 초기화해야 합니다.
