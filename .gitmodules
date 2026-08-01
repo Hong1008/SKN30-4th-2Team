@@ -1,3 +1,4 @@
 [submodule "mcp"]
 	path = mcp
 	url = https://github.com/SKNETWORKS-FAMILY-AICAMP/SKN30-3rd-2Team.git
+	branch = main
